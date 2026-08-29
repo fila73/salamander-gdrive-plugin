@@ -64,6 +64,11 @@ public:
     // Invalidate virtual folders (/Starred, /Recent, /Trash).
     void InvalidateVirtualFolders();
 
+    // Folder size caching and calculation
+    void SetFolderSize(const std::string& folderId, int64_t size);
+    bool GetFolderSize(const std::string& folderId, int64_t& sizeOut);
+    bool ComputeFolderSizeFromCache(const std::string& folderId, int64_t& sizeOut, int& filesCountOut, int& dirsCountOut);
+
     // Query Google Drive Changes API if the check interval has elapsed.
     // Returns true if changes were checked successfully (or if interval has not elapsed yet).
     bool CheckForRemoteChanges(bool forceCheck = false);
@@ -82,6 +87,7 @@ private:
 
     std::string m_currentAccountEmail;
     std::map<std::string, CachedFolder> m_folders;
+    std::map<std::string, int64_t> m_folderSizes;
     std::string m_startPageToken;
     uint64_t m_lastChangeCheckTick = 0;
     DWORD m_checkIntervalMs = 30000; // 30 seconds default

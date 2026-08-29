@@ -568,6 +568,11 @@ bool CCalcSizeProgressDialog::Run()
         }
     }
 
+    if (!m_cancelled)
+    {
+        GDriveCache::CacheManager::GetInstance().SetFolderSize(m_folderId, m_totalBytes);
+    }
+
     GDriveCache::CacheManager::GetInstance().SaveToDisk();
 
     if (hParent) EnableWindow(hParent, TRUE);

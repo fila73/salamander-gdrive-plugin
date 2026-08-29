@@ -456,6 +456,10 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
     }
 
     file.Size.SetUI64((unsigned __int64)size);
+    if (isDir && size > 0)
+    {
+        file.SizeValid = 1;
+    }
     if (ft) file.LastWrite = *ft;
     file.Attr = isDir ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
     file.DosName = NULL;
@@ -470,6 +474,22 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
     {
         dir->AddFile(NULL, file, pluginData);
     }
+}
+
+static int64_t GetCachedOrComputedFolderSize(const std::string& folderId)
+{
+    if (folderId.empty()) return 0;
+    int64_t sz = 0;
+    int files = 0, dirs = 0;
+    if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, sz))
+    {
+        return sz;
+    }
+    if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, sz, files, dirs))
+    {
+        return sz;
+    }
+    return 0;
 }
 
 BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
@@ -595,7 +615,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
             }
             else
             {
@@ -642,7 +662,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             std::string subPath = m_currentPath + "/" + d.name;
             m_pathToIdCache[subPath] = d.id;
 
-            AddItemToDir(dir, d.name.c_str(), true, 0, &ft, pluginData);
+            AddItemToDir(dir, d.name.c_str(), true, GetCachedOrComputedFolderSize(d.id), &ft, pluginData);
         }
         return TRUE;
     }
@@ -673,7 +693,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
             }
             else
             {
@@ -719,7 +739,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
             }
             else
             {
@@ -765,7 +785,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
             }
             else
             {
@@ -811,7 +831,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
             }
             else
             {
@@ -877,7 +897,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
         if (item.isFolder)
         {
-            AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+            AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
         }
         else
         {

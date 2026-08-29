@@ -134,11 +134,20 @@ void CacheManager::SwitchAccount(const std::string& newAccountEmail)
                         WriteString(os, item.exportExtension);
                     }
                 }
+
+                uint32_t sizesCount = (uint32_t)m_folderSizes.size();
+                os.write((const char*)&sizesCount, sizeof(sizesCount));
+                for (const auto& [id, sz] : m_folderSizes)
+                {
+                    WriteString(os, id);
+                    os.write((const char*)&sz, sizeof(sz));
+                }
             }
         }
     }
 
     m_folders.clear();
+    m_folderSizes.clear();
     m_startPageToken.clear();
     m_lastChangeCheckTick = 0;
     m_currentAccountEmail = newAccountEmail;
@@ -205,6 +214,20 @@ void CacheManager::SwitchAccount(const std::string& newAccountEmail)
 
                         m_folders[folder.folderKey] = folder;
                     }
+
+                    uint32_t sizesCount = 0;
+                    if (is.read((char*)&sizesCount, sizeof(sizesCount)))
+                    {
+                        for (uint32_t s = 0; s < sizesCount && !is.eof(); ++s)
+                        {
+                            std::string sId = ReadString(is);
+                            int64_t sSz = 0;
+                            if (is.read((char*)&sSz, sizeof(sSz)))
+                            {
+                                m_folderSizes[sId] = sSz;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -263,6 +286,14 @@ bool CacheManager::SaveToDisk()
             WriteString(os, item.exportMimeType);
             WriteString(os, item.exportExtension);
         }
+    }
+
+    uint32_t sizesCount = (uint32_t)m_folderSizes.size();
+    os.write((const char*)&sizesCount, sizeof(sizesCount));
+    for (const auto& [id, sz] : m_folderSizes)
+    {
+        WriteString(os, id);
+        os.write((const char*)&sz, sizeof(sz));
     }
 
     m_dirty = false;
@@ -336,6 +367,20 @@ bool CacheManager::LoadFromDisk()
         m_folders[folder.folderKey] = folder;
     }
 
+    uint32_t sizesCount = 0;
+    if (is.read((char*)&sizesCount, sizeof(sizesCount)))
+    {
+        for (uint32_t s = 0; s < sizesCount && !is.eof(); ++s)
+        {
+            std::string sId = ReadString(is);
+            int64_t sSz = 0;
+            if (is.read((char*)&sSz, sizeof(sSz)))
+            {
+                m_folderSizes[sId] = sSz;
+            }
+        }
+    }
+
     m_dirty = false;
     return true;
 }
@@ -353,6 +398,105 @@ void CacheManager::ClearDiskCache(const std::string& accountEmail)
     {
         InvalidateAll();
     }
+}
+
+void CacheManager::SetFolderSize(const std::string& folderId, int64_t size)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_folderSizes[folderId] = size;
+    m_dirty = true;
+}
+
+bool CacheManager::GetFolderSize(const std::string& folderId, int64_t& sizeOut)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto it = m_folderSizes.find(folderId);
+    if (it != m_folderSizes.end())
+    {
+        sizeOut = it->second;
+        return true;
+    }
+    return false;
+}
+
+bool CacheManager::ComputeFolderSizeFromCache(const std::string& folderId, int64_t& sizeOut, int& filesCountOut, int& dirsCountOut)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    sizeOut = 0;
+    filesCountOut = 0;
+    dirsCountOut = 0;
+
+    auto itRoot = m_folders.find(folderId);
+    if (itRoot == m_folders.end() || !itRoot->second.isValid)
+    {
+        auto itSize = m_folderSizes.find(folderId);
+        if (itSize != m_folderSizes.end())
+        {
+            sizeOut = itSize->second;
+            return true;
+        }
+        return false;
+    }
+
+    std::vector<std::string> queue;
+    std::set<std::string> visited;
+    queue.push_back(folderId);
+    visited.insert(folderId);
+
+    int64_t totalBytes = 0;
+    int totalFiles = 0;
+    int totalDirs = 0;
+    bool allValid = true;
+
+    size_t qIdx = 0;
+    while (qIdx < queue.size())
+    {
+        std::string curId = queue[qIdx++];
+
+        auto it = m_folders.find(curId);
+        if (it == m_folders.end() || !it->second.isValid)
+        {
+            auto itKnownSize = m_folderSizes.find(curId);
+            if (itKnownSize != m_folderSizes.end())
+            {
+                totalBytes += itKnownSize->second;
+                continue;
+            }
+            allValid = false;
+            break;
+        }
+
+        for (const auto& item : it->second.items)
+        {
+            if (item.isFolder)
+            {
+                totalDirs++;
+                if (visited.find(item.id) == visited.end())
+                {
+                    visited.insert(item.id);
+                    queue.push_back(item.id);
+                }
+            }
+            else
+            {
+                totalFiles++;
+                totalBytes += item.size;
+            }
+        }
+    }
+
+    if (allValid)
+    {
+        sizeOut = totalBytes;
+        filesCountOut = totalFiles;
+        dirsCountOut = totalDirs;
+        m_folderSizes[folderId] = totalBytes;
+        m_dirty = true;
+        return true;
+    }
+
+    return false;
 }
 
 bool CacheManager::GetFolder(const std::string& folderKey, std::vector<GDriveApi::GDriveItem>& itemsOut)
@@ -392,6 +536,7 @@ void CacheManager::PutFolder(const std::string& folderKey, const std::vector<GDr
 void CacheManager::InvalidateFolder(const std::string& folderKey)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_folderSizes.erase(folderKey);
     auto it = m_folders.find(folderKey);
     if (it != m_folders.end())
     {
@@ -405,6 +550,7 @@ void CacheManager::InvalidateFolderIds(const std::vector<std::string>& folderIds
     std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& fId : folderIds)
     {
+        m_folderSizes.erase(fId);
         auto it = m_folders.find(fId);
         if (it != m_folders.end())
         {
@@ -422,6 +568,7 @@ void CacheManager::InvalidateAll()
     {
         pair.second.isValid = false;
     }
+    m_folderSizes.clear();
     m_startPageToken.clear();
     m_lastChangeCheckTick = 0;
     m_dirty = true;
@@ -503,6 +650,7 @@ bool CacheManager::CheckForRemoteChanges(bool forceCheck)
 void CacheManager::AddOrUpdateItem(const std::string& folderKey, const GDriveApi::GDriveItem& item)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_folderSizes.erase(folderKey);
     auto it = m_folders.find(folderKey);
     if (it != m_folders.end() && it->second.isValid)
     {
@@ -528,6 +676,7 @@ void CacheManager::AddOrUpdateItem(const std::string& folderKey, const GDriveApi
 void CacheManager::RemoveItem(const std::string& folderKey, const std::string& fileId)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_folderSizes.erase(folderKey);
     auto it = m_folders.find(folderKey);
     if (it != m_folders.end() && it->second.isValid)
     {
