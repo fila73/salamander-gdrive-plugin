@@ -611,4 +611,76 @@ bool HttpClient::UploadMultipartFile(const std::string& url,
     return success;
 }
 
+std::string HttpClient::AnsiToUtf8(const std::string& ansi)
+{
+    if (ansi.empty()) return "";
+    int wlen = MultiByteToWideChar(CP_ACP, 0, ansi.c_str(), -1, NULL, 0);
+    if (wlen <= 0) return ansi;
+    std::wstring wide(wlen - 1, L'\0');
+    MultiByteToWideChar(CP_ACP, 0, ansi.c_str(), -1, &wide[0], wlen);
+    return WideToUtf8(wide);
+}
+
+std::string HttpClient::Utf8ToAnsi(const std::string& utf8)
+{
+    if (utf8.empty()) return "";
+    std::wstring wide = Utf8ToWide(utf8);
+    int alen = WideCharToMultiByte(CP_ACP, 0, wide.c_str(), -1, NULL, 0, NULL, NULL);
+    if (alen <= 0) return utf8;
+    std::string ansi(alen - 1, '\0');
+    WideCharToMultiByte(CP_ACP, 0, wide.c_str(), -1, &ansi[0], alen, NULL, NULL);
+    return ansi;
+}
+
+std::wstring HttpClient::AnsiToWide(const std::string& ansi)
+{
+    if (ansi.empty()) return L"";
+    int wlen = MultiByteToWideChar(CP_ACP, 0, ansi.c_str(), -1, NULL, 0);
+    if (wlen <= 0) return L"";
+    std::wstring wide(wlen - 1, L'\0');
+    MultiByteToWideChar(CP_ACP, 0, ansi.c_str(), -1, &wide[0], wlen);
+    return wide;
+}
+
+std::string HttpClient::WideToAnsi(const std::wstring& wide)
+{
+    if (wide.empty()) return "";
+    int alen = WideCharToMultiByte(CP_ACP, 0, wide.c_str(), -1, NULL, 0, NULL, NULL);
+    if (alen <= 0) return "";
+    std::string ansi(alen - 1, '\0');
+    WideCharToMultiByte(CP_ACP, 0, wide.c_str(), -1, &ansi[0], alen, NULL, NULL);
+    return ansi;
+}
+
+std::wstring HttpClient::SanitizeFileNameForLocalFsW(const std::wstring& name, wchar_t replacementChar)
+{
+    if (name.empty()) return L"";
+    std::wstring result = name;
+    for (size_t i = 0; i < result.size(); ++i)
+    {
+        wchar_t c = result[i];
+        if (c == L'\\' || c == L'/' || c == L':' || c == L'*' ||
+            c == L'?' || c == L'"' || c == L'<' || c == L'>' ||
+            c == L'|' || (c >= 0 && c < 32))
+        {
+            result[i] = replacementChar;
+        }
+    }
+    // Trim trailing spaces and dots which Windows FS disallows at the end of names
+    while (!result.empty() && (result.back() == L' ' || result.back() == L'.'))
+    {
+        result.pop_back();
+    }
+    if (result.empty()) result = L"_";
+    return result;
+}
+
+std::string HttpClient::SanitizeFileNameForLocalFs(const std::string& name, char replacementChar)
+{
+    if (name.empty()) return "";
+    std::wstring wName = Utf8ToWide(name);
+    std::wstring wClean = SanitizeFileNameForLocalFsW(wName, (wchar_t)replacementChar);
+    return WideToUtf8(wClean);
+}
+
 } // namespace GDriveHttp

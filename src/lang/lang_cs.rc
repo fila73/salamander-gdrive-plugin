@@ -68,16 +68,19 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
 CAPTION "Mezipaměť a synchronizace"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    GROUPBOX        "Mezipaměť metadat a synchronizace",IDC_STATIC_1,4,4,242,116
-    CONTROL         "&Povolit trvalou mezipaměť metadat na disku",IDC_CFG_CACHE_ENABLED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,18,220,10
-    LTEXT           "Frekvence kontroly změn (TTL):",IDC_STATIC_2,12,32,220,8
-    COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,44,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "&Ctrl+R: Nevynucovat refresh, pokud složka není změněna",IDC_CFG_SMART_CTRL_R,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,62,224,10
-    LTEXT           "Stav mezipaměti: Připraveno (izolováno pro účet)",IDC_CFG_CACHE_STATUS,12,78,220,8
-    PUSHBUTTON      "&Vymazat mezipaměť aktivního účtu",IDC_CFG_CACHE_CLEAR_BTN,12,92,140,14
+    GROUPBOX        "Mezipaměť metadat a synchronizace",IDC_STATIC_1,4,4,242,126
+    CONTROL         "&Povolit trvalou mezipaměť metadat na disku",IDC_CFG_CACHE_ENABLED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,16,220,10
+    LTEXT           "Frekvence kontroly změn (TTL):",IDC_STATIC_2,12,28,220,8
+    COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,38,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "&Ctrl+R: Nevynucovat refresh, pokud složka není změněna",IDC_CFG_SMART_CTRL_R,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,54,224,10
+    CONTROL         "&Nahrazovat neplatné znaky při stahování na disk",IDC_CFG_SANITIZE_INVALID_CHARS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,68,200,10
+    LTEXT           "Znak:",IDC_STATIC_5,214,69,18,8
+    EDITTEXT        IDC_CFG_SANITIZE_CHAR,232,67,14,12,ES_AUTOHSCROLL
+    LTEXT           "Stav mezipaměti: Připraveno (izolováno pro účet)",IDC_CFG_CACHE_STATUS,12,84,220,8
+    PUSHBUTTON      "&Vymazat mezipaměť aktivního účtu",IDC_CFG_CACHE_CLEAR_BTN,12,98,140,14
 
-    GROUPBOX        "Informace",IDC_STATIC_3,4,124,242,52
-    LTEXT           "Inteligentní mezipaměť zrychluje procházení složek na 0 ms.\nZměny na Google Disku jsou detekovány přes Changes API bez zbytečného plošného stahování celých složek.",IDC_STATIC_4,12,136,224,36
+    GROUPBOX        "Informace",IDC_STATIC_3,4,132,242,44
+    LTEXT           "Inteligentní mezipaměť zrychluje procházení složek na 0 ms.\nZměny na Google Disku jsou detekovány přes Changes API bez zbytečného plošného stahování celých složek.",IDC_STATIC_4,12,142,224,30
 END
 
 IDD_AUTH_PROGRESS DIALOGEX 0, 0, 230, 95
@@ -106,6 +109,19 @@ BEGIN
     LTEXT           "0 B",IDC_CALC_TOTAL_SIZE,70,54,155,8
     CONTROL         "",IDC_CALC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,15,68,210,12
     PUSHBUTTON      "Zrušit",IDCANCEL,90,88,60,14
+END
+
+IDD_TRANSFER_PROGRESS DIALOGEX 0, 0, 260, 105
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Přenos Google Disk"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Probíhá přenos:",IDC_TRANSFER_ACTION_LABEL,15,12,230,8
+    LTEXT           "",IDC_TRANSFER_FILENAME,15,24,230,8,SS_PATHELLIPSIS
+    CONTROL         "",IDC_TRANSFER_PROGRESSBAR,"msctls_progress32",WS_BORDER,15,38,230,12
+    LTEXT           "",IDC_TRANSFER_BYTES,15,54,140,8
+    RTEXT           "",IDC_TRANSFER_SPEED,160,54,85,8
+    PUSHBUTTON      "Zrušit",IDCANCEL,100,78,60,14
 END
 
 /////////////////////////////////////////////////////////////////////////////
@@ -192,6 +208,11 @@ BEGIN
     IDS_TTL_MANUAL              "Pouze ručně (Ctrl+R)"
     IDS_MENU_SWITCH_ACCOUNT     "Přepnout &účet"
     IDS_MENU_ADD_ACCOUNT        "&Přidat nový účet..."
+    IDS_TRANSFER_DOWNLOADING    "Stahuji:"
+    IDS_TRANSFER_UPLOADING      "Nahrávám:"
+    IDS_TRANSFER_CANCEL         "Přenos byl zrušen uživatelem."
+    IDS_TRANSFER_SPEED_FMT      "%.2f MB/s"
+    IDS_TRANSFER_BYTES_FMT      "%s z %s (%d%%)"
 END
 
 #endif // Czech resources

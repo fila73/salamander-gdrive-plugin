@@ -75,6 +75,13 @@ public:
     static std::string UrlEncode(const std::string& str);
     static std::wstring Utf8ToWide(const std::string& utf8);
     static std::string WideToUtf8(const std::wstring& wide);
+    static std::string AnsiToUtf8(const std::string& ansi);
+    static std::string Utf8ToAnsi(const std::string& utf8);
+    static std::wstring AnsiToWide(const std::string& ansi);
+    static std::string WideToAnsi(const std::wstring& wide);
+
+    static std::wstring SanitizeFileNameForLocalFsW(const std::wstring& name, wchar_t replacementChar = L'_');
+    static std::string SanitizeFileNameForLocalFs(const std::string& name, char replacementChar = '_');
 
 private:
     HINTERNET m_hSession = NULL;

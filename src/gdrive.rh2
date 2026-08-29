@@ -113,5 +113,10 @@
 #define IDS_TTL_MANUAL                           2158
 #define IDS_MENU_SWITCH_ACCOUNT                  2159
 #define IDS_MENU_ADD_ACCOUNT                     2160
+#define IDS_TRANSFER_DOWNLOADING                 2161
+#define IDS_TRANSFER_UPLOADING                   2162
+#define IDS_TRANSFER_CANCEL                      2163
+#define IDS_TRANSFER_SPEED_FMT                   2164
+#define IDS_TRANSFER_BYTES_FMT                   2165
 
 #endif // __GDRIVE_RH2

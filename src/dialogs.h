@@ -100,5 +100,34 @@ private:
     void UpdateUI(const std::string& currentScanningFolder);
 };
 
+class CTransferProgressDialog : public CCommonDialog
+{
+public:
+    CTransferProgressDialog(HWND hParent, bool isUpload, const std::string& fileName, int64_t totalBytes);
+    ~CTransferProgressDialog();
+
+    bool Start();
+    void Stop();
+
+    bool OnProgress(int64_t bytesTransferred, int64_t totalBytes);
+    bool IsCancelled() const { return m_cancelled; }
+
+    static std::string FormatSize(int64_t bytes);
+
+protected:
+    virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+
+private:
+    bool m_isUpload;
+    std::string m_fileName;
+    int64_t m_totalBytes;
+    bool m_cancelled;
+    DWORD m_startTick;
+    DWORD m_lastUpdateTick;
+
+    void ProcessMessages();
+    void UpdateUI(int64_t bytesTransferred, int64_t totalBytes);
+};
+
 void OnConfiguration(HWND hParent);
 void OnAbout(HWND hParent);

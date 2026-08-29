@@ -31,6 +31,8 @@ extern int AssignedFSNameLen;
 extern std::string CfgClientId;
 extern std::string CfgClientSecret;
 extern BOOL CfgIncludeSharedDrives;
+extern BOOL CfgSanitizeInvalidChars;
+extern char CfgSanitizeChar;
 
 char* LoadStr(int resID);
 

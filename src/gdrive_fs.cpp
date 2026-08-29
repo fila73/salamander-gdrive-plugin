@@ -371,16 +371,29 @@ bool CPluginFS::ResolveCurrentFolderId()
     return true;
 }
 
-static void AddItemToDir(CSalamanderDirectoryAbstract* dir,
-                         const char* name,
-                         bool isDir,
-                         int64_t size,
-                         const FILETIME* ft,
+static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
+                         bool isDir, int64_t size, const FILETIME* ft,
                          CPluginDataInterfaceAbstract* pluginData)
 {
+    if (!name) return;
+
+    std::string ansiName;
+    if (strcmp(name, "..") == 0 || strcmp(name, ".") == 0)
+    {
+        ansiName = name;
+    }
+    else
+    {
+        ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(name);
+        for (char& c : ansiName)
+        {
+            if (c == '/' || c == '\\') c = '_';
+        }
+    }
+
     CFileData file;
     memset(&file, 0, sizeof(file));
-    file.Name = SalamanderGeneral->DupStr(name ? name : "");
+    file.Name = SalamanderGeneral->DupStr(ansiName.c_str());
     if (!file.Name) return;
 
     file.NameLen = (int)strlen(file.Name);
@@ -529,6 +542,11 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             m_cachedItems.push_back(item);
             std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + item.name;
             m_pathToIdCache[subPath] = item.id;
+
+            std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
+            for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
+            std::string ansiSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
+            m_pathToIdCache[ansiSubPath] = item.id;
 
             if (item.isFolder)
             {
@@ -807,6 +825,11 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + item.name;
         m_pathToIdCache[subPath] = item.id;
 
+        std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
+        for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
+        std::string ansiSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
+        m_pathToIdCache[ansiSubPath] = item.id;
+
         if (item.isFolder)
         {
             AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
@@ -975,7 +998,7 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
                                    BOOL isDir, char* newName, BOOL& cancel)
 {
     cancel = FALSE;
-    if (!newName || !*newName) return FALSE;
+    if (!newName || !*newName || !file.Name) return FALSE;
 
     if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
     {
@@ -983,10 +1006,14 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
         return FALSE;
     }
 
+    std::string fileAnsiName = file.Name;
+    std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(file.Name);
+
     std::string fileId;
     for (const auto& it : m_cachedItems)
     {
-        if (_stricmp(it.name.c_str(), file.Name) == 0)
+        if (_stricmp(it.name.c_str(), fileAnsiName.c_str()) == 0 ||
+            _stricmp(it.name.c_str(), fileUtf8Name.c_str()) == 0)
         {
             fileId = it.id;
             break;
@@ -995,11 +1022,17 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
 
     if (fileId.empty())
     {
-        std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + file.Name;
+        std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + fileAnsiName;
         auto it = m_pathToIdCache.find(fullPath);
         if (it != m_pathToIdCache.end())
         {
             fileId = it->second;
+        }
+        else
+        {
+            fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + fileUtf8Name;
+            it = m_pathToIdCache.find(fullPath);
+            if (it != m_pathToIdCache.end()) fileId = it->second;
         }
     }
 
@@ -1009,28 +1042,34 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
         return FALSE;
     }
 
+    std::string utf8NewName = GDriveHttp::HttpClient::AnsiToUtf8(newName);
     std::string err;
-    if (!GDriveApi::ApiClient::GetInstance().RenameItem(fileId, newName, &err))
+    if (!GDriveApi::ApiClient::GetInstance().RenameItem(fileId, utf8NewName, &err))
     {
         SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
         return FALSE;
     }
 
-    std::string oldSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + file.Name;
+    std::string oldSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + fileAnsiName;
     std::string newSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + newName;
     m_pathToIdCache.erase(oldSubPath);
     m_pathToIdCache[newSubPath] = fileId;
+
+    std::string oldUtf8SubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + fileUtf8Name;
+    std::string newUtf8SubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + utf8NewName;
+    m_pathToIdCache.erase(oldUtf8SubPath);
+    m_pathToIdCache[newUtf8SubPath] = fileId;
 
     for (auto& it : m_cachedItems)
     {
         if (it.id == fileId)
         {
-            it.name = newName;
+            it.name = utf8NewName;
             break;
         }
     }
 
-    GDriveCache::CacheManager::GetInstance().RenameItem(m_currentFolderId, fileId, newName);
+    GDriveCache::CacheManager::GetInstance().RenameItem(m_currentFolderId, fileId, utf8NewName);
 
     return TRUE;
 }
@@ -1068,9 +1107,10 @@ BOOL WINAPI CPluginFS::CreateDir(const char* fsName, int mode, HWND parent, char
         return FALSE;
     }
 
+    std::string utf8NewName = GDriveHttp::HttpClient::AnsiToUtf8(newName);
     GDriveApi::GDriveItem newItem;
     std::string err;
-    if (!GDriveApi::ApiClient::GetInstance().CreateFolder(m_currentFolderId, newName, newItem, &err))
+    if (!GDriveApi::ApiClient::GetInstance().CreateFolder(m_currentFolderId, utf8NewName, newItem, &err))
     {
         SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
         return FALSE;
@@ -1078,8 +1118,10 @@ BOOL WINAPI CPluginFS::CreateDir(const char* fsName, int mode, HWND parent, char
 
     std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + newName;
     m_pathToIdCache[subPath] = newItem.id;
-    m_cachedItems.push_back(newItem);
+    std::string utf8SubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + utf8NewName;
+    m_pathToIdCache[utf8SubPath] = newItem.id;
 
+    m_cachedItems.push_back(newItem);
     GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(m_currentFolderId, newItem);
 
     return TRUE;
@@ -1108,10 +1150,13 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
         const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(panel, &isDir);
         if (f && strcmp(f->Name, "..") != 0)
         {
+            std::string ansiName = f->Name;
+            std::string utf8Name = GDriveHttp::HttpClient::AnsiToUtf8(f->Name);
             std::string id;
             for (const auto& it : m_cachedItems)
             {
-                if (_stricmp(it.name.c_str(), f->Name) == 0)
+                if (_stricmp(it.name.c_str(), ansiName.c_str()) == 0 ||
+                    _stricmp(it.name.c_str(), utf8Name.c_str()) == 0)
                 {
                     id = it.id;
                     break;
@@ -1119,9 +1164,15 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
             }
             if (id.empty())
             {
-                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + f->Name;
+                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
                 auto it = m_pathToIdCache.find(fullPath);
                 if (it != m_pathToIdCache.end()) id = it->second;
+                else
+                {
+                    fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + utf8Name;
+                    it = m_pathToIdCache.find(fullPath);
+                    if (it != m_pathToIdCache.end()) id = it->second;
+                }
             }
             if (!id.empty()) itemsToDelete.emplace_back(f->Name, id);
         }
@@ -1134,10 +1185,13 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
         while ((f = SalamanderGeneral->GetPanelSelectedItem(panel, &index, &isDir)) != NULL)
         {
             if (strcmp(f->Name, "..") == 0) continue;
+            std::string ansiName = f->Name;
+            std::string utf8Name = GDriveHttp::HttpClient::AnsiToUtf8(f->Name);
             std::string id;
             for (const auto& it : m_cachedItems)
             {
-                if (_stricmp(it.name.c_str(), f->Name) == 0)
+                if (_stricmp(it.name.c_str(), ansiName.c_str()) == 0 ||
+                    _stricmp(it.name.c_str(), utf8Name.c_str()) == 0)
                 {
                     id = it.id;
                     break;
@@ -1145,9 +1199,15 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
             }
             if (id.empty())
             {
-                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + f->Name;
+                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
                 auto it = m_pathToIdCache.find(fullPath);
                 if (it != m_pathToIdCache.end()) id = it->second;
+                else
+                {
+                    fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + utf8Name;
+                    it = m_pathToIdCache.find(fullPath);
+                    if (it != m_pathToIdCache.end()) id = it->second;
+                }
             }
             if (!id.empty()) itemsToDelete.emplace_back(f->Name, id);
         }
@@ -1218,8 +1278,21 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
 
     if (mode == 1)
     {
-        // Default Salamander destination prompt
-        return FALSE;
+        // Pre-fill target path for Salamander Copy dialog
+        if (targetPath)
+        {
+            std::string dest = "gdrive:\\";
+            if (!m_currentPath.empty() && m_currentPath != "/")
+            {
+                std::string rel = m_currentPath;
+                if (rel[0] == '/') rel = rel.substr(1);
+                for (char& c : rel) { if (c == '/') c = '\\'; }
+                dest += rel;
+            }
+            std::string ansiDest = GDriveHttp::HttpClient::Utf8ToAnsi(dest);
+            strncpy(targetPath, ansiDest.c_str(), MAX_PATH - 1);
+        }
+        return TRUE;
     }
     if (mode == 4)
     {
@@ -1254,7 +1327,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         return FALSE;
     }
 
-    std::wstring wSourcePath = GDriveHttp::HttpClient::Utf8ToWide(sourcePath ? sourcePath : "");
+    std::wstring wSourcePath = GDriveHttp::HttpClient::AnsiToWide(sourcePath ? sourcePath : "");
     if (!wSourcePath.empty() && wSourcePath.back() != L'\\')
         wSourcePath += L"\\";
 
@@ -1273,8 +1346,21 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         if (strcmp(itemName, ".") == 0 || strcmp(itemName, "..") == 0)
             continue;
 
-        std::wstring itemLocalPath = wSourcePath + GDriveHttp::HttpClient::Utf8ToWide(itemName);
-        std::string fileName = itemName;
+        std::wstring itemLocalPath = wSourcePath + GDriveHttp::HttpClient::AnsiToWide(itemName);
+        
+        // Resolve long filename from disk in case itemName is DOS 8.3 short name
+        std::string fileName;
+        WIN32_FIND_DATAW fd;
+        HANDLE hFind = FindFirstFileW(itemLocalPath.c_str(), &fd);
+        if (hFind != INVALID_HANDLE_VALUE)
+        {
+            fileName = GDriveHttp::HttpClient::WideToUtf8(fd.cFileName);
+            FindClose(hFind);
+        }
+        else
+        {
+            fileName = GDriveHttp::HttpClient::AnsiToUtf8(itemName);
+        }
 
         if (isDir)
         {
@@ -1507,7 +1593,7 @@ void WINAPI CPluginFS::ShowSecurityInfo(HWND parent)
 {
 }
 
-bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent)
+bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent, CTransferProgressDialog* pProgressDlg)
 {
     std::string fileName = item.name;
     if (item.isGoogleDoc && !item.exportExtension.empty())
@@ -1519,13 +1605,42 @@ bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std:
         }
     }
 
+    std::wstring wFileName = GDriveHttp::HttpClient::Utf8ToWide(fileName);
+    if (CfgSanitizeInvalidChars)
+    {
+        wFileName = GDriveHttp::HttpClient::SanitizeFileNameForLocalFsW(wFileName, (wchar_t)CfgSanitizeChar);
+    }
+
     std::wstring localPath = targetDir;
     if (!localPath.empty() && localPath.back() != L'\\')
         localPath += L"\\";
-    localPath += GDriveHttp::HttpClient::Utf8ToWide(fileName);
+    localPath += wFileName;
 
+    bool ownProgress = false;
+    if (!pProgressDlg)
+    {
+        pProgressDlg = new CTransferProgressDialog(parent, false, fileName, item.size);
+        pProgressDlg->Start();
+        ownProgress = true;
+    }
+
+    GDriveHttp::ProgressCallback progressCb = [pProgressDlg](int64_t bytesTransferred, int64_t totalBytes) -> bool {
+        if (pProgressDlg)
+        {
+            return pProgressDlg->OnProgress(bytesTransferred, totalBytes);
+        }
+        return true;
+    };
+
+    bool cancelFlag = false;
     std::string err;
-    bool success = GDriveApi::ApiClient::GetInstance().DownloadFile(item, localPath, nullptr, nullptr, &err);
+    bool success = GDriveApi::ApiClient::GetInstance().DownloadFile(item, localPath, progressCb, &cancelFlag, &err);
+
+    if (ownProgress)
+    {
+        delete pProgressDlg;
+    }
+
     if (!success && !err.empty())
     {
         SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
@@ -1533,12 +1648,18 @@ bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std:
     return success;
 }
 
-bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent)
+bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, CTransferProgressDialog* pProgressDlg)
 {
+    std::wstring wFolderName = GDriveHttp::HttpClient::Utf8ToWide(folder.name);
+    if (CfgSanitizeInvalidChars)
+    {
+        wFolderName = GDriveHttp::HttpClient::SanitizeFileNameForLocalFsW(wFolderName, (wchar_t)CfgSanitizeChar);
+    }
+
     std::wstring subDir = targetDir;
     if (!subDir.empty() && subDir.back() != L'\\')
         subDir += L"\\";
-    subDir += GDriveHttp::HttpClient::Utf8ToWide(folder.name);
+    subDir += wFolderName;
 
     CreateDirectoryW(subDir.c_str(), NULL);
 
@@ -1551,25 +1672,59 @@ bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, con
 
     for (const auto& child : children)
     {
+        if (pProgressDlg && pProgressDlg->IsCancelled())
+            return false;
+
         if (child.isFolder)
         {
-            if (!DownloadFolderRecursive(child, subDir, parent))
+            if (!DownloadFolderRecursive(child, subDir, parent, pProgressDlg))
                 return false;
         }
         else
         {
-            if (!DownloadSingleItem(child, subDir, parent))
+            if (!DownloadSingleItem(child, subDir, parent, pProgressDlg))
                 return false;
         }
     }
     return true;
 }
 
-bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::string& fileName, const std::string& parentFolderId, HWND parent)
+bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::string& fileName, const std::string& parentFolderId, HWND parent, CTransferProgressDialog* pProgressDlg)
 {
+    LARGE_INTEGER localFileSize = {0};
+    HANDLE hF = CreateFileW(localPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (hF != INVALID_HANDLE_VALUE)
+    {
+        GetFileSizeEx(hF, &localFileSize);
+        CloseHandle(hF);
+    }
+
+    bool ownProgress = false;
+    if (!pProgressDlg)
+    {
+        pProgressDlg = new CTransferProgressDialog(parent, true, fileName, localFileSize.QuadPart);
+        pProgressDlg->Start();
+        ownProgress = true;
+    }
+
+    GDriveHttp::ProgressCallback progressCb = [pProgressDlg](int64_t bytesTransferred, int64_t totalBytes) -> bool {
+        if (pProgressDlg)
+        {
+            return pProgressDlg->OnProgress(bytesTransferred, totalBytes);
+        }
+        return true;
+    };
+
+    bool cancelFlag = false;
     GDriveApi::GDriveItem newItem;
     std::string err;
-    bool success = GDriveApi::ApiClient::GetInstance().UploadFile(parentFolderId, localPath, fileName, "", nullptr, nullptr, newItem, &err);
+    bool success = GDriveApi::ApiClient::GetInstance().UploadFile(parentFolderId, localPath, fileName, "", progressCb, &cancelFlag, newItem, &err);
+
+    if (ownProgress)
+    {
+        delete pProgressDlg;
+    }
+
     if (!success)
     {
         if (!err.empty())
@@ -1581,6 +1736,12 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
 
     std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + fileName;
     m_pathToIdCache[subPath] = newItem.id;
+
+    std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(fileName);
+    for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
+    std::string ansiSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
+    m_pathToIdCache[ansiSubPath] = newItem.id;
+
     m_cachedItems.push_back(newItem);
 
     GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(parentFolderId, newItem);
@@ -1588,7 +1749,7 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
     return true;
 }
 
-bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent)
+bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent, CTransferProgressDialog* pProgressDlg)
 {
     GDriveApi::GDriveItem newFolder;
     std::string err;
@@ -1604,6 +1765,11 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
     std::string folderSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + dirName;
     m_pathToIdCache[folderSubPath] = newFolder.id;
 
+    std::string ansiDirName = GDriveHttp::HttpClient::Utf8ToAnsi(dirName);
+    for (char& c : ansiDirName) { if (c == '/' || c == '\\') c = '_'; }
+    std::string ansiFolderSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiDirName;
+    m_pathToIdCache[ansiFolderSubPath] = newFolder.id;
+
     GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(parentFolderId, newFolder);
 
     std::wstring searchPattern = localDirPath;
@@ -1617,6 +1783,12 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
     {
         do
         {
+            if (pProgressDlg && pProgressDlg->IsCancelled())
+            {
+                FindClose(hFind);
+                return false;
+            }
+
             if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
                 continue;
 
@@ -1629,7 +1801,7 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
 
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                if (!UploadFolderRecursive(itemLocalPath, itemUtf8Name, newFolder.id, parent))
+                if (!UploadFolderRecursive(itemLocalPath, itemUtf8Name, newFolder.id, parent, pProgressDlg))
                 {
                     FindClose(hFind);
                     return false;
@@ -1637,13 +1809,8 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
             }
             else
             {
-                GDriveApi::GDriveItem uploadedFile;
-                if (!GDriveApi::ApiClient::GetInstance().UploadFile(newFolder.id, itemLocalPath, itemUtf8Name, "", nullptr, nullptr, uploadedFile, &err))
+                if (!UploadSingleItem(itemLocalPath, itemUtf8Name, newFolder.id, parent, pProgressDlg))
                 {
-                    if (!err.empty())
-                    {
-                        SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
-                    }
                     FindClose(hFind);
                     return false;
                 }
@@ -1687,7 +1854,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
             target[0] = 0;
     }
 
-    std::wstring wTargetDir = GDriveHttp::HttpClient::Utf8ToWide(target);
+    std::wstring wTargetDir = GDriveHttp::HttpClient::AnsiToWide(target);
 
     BOOL focused = (selectedFiles == 0 && selectedDirs == 0);
     int index = 0;
@@ -1701,11 +1868,15 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
         if (f == NULL)
             break;
 
+        std::string fileAnsiName = f->Name;
+        std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(f->Name);
+
         // Find item in cache
         const GDriveApi::GDriveItem* targetItem = nullptr;
         for (const auto& item : m_cachedItems)
         {
-            if (_stricmp(item.name.c_str(), f->Name) == 0)
+            if (_stricmp(item.name.c_str(), fileAnsiName.c_str()) == 0 ||
+                _stricmp(item.name.c_str(), fileUtf8Name.c_str()) == 0)
             {
                 targetItem = &item;
                 break;
@@ -1750,6 +1921,9 @@ void WINAPI CPluginFS::ViewFile(const char* fsName, HWND parent,
 {
     if (!file.Name || !salamander) return;
 
+    std::string fileAnsiName = file.Name;
+    std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(file.Name);
+
     const GDriveApi::GDriveItem* targetItem = nullptr;
     for (const auto& item : m_cachedItems)
     {
@@ -1763,7 +1937,10 @@ void WINAPI CPluginFS::ViewFile(const char* fsName, HWND parent,
             }
         }
 
-        if (_stricmp(checkName.c_str(), file.Name) == 0 || _stricmp(item.name.c_str(), file.Name) == 0)
+        if (_stricmp(checkName.c_str(), fileAnsiName.c_str()) == 0 ||
+            _stricmp(checkName.c_str(), fileUtf8Name.c_str()) == 0 ||
+            _stricmp(item.name.c_str(), fileAnsiName.c_str()) == 0 ||
+            _stricmp(item.name.c_str(), fileUtf8Name.c_str()) == 0)
         {
             targetItem = &item;
             break;
@@ -1785,7 +1962,7 @@ void WINAPI CPluginFS::ViewFile(const char* fsName, HWND parent,
 
     if (!fileExists)
     {
-        std::wstring wTempPath = GDriveHttp::HttpClient::Utf8ToWide(tmpFileName);
+        std::wstring wTempPath = GDriveHttp::HttpClient::AnsiToWide(tmpFileName);
         std::string err;
         newFileOK = GDriveApi::ApiClient::GetInstance().DownloadFile(*targetItem, wTempPath, nullptr, nullptr, &err);
         if (!newFileOK)

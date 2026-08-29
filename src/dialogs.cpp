@@ -145,6 +145,20 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
             RefreshAccountsList();
             return TRUE;
         }
+        else if (ctrlId == IDC_CFG_ACCOUNTS_COMBO && notifyCode == CBN_SELCHANGE)
+        {
+            HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
+            int curSel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+            auto accounts = GDriveAuth::AuthManager::GetInstance().GetAccounts();
+            if (curSel >= 0 && curSel < (int)accounts.size())
+            {
+                std::string cId = accounts[curSel].clientId.empty() ? GDriveAuth::AuthManager::GetInstance().GetClientId() : accounts[curSel].clientId;
+                std::string cSec = accounts[curSel].clientSecret.empty() ? GDriveAuth::AuthManager::GetInstance().GetClientSecret() : accounts[curSel].clientSecret;
+                SetDlgItemTextA(HWindow, IDC_CFG_CLIENTID, cId.c_str());
+                SetDlgItemTextA(HWindow, IDC_CFG_CLIENTSECRET, cSec.c_str());
+            }
+            return TRUE;
+        }
         else if (ctrlId == IDC_CFG_ACCOUNT_SWITCH_BTN && notifyCode == BN_CLICKED)
         {
             HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
@@ -153,6 +167,8 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
             if (curSel >= 0 && curSel < (int)accounts.size())
             {
                 GDriveAuth::AuthManager::GetInstance().SwitchAccount(accounts[curSel].email);
+                SetDlgItemTextA(HWindow, IDC_CFG_CLIENTID, GDriveAuth::AuthManager::GetInstance().GetClientId().c_str());
+                SetDlgItemTextA(HWindow, IDC_CFG_CLIENTSECRET, GDriveAuth::AuthManager::GetInstance().GetClientSecret().c_str());
                 RefreshAccountsList();
             }
             return TRUE;
@@ -169,6 +185,8 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
                 if (SalamanderGeneral->SalMessageBox(HWindow, msg, LoadStr(IDS_PLUGINNAME), MB_YESNO | MB_ICONQUESTION) == IDYES)
                 {
                     GDriveAuth::AuthManager::GetInstance().RemoveAccount(accounts[curSel].email);
+                    SetDlgItemTextA(HWindow, IDC_CFG_CLIENTID, GDriveAuth::AuthManager::GetInstance().GetClientId().c_str());
+                    SetDlgItemTextA(HWindow, IDC_CFG_CLIENTSECRET, GDriveAuth::AuthManager::GetInstance().GetClientSecret().c_str());
                     RefreshAccountsList();
                 }
             }
@@ -211,10 +229,18 @@ void CConfigPageCache::Transfer(CTransferInfo& ti)
     int smartCtrlR = GDriveCache::CacheManager::GetInstance().IsSmartCtrlR() ? 1 : 0;
     ti.CheckBox(IDC_CFG_SMART_CTRL_R, smartCtrlR);
 
+    int sanitize = CfgSanitizeInvalidChars ? 1 : 0;
+    ti.CheckBox(IDC_CFG_SANITIZE_INVALID_CHARS, sanitize);
+
+    char szSanitizeChar[8] = { CfgSanitizeChar, '\0' };
+    ti.EditLine(IDC_CFG_SANITIZE_CHAR, szSanitizeChar, sizeof(szSanitizeChar));
+
     if (ti.Type == ttDataFromWindow)
     {
         GDriveCache::CacheManager::GetInstance().SetEnabled(enabled != 0);
         GDriveCache::CacheManager::GetInstance().SetSmartCtrlR(smartCtrlR != 0);
+        CfgSanitizeInvalidChars = (sanitize != 0);
+        if (szSanitizeChar[0]) CfgSanitizeChar = szSanitizeChar[0];
 
         HWND hCombo = GetDlgItem(HWindow, IDC_CFG_CACHE_INTERVAL_COMBO);
         if (hCombo)
@@ -544,6 +570,165 @@ bool CCalcSizeProgressDialog::Run()
         _snprintf_s(msg, _TRUNCATE, LoadStr(IDS_CALC_RESULT_FMT),
                     m_itemName.c_str(), m_totalDirs, m_totalFiles, szStr.c_str(), numStr.c_str());
         SalamanderGeneral->SalMessageBox(hParent, msg, LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONINFORMATION);
+    }
+
+    return !m_cancelled;
+}
+
+//
+// CTransferProgressDialog
+//
+
+CTransferProgressDialog::CTransferProgressDialog(HWND hParent, bool isUpload, const std::string& fileName, int64_t totalBytes)
+    : CCommonDialog(HLanguage, IDD_TRANSFER_PROGRESS, hParent),
+      m_isUpload(isUpload),
+      m_fileName(fileName),
+      m_totalBytes(totalBytes),
+      m_cancelled(false),
+      m_startTick(0),
+      m_lastUpdateTick(0)
+{
+}
+
+CTransferProgressDialog::~CTransferProgressDialog()
+{
+    Stop();
+}
+
+INT_PTR CTransferProgressDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    if (uMsg == WM_COMMAND)
+    {
+        if (LOWORD(wParam) == IDCANCEL)
+        {
+            m_cancelled = true;
+            return TRUE;
+        }
+    }
+    else if (uMsg == WM_CLOSE)
+    {
+        m_cancelled = true;
+        return TRUE;
+    }
+    return CCommonDialog::DialogProc(uMsg, wParam, lParam);
+}
+
+void CTransferProgressDialog::ProcessMessages()
+{
+    MSG msg;
+    while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+    {
+        if (msg.message == WM_QUIT)
+        {
+            m_cancelled = true;
+            PostQuitMessage((int)msg.wParam);
+            break;
+        }
+        if (HWindow && IsDialogMessage(HWindow, &msg))
+            continue;
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
+bool CTransferProgressDialog::Start()
+{
+    if (!Create()) return false;
+
+    ShowWindow(HWindow, SW_SHOW);
+    UpdateWindow(HWindow);
+
+    std::string actionText = LoadStr(m_isUpload ? IDS_TRANSFER_UPLOADING : IDS_TRANSFER_DOWNLOADING);
+    SetDlgItemTextA(HWindow, IDC_TRANSFER_ACTION_LABEL, actionText.c_str());
+
+    std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(m_fileName);
+    SetDlgItemTextA(HWindow, IDC_TRANSFER_FILENAME, ansiFileName.c_str());
+
+    HWND hPb = GetDlgItem(HWindow, IDC_TRANSFER_PROGRESSBAR);
+    if (hPb)
+    {
+        SendMessage(hPb, PBM_SETRANGE32, 0, 1000);
+        SendMessage(hPb, PBM_SETPOS, 0, 0);
+    }
+
+    m_startTick = GetTickCount();
+    m_lastUpdateTick = m_startTick;
+
+    UpdateUI(0, m_totalBytes);
+    return true;
+}
+
+void CTransferProgressDialog::Stop()
+{
+    if (HWindow)
+    {
+        DestroyWindow(HWindow);
+        HWindow = NULL;
+    }
+}
+
+std::string CTransferProgressDialog::FormatSize(int64_t bytes)
+{
+    char buf[64];
+    if (bytes < 1024)
+        snprintf(buf, sizeof(buf), "%lld B", (long long)bytes);
+    else if (bytes < 1024 * 1024)
+        snprintf(buf, sizeof(buf), "%.2f KB", (double)bytes / 1024.0);
+    else if (bytes < 1024LL * 1024 * 1024)
+        snprintf(buf, sizeof(buf), "%.2f MB", (double)bytes / (1024.0 * 1024.0));
+    else if (bytes < 1024LL * 1024 * 1024 * 1024)
+        snprintf(buf, sizeof(buf), "%.2f GB", (double)bytes / (1024.0 * 1024.0 * 1024.0));
+    else
+        snprintf(buf, sizeof(buf), "%.2f TB", (double)bytes / (1024.0 * 1024.0 * 1024.0 * 1024.0));
+    return buf;
+}
+
+void CTransferProgressDialog::UpdateUI(int64_t bytesTransferred, int64_t totalBytes)
+{
+    if (!HWindow) return;
+
+    int percent = 0;
+    if (totalBytes > 0)
+    {
+        percent = (int)((bytesTransferred * 100) / totalBytes);
+        if (percent > 100) percent = 100;
+    }
+
+    HWND hPb = GetDlgItem(HWindow, IDC_TRANSFER_PROGRESSBAR);
+    if (hPb)
+    {
+        int pos = (int)((bytesTransferred * 1000) / (totalBytes > 0 ? totalBytes : 1));
+        if (pos > 1000) pos = 1000;
+        SendMessage(hPb, PBM_SETPOS, pos, 0);
+    }
+
+    char bytesBuf[128];
+    std::string trStr = FormatSize(bytesTransferred);
+    std::string totStr = FormatSize(totalBytes);
+    snprintf(bytesBuf, sizeof(bytesBuf), LoadStr(IDS_TRANSFER_BYTES_FMT), trStr.c_str(), totStr.c_str(), percent);
+    SetDlgItemTextA(HWindow, IDC_TRANSFER_BYTES, bytesBuf);
+
+    DWORD now = GetTickCount();
+    DWORD elapsedMs = now - m_startTick;
+    if (elapsedMs > 500 && bytesTransferred > 0)
+    {
+        double speedMBs = ((double)bytesTransferred / (1024.0 * 1024.0)) / ((double)elapsedMs / 1000.0);
+        char speedBuf[64];
+        snprintf(speedBuf, sizeof(speedBuf), LoadStr(IDS_TRANSFER_SPEED_FMT), speedMBs);
+        SetDlgItemTextA(HWindow, IDC_TRANSFER_SPEED, speedBuf);
+    }
+}
+
+bool CTransferProgressDialog::OnProgress(int64_t bytesTransferred, int64_t totalBytes)
+{
+    ProcessMessages();
+    if (m_cancelled) return false;
+
+    DWORD now = GetTickCount();
+    if (now - m_lastUpdateTick >= 100 || bytesTransferred >= totalBytes)
+    {
+        m_lastUpdateTick = now;
+        UpdateUI(bytesTransferred, totalBytes);
     }
 
     return !m_cancelled;

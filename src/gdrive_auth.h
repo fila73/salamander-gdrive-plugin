@@ -31,6 +31,8 @@ struct AccountProfile
 {
     std::string email;
     std::string displayName;
+    std::string clientId;
+    std::string clientSecret;
     bool isActive = false;
 };
 

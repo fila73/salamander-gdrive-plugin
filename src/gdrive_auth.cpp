@@ -631,6 +631,18 @@ bool AuthManager::SaveTokens()
                 RegSetValueExW(hKeyAcc, kRegValAccountName, 0, REG_SZ, (const BYTE*)wName.c_str(), (DWORD)(wName.length() + 1) * sizeof(wchar_t));
             }
 
+            if (!m_clientId.empty())
+            {
+                std::wstring wCid = GDriveHttp::HttpClient::Utf8ToWide(m_clientId);
+                RegSetValueExW(hKeyAcc, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
+            }
+
+            if (!m_clientSecret.empty())
+            {
+                std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(m_clientSecret);
+                RegSetValueExW(hKeyAcc, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+            }
+
             RegCloseKey(hKeyAcc);
         }
 
@@ -788,6 +800,18 @@ std::vector<AccountProfile> AuthManager::GetAccounts()
                     profile.displayName = GDriveHttp::HttpClient::WideToUtf8(szVal);
                 }
 
+                cbVal = sizeof(szVal);
+                if (RegQueryValueExW(hKeyItem, kRegValClientId, NULL, NULL, (LPBYTE)szVal, &cbVal) == ERROR_SUCCESS)
+                {
+                    profile.clientId = GDriveHttp::HttpClient::WideToUtf8(szVal);
+                }
+
+                cbVal = sizeof(szVal);
+                if (RegQueryValueExW(hKeyItem, kRegValClientSecret, NULL, NULL, (LPBYTE)szVal, &cbVal) == ERROR_SUCCESS)
+                {
+                    profile.clientSecret = GDriveHttp::HttpClient::WideToUtf8(szVal);
+                }
+
                 if (!profile.email.empty())
                 {
                     profile.isActive = (_stricmp(profile.email.c_str(), m_tokens.accountEmail.c_str()) == 0);
@@ -808,6 +832,8 @@ std::vector<AccountProfile> AuthManager::GetAccounts()
         AccountProfile prof;
         prof.email = m_tokens.accountEmail;
         prof.displayName = m_tokens.accountName;
+        prof.clientId = m_clientId;
+        prof.clientSecret = m_clientSecret;
         prof.isActive = true;
         accounts.push_back(prof);
     }
@@ -837,7 +863,7 @@ bool AuthManager::SwitchAccount(const std::string& email)
         return false;
     }
 
-    std::string newEmail, newName, newRefreshToken;
+    std::string newEmail, newName, newRefreshToken, newClientId, newClientSecret;
 
     wchar_t szBuf[256] = {0};
     DWORD cbBuf = sizeof(szBuf);
@@ -850,6 +876,18 @@ bool AuthManager::SwitchAccount(const std::string& email)
     if (RegQueryValueExW(hKeyAcc, kRegValAccountName, NULL, NULL, (LPBYTE)szBuf, &cbBuf) == ERROR_SUCCESS)
     {
         newName = GDriveHttp::HttpClient::WideToUtf8(szBuf);
+    }
+
+    cbBuf = sizeof(szBuf);
+    if (RegQueryValueExW(hKeyAcc, kRegValClientId, NULL, NULL, (LPBYTE)szBuf, &cbBuf) == ERROR_SUCCESS)
+    {
+        newClientId = GDriveHttp::HttpClient::WideToUtf8(szBuf);
+    }
+
+    cbBuf = sizeof(szBuf);
+    if (RegQueryValueExW(hKeyAcc, kRegValClientSecret, NULL, NULL, (LPBYTE)szBuf, &cbBuf) == ERROR_SUCCESS)
+    {
+        newClientSecret = GDriveHttp::HttpClient::WideToUtf8(szBuf);
     }
 
     DWORD cbData = 0;
@@ -882,6 +920,8 @@ bool AuthManager::SwitchAccount(const std::string& email)
         m_tokens.refreshToken = newRefreshToken;
         m_tokens.accessToken = "";
         m_tokens.expiresAt = 0;
+        if (!newClientId.empty()) m_clientId = newClientId;
+        if (!newClientSecret.empty()) m_clientSecret = newClientSecret;
     }
 
     // Set ActiveAccount in registry

@@ -24,6 +24,10 @@ char AssignedFSName[MAX_PATH] = "gdrive";
 int AssignedFSNameLen = 6;
 
 BOOL CfgIncludeSharedDrives = TRUE;
+BOOL CfgSanitizeInvalidChars = TRUE;
+char CfgSanitizeChar = '_';
+std::string CfgClientId = "";
+std::string CfgClientSecret = "";
 
 CPluginInterface PluginInterface;
 
@@ -136,10 +140,22 @@ void WINAPI CPluginInterface::LoadConfiguration(HWND parent, HKEY regKey, CSalam
 {
     if (!registry || !regKey) return;
 
-    DWORD dwShared = 1;
+    DWORD dwShared = 0;
     if (registry->GetValue(regKey, "IncludeSharedDrives", REG_DWORD, &dwShared, sizeof(dwShared)))
     {
         CfgIncludeSharedDrives = (dwShared != 0);
+    }
+
+    DWORD dwSanitize = 1;
+    if (registry->GetValue(regKey, "SanitizeInvalidChars", REG_DWORD, &dwSanitize, sizeof(dwSanitize)))
+    {
+        CfgSanitizeInvalidChars = (dwSanitize != 0);
+    }
+
+    char szSanitizeChar[8] = {0};
+    if (registry->GetValue(regKey, "SanitizeChar", REG_SZ, szSanitizeChar, sizeof(szSanitizeChar)))
+    {
+        if (szSanitizeChar[0]) CfgSanitizeChar = szSanitizeChar[0];
     }
 
     DWORD dwCacheEnabled = 1;
@@ -183,6 +199,12 @@ void WINAPI CPluginInterface::SaveConfiguration(HWND parent, HKEY regKey, CSalam
 
     DWORD dwShared = CfgIncludeSharedDrives ? 1 : 0;
     registry->SetValue(regKey, "IncludeSharedDrives", REG_DWORD, &dwShared, sizeof(dwShared));
+
+    DWORD dwSanitize = CfgSanitizeInvalidChars ? 1 : 0;
+    registry->SetValue(regKey, "SanitizeInvalidChars", REG_DWORD, &dwSanitize, sizeof(dwSanitize));
+
+    char szSanitizeChar[2] = { CfgSanitizeChar, '\0' };
+    registry->SetValue(regKey, "SanitizeChar", REG_SZ, szSanitizeChar, (int)strlen(szSanitizeChar) + 1);
 
     DWORD dwCacheEnabled = GDriveCache::CacheManager::GetInstance().IsEnabled() ? 1 : 0;
     registry->SetValue(regKey, "CacheEnabled", REG_DWORD, &dwCacheEnabled, sizeof(dwCacheEnabled));
