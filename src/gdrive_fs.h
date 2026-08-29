@@ -172,8 +172,14 @@ private:
     std::string m_currentDriveId; // Shared drive ID if inside shared drive
     bool m_isSharedDrive = false;
 
+    struct CaseInsensitiveCompare {
+        bool operator()(const std::string& a, const std::string& b) const {
+            return _stricmp(a.c_str(), b.c_str()) < 0;
+        }
+    };
+
     std::vector<GDriveApi::GDriveItem> m_cachedItems;
-    std::map<std::string, std::string> m_pathToIdCache;
+    std::map<std::string, std::string, CaseInsensitiveCompare> m_pathToIdCache;
     std::string m_lastErrorPath;
 
     bool ResolveCurrentFolderId();

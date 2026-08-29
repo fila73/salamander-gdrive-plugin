@@ -269,6 +269,12 @@ bool ApiClient::ListFolder(const std::string& folderId,
                            std::vector<GDriveItem>& itemsOut,
                            std::string* errorOut)
 {
+    if (folderId.empty() || folderId == "shared_drives_root" || folderId == "shared_with_me_root")
+    {
+        if (errorOut) *errorOut = "Invalid folder ID";
+        return false;
+    }
+
     std::string token = GetToken(errorOut);
     if (token.empty()) return false;
 

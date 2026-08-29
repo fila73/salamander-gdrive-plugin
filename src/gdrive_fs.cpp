@@ -135,7 +135,10 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
     while (newPath.size() > 1 && newPath.back() == '/')
         newPath.pop_back();
 
-    if (newPath.empty()) newPath = "/";
+    if (newPath.empty() || newPath == "/")
+        newPath = "/";
+    else if (newPath[0] != '/')
+        newPath = "/" + newPath;
 
     m_currentPath = newPath;
     m_lastErrorPath.clear();
@@ -144,7 +147,7 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
 
 bool CPluginFS::ResolveCurrentFolderId()
 {
-    if (m_currentPath.empty() || m_currentPath == "/")
+    if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
     {
         m_currentFolderId = "";
         m_currentDriveId = "";
@@ -152,15 +155,7 @@ bool CPluginFS::ResolveCurrentFolderId()
         return true;
     }
 
-    auto it = m_pathToIdCache.find(m_currentPath);
-    if (it != m_pathToIdCache.end())
-    {
-        m_currentFolderId = it->second;
-        m_isSharedDrive = (m_currentPath.rfind("/Shared Drives", 0) == 0 && m_currentPath != "/Shared Drives");
-        return true;
-    }
-
-    if (m_currentPath == "/My Drive")
+    if (_stricmp(m_currentPath.c_str(), "/My Drive") == 0)
     {
         m_currentFolderId = "root";
         m_currentDriveId = "";
@@ -169,7 +164,7 @@ bool CPluginFS::ResolveCurrentFolderId()
         return true;
     }
 
-    if (m_currentPath == "/Shared Drives")
+    if (_stricmp(m_currentPath.c_str(), "/Shared Drives") == 0)
     {
         m_currentFolderId = "shared_drives_root";
         m_currentDriveId = "";
@@ -178,12 +173,20 @@ bool CPluginFS::ResolveCurrentFolderId()
         return true;
     }
 
-    if (m_currentPath == "/Shared with me")
+    if (_stricmp(m_currentPath.c_str(), "/Shared with me") == 0)
     {
         m_currentFolderId = "shared_with_me_root";
         m_currentDriveId = "";
         m_isSharedDrive = false;
         m_pathToIdCache[m_currentPath] = "shared_with_me_root";
+        return true;
+    }
+
+    auto it = m_pathToIdCache.find(m_currentPath);
+    if (it != m_pathToIdCache.end())
+    {
+        m_currentFolderId = it->second;
+        m_isSharedDrive = (_strnicmp(m_currentPath.c_str(), "/Shared Drives", 14) == 0 && _stricmp(m_currentPath.c_str(), "/Shared Drives") != 0);
         return true;
     }
 
@@ -199,7 +202,7 @@ bool CPluginFS::ResolveCurrentFolderId()
         if (seg.empty()) continue;
         accumulated += "/" + seg;
 
-        if (accumulated == "/My Drive")
+        if (_stricmp(accumulated.c_str(), "/My Drive") == 0)
         {
             parentId = "root";
             isShared = false;
@@ -207,7 +210,7 @@ bool CPluginFS::ResolveCurrentFolderId()
             continue;
         }
 
-        if (accumulated == "/Shared Drives")
+        if (_stricmp(accumulated.c_str(), "/Shared Drives") == 0)
         {
             parentId = "shared_drives_root";
             isShared = true;
@@ -215,7 +218,7 @@ bool CPluginFS::ResolveCurrentFolderId()
             continue;
         }
 
-        if (accumulated == "/Shared with me")
+        if (_stricmp(accumulated.c_str(), "/Shared with me") == 0)
         {
             parentId = "shared_with_me_root";
             isShared = false;
@@ -231,7 +234,7 @@ bool CPluginFS::ResolveCurrentFolderId()
             continue;
         }
 
-        if (parentId == "shared_drives_root")
+        if (_stricmp(parentId.c_str(), "shared_drives_root") == 0)
         {
             std::vector<GDriveApi::GDriveItem> drives;
             if (GDriveApi::ApiClient::GetInstance().ListSharedDrives(drives))
@@ -239,7 +242,7 @@ bool CPluginFS::ResolveCurrentFolderId()
                 bool found = false;
                 for (const auto& d : drives)
                 {
-                    if (d.name == seg)
+                    if (_stricmp(d.name.c_str(), seg.c_str()) == 0)
                     {
                         parentId = d.id;
                         driveId = d.id;
@@ -255,7 +258,7 @@ bool CPluginFS::ResolveCurrentFolderId()
                 return false;
             }
         }
-        else if (parentId == "shared_with_me_root")
+        else if (_stricmp(parentId.c_str(), "shared_with_me_root") == 0)
         {
             std::vector<GDriveApi::GDriveItem> items;
             if (GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items))
@@ -263,7 +266,7 @@ bool CPluginFS::ResolveCurrentFolderId()
                 bool found = false;
                 for (const auto& item : items)
                 {
-                    if (item.isFolder && item.name == seg)
+                    if (item.isFolder && _stricmp(item.name.c_str(), seg.c_str()) == 0)
                     {
                         parentId = item.id;
                         m_pathToIdCache[accumulated] = parentId;
@@ -286,7 +289,7 @@ bool CPluginFS::ResolveCurrentFolderId()
                 bool found = false;
                 for (const auto& item : items)
                 {
-                    if (item.isFolder && item.name == seg)
+                    if (item.isFolder && _stricmp(item.name.c_str(), seg.c_str()) == 0)
                     {
                         parentId = item.id;
                         m_pathToIdCache[accumulated] = parentId;
@@ -306,6 +309,7 @@ bool CPluginFS::ResolveCurrentFolderId()
     m_currentFolderId = parentId;
     m_currentDriveId = driveId;
     m_isSharedDrive = isShared;
+    m_pathToIdCache[m_currentPath] = parentId;
     return true;
 }
 
@@ -377,7 +381,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     }
 
     // Up-dir ".." if not at root
-    if (!m_currentPath.empty() && m_currentPath != "/")
+    if (!m_currentPath.empty() && m_currentPath != "/" && _stricmp(m_currentPath.c_str(), "/") != 0)
     {
         FILETIME ft = {0, 0};
         GetSystemTimeAsFileTime(&ft);
@@ -385,7 +389,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     }
 
     // 1. Root listing: show "My Drive" and "Shared Drives"
-    if (m_currentPath.empty() || m_currentPath == "/")
+    if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
     {
         FILETIME ft = {0, 0};
         GetSystemTimeAsFileTime(&ft);
@@ -421,7 +425,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     }
 
     // 2. Shared Drives root: show all Shared Drives
-    if (m_currentPath == "/Shared Drives")
+    if (_stricmp(m_currentPath.c_str(), "/Shared Drives") == 0)
     {
         std::vector<GDriveApi::GDriveItem> drives;
         std::string err;
@@ -451,10 +455,11 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     }
 
     // 2b. Shared with me root: show all files & folders shared with the user
-    if (m_currentPath == "/Shared with me")
+    if (_stricmp(m_currentPath.c_str(), "/Shared with me") == 0)
     {
+        std::vector<GDriveApi::GDriveItem> items;
         std::string err;
-        if (!GDriveApi::ApiClient::GetInstance().ListSharedWithMe(m_cachedItems, &err))
+        if (!GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items, &err))
         {
             if (m_lastErrorPath != m_currentPath)
             {
@@ -465,8 +470,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         }
         m_lastErrorPath.clear();
 
-        for (auto& item : m_cachedItems)
+        for (auto& item : items)
         {
+            m_cachedItems.push_back(item);
             std::string subPath = m_currentPath + "/" + item.name;
             m_pathToIdCache[subPath] = item.id;
 
@@ -490,6 +496,21 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             }
         }
         return TRUE;
+    }
+
+    // Guard against empty or invalid folder ID before calling ListFolder
+    if (m_currentFolderId.empty() || m_currentFolderId == "shared_drives_root" || m_currentFolderId == "shared_with_me_root")
+    {
+        ResolveCurrentFolderId();
+        if (m_currentFolderId.empty() || m_currentFolderId == "shared_drives_root" || m_currentFolderId == "shared_with_me_root")
+        {
+            if (m_lastErrorPath != m_currentPath)
+            {
+                m_lastErrorPath = m_currentPath;
+                SalamanderGeneral->SalMessageBox(NULL, LoadStr(IDS_ERR_PATH_NOT_FOUND), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            }
+            return TRUE;
+        }
     }
 
     // 3. Regular folder listing (My Drive, subfolders, or Shared Drive contents)
