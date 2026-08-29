@@ -8,6 +8,7 @@
 #include "gdrive_auth.h"
 #include "gdrive.h"
 #include "gdrive_api.h"
+#include "gdrive_log.h"
 
 CCommonDialog::CCommonDialog(HINSTANCE hInstance, int resID, HWND hParent, CObjectOrigin origin)
     : CDialog(hInstance, resID, hParent, origin)
@@ -504,6 +505,7 @@ bool CCalcSizeProgressDialog::Run()
     HWND hParent = Parent;
     if (hParent) EnableWindow(hParent, FALSE);
 
+    GDriveLog::Log("[CALC] Started calculation for folder '%s' (ID: '%s')", m_itemName.c_str(), m_folderId.c_str());
     GDriveCache::CacheManager::GetInstance().CheckForRemoteChanges(false);
 
     std::queue<std::string> folderQueue;
@@ -511,6 +513,9 @@ bool CCalcSizeProgressDialog::Run()
     std::map<std::string, int64_t> directFolderBytes;
     std::map<std::string, std::vector<std::string>> childFoldersMap;
     folderQueue.push(m_folderId);
+
+    int cacheHits = 0;
+    int apiFetches = 0;
 
     while (!folderQueue.empty() && !m_cancelled)
     {
@@ -529,9 +534,13 @@ bool CCalcSizeProgressDialog::Run()
         if (currentId != "shared_with_me_root" && GDriveCache::CacheManager::GetInstance().GetFolder(currentId, items))
         {
             listOk = true;
+            cacheHits++;
+            GDriveLog::Log("[CALC] Folder '%s' (ID: %s) -> CACHE HIT (%u items)",
+                           currentId == m_folderId ? m_itemName.c_str() : "", currentId.c_str(), (uint32_t)items.size());
         }
         else
         {
+            apiFetches++;
             if (currentId == "shared_with_me_root")
             {
                 listOk = GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items, &err);
@@ -544,6 +553,12 @@ bool CCalcSizeProgressDialog::Run()
             if (listOk && currentId != "shared_with_me_root")
             {
                 GDriveCache::CacheManager::GetInstance().PutFolder(currentId, items);
+                GDriveLog::Log("[CALC] Folder '%s' (ID: %s) -> API FETCH (%u items)",
+                               currentId == m_folderId ? m_itemName.c_str() : "", currentId.c_str(), (uint32_t)items.size());
+            }
+            else if (!listOk)
+            {
+                GDriveLog::Log("[CALC] Folder ID '%s' -> API FETCH FAILED: %s", currentId.c_str(), err.c_str());
             }
         }
 
@@ -604,6 +619,12 @@ bool CCalcSizeProgressDialog::Run()
             GDriveCache::CacheManager::GetInstance().SetFolderSize(id, totalForThisFolder);
         }
         GDriveCache::CacheManager::GetInstance().SetFolderSize(m_folderId, m_totalBytes);
+        GDriveLog::Log("[CALC] Finished calculation for '%s' (ID: %s): %d dirs, %d files, %lld bytes. Cache hits: %d, API fetches: %d",
+                       m_itemName.c_str(), m_folderId.c_str(), m_totalDirs, m_totalFiles, (long long)m_totalBytes, cacheHits, apiFetches);
+    }
+    else
+    {
+        GDriveLog::Log("[CALC] Cancelled by user for '%s' (ID: %s)", m_itemName.c_str(), m_folderId.c_str());
     }
 
     GDriveCache::CacheManager::GetInstance().SaveToDisk();

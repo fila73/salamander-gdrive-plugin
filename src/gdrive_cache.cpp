@@ -3,6 +3,7 @@
 
 #include "gdrive_cache.h"
 #include "gdrive_http.h"
+#include "gdrive_log.h"
 #include <algorithm>
 #include <fstream>
 #include <shlobj.h>
@@ -297,6 +298,8 @@ bool CacheManager::SaveToDisk()
     }
 
     m_dirty = false;
+    GDriveLog::Log("[CACHE] Saved to disk for '%s': %u folders, %u sizes",
+                   m_currentAccountEmail.c_str(), folderCount, sizesCount);
     return true;
 }
 
@@ -382,6 +385,9 @@ bool CacheManager::LoadFromDisk()
     }
 
     m_dirty = false;
+    GDriveLog::Log("[CACHE] Loaded from disk for '%s': %u folders, %u sizes (startToken='%s')",
+                   m_currentAccountEmail.c_str(), (uint32_t)m_folders.size(), (uint32_t)m_folderSizes.size(),
+                   m_startPageToken.c_str());
     return true;
 }
 
@@ -405,6 +411,7 @@ void CacheManager::SetFolderSize(const std::string& folderId, int64_t size)
     std::lock_guard<std::mutex> lock(m_mutex);
     m_folderSizes[folderId] = size;
     m_dirty = true;
+    GDriveLog::Log("[CACHE] SetFolderSize: id='%s' -> %lld B", folderId.c_str(), (long long)size);
 }
 
 bool CacheManager::GetFolderSize(const std::string& folderId, int64_t& sizeOut)
@@ -631,18 +638,29 @@ bool CacheManager::CheckForRemoteChanges(bool forceCheck)
 
         if (!changedFolders.empty())
         {
+            GDriveLog::Log("[CHANGES] Remote changes detected: %u changed folders reported by Google Drive API", (uint32_t)changedFolders.size());
             for (const auto& fId : changedFolders)
             {
                 auto it = m_folders.find(fId);
                 if (it != m_folders.end())
                 {
                     it->second.isValid = false;
+                    GDriveLog::Log("[CHANGES] Folder cache invalidated: id='%s' (had %u cached items)", fId.c_str(), (uint32_t)it->second.items.size());
                 }
+                m_folderSizes.erase(fId);
             }
             InvalidateVirtualFolders();
             m_dirty = true;
         }
+        else
+        {
+            GDriveLog::Log("[CHANGES] CheckForRemoteChanges: 0 changes reported (cache is up-to-date)");
+        }
         return true;
+    }
+    else
+    {
+        GDriveLog::Log("[CHANGES] CheckForRemoteChanges failed: %s", err.c_str());
     }
 
     return false;

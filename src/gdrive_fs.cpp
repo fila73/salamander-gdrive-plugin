@@ -8,6 +8,7 @@
 #include "gdrive_api.h"
 #include "gdrive_cache.h"
 #include "gdrive_http.h"
+#include "gdrive_log.h"
 #include "dialogs.h"
 
 CPluginInterfaceForFS InterfaceForFS;
@@ -459,7 +460,7 @@ bool CPluginFS::ResolveCurrentFolderId()
 }
 
 static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
-                         bool isDir, int64_t size, const FILETIME* ft,
+                         bool isDir, int64_t size, bool sizeValid, const FILETIME* ft,
                          CPluginDataInterfaceAbstract* pluginData)
 {
     if (!name) return;
@@ -493,8 +494,8 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
         file.Ext = (pDot != NULL) ? const_cast<char*>(pDot + 1) : file.Name + file.NameLen;
     }
 
-    file.Size.SetUI64((unsigned __int64)size);
-    if (isDir && size > 0)
+    file.Size.SetUI64((unsigned __int64)(size < 0 ? 0 : size));
+    if (sizeValid)
     {
         file.SizeValid = 1;
     }
@@ -514,20 +515,19 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
     }
 }
 
-static int64_t GetCachedOrComputedFolderSize(const std::string& folderId)
+static bool GetCachedOrComputedFolderSize(const std::string& folderId, int64_t& sizeOut)
 {
-    if (folderId.empty()) return 0;
-    int64_t sz = 0;
+    if (folderId.empty()) return false;
     int files = 0, dirs = 0;
-    if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, sz))
+    if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, sizeOut))
     {
-        return sz;
+        return true;
     }
-    if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, sz, files, dirs))
+    if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, sizeOut, files, dirs))
     {
-        return sz;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
@@ -559,7 +559,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     {
         FILETIME ft = {0, 0};
         GetSystemTimeAsFileTime(&ft);
-        AddItemToDir(dir, "..", true, 0, &ft, pluginData);
+        AddItemToDir(dir, "..", true, 0, false, &ft, pluginData);
     }
 
     // 1. Root listing: show "My Drive" and "Shared Drives"
@@ -574,7 +574,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         itemMy.isFolder = true;
         m_cachedItems.push_back(itemMy);
 
-        AddItemToDir(dir, kMyDriveDir, true, 0, &ft, pluginData);
+        AddItemToDir(dir, kMyDriveDir, true, 0, false, &ft, pluginData);
 
         if (CfgIncludeSharedDrives)
         {
@@ -584,7 +584,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             itemShared.isFolder = true;
             m_cachedItems.push_back(itemShared);
 
-            AddItemToDir(dir, kSharedDrivesDir, true, 0, &ft, pluginData);
+            AddItemToDir(dir, kSharedDrivesDir, true, 0, false, &ft, pluginData);
         }
 
         GDriveApi::GDriveItem itemSharedWithMe;
@@ -593,7 +593,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         itemSharedWithMe.isFolder = true;
         m_cachedItems.push_back(itemSharedWithMe);
 
-        AddItemToDir(dir, kSharedWithMeDir, true, 0, &ft, pluginData);
+        AddItemToDir(dir, kSharedWithMeDir, true, 0, false, &ft, pluginData);
 
         GDriveApi::GDriveItem itemStarred;
         itemStarred.id = "starred_root";
@@ -601,7 +601,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         itemStarred.isFolder = true;
         m_cachedItems.push_back(itemStarred);
 
-        AddItemToDir(dir, kStarredDir, true, 0, &ft, pluginData);
+        AddItemToDir(dir, kStarredDir, true, 0, false, &ft, pluginData);
 
         GDriveApi::GDriveItem itemRecent;
         itemRecent.id = "recent_root";
@@ -609,7 +609,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         itemRecent.isFolder = true;
         m_cachedItems.push_back(itemRecent);
 
-        AddItemToDir(dir, kRecentDir, true, 0, &ft, pluginData);
+        AddItemToDir(dir, kRecentDir, true, 0, false, &ft, pluginData);
 
         GDriveApi::GDriveItem itemTrash;
         itemTrash.id = "trash_root";
@@ -617,7 +617,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         itemTrash.isFolder = true;
         m_cachedItems.push_back(itemTrash);
 
-        AddItemToDir(dir, kTrashDir, true, 0, &ft, pluginData);
+        AddItemToDir(dir, kTrashDir, true, 0, false, &ft, pluginData);
 
         return TRUE;
     }
@@ -640,6 +640,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     std::vector<GDriveApi::GDriveItem> cachedList;
     if (!m_currentFolderId.empty() && GDriveCache::CacheManager::GetInstance().GetFolder(m_currentFolderId, cachedList))
     {
+        GDriveLog::Log("[PANEL] ListCurrentPath '%s' (ID: %s) -> Cache hit (%u items)",
+                       m_currentPath.c_str(), m_currentFolderId.c_str(), (uint32_t)cachedList.size());
         for (const auto& item : cachedList)
         {
             m_cachedItems.push_back(item);
@@ -653,7 +655,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
+                int64_t folderSize = 0;
+                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
+                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
             }
             else
             {
@@ -667,7 +671,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
                     }
                 }
 
-                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
             }
         }
         return TRUE;
@@ -700,7 +704,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             std::string subPath = m_currentPath + "/" + d.name;
             m_pathToIdCache[subPath] = d.id;
 
-            AddItemToDir(dir, d.name.c_str(), true, GetCachedOrComputedFolderSize(d.id), &ft, pluginData);
+            int64_t folderSize = 0;
+            bool hasSize = GetCachedOrComputedFolderSize(d.id, folderSize);
+            AddItemToDir(dir, d.name.c_str(), true, folderSize, hasSize, &ft, pluginData);
         }
         return TRUE;
     }
@@ -731,7 +737,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
+                int64_t folderSize = 0;
+                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
+                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
             }
             else
             {
@@ -745,7 +753,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
                     }
                 }
 
-                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
             }
         }
         return TRUE;
@@ -777,7 +785,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
+                int64_t folderSize = 0;
+                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
+                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
             }
             else
             {
@@ -791,7 +801,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
                     }
                 }
 
-                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
             }
         }
         return TRUE;
@@ -823,7 +833,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
+                int64_t folderSize = 0;
+                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
+                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
             }
             else
             {
@@ -837,7 +849,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
                     }
                 }
 
-                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
             }
         }
         return TRUE;
@@ -869,7 +881,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             if (item.isFolder)
             {
-                AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
+                int64_t folderSize = 0;
+                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
+                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
             }
             else
             {
@@ -883,7 +897,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
                     }
                 }
 
-                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
             }
         }
         return TRUE;
@@ -922,6 +936,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     m_lastErrorPath.clear();
 
     GDriveCache::CacheManager::GetInstance().PutFolder(m_currentFolderId, m_cachedItems);
+    GDriveLog::Log("[PANEL] ListCurrentPath '%s' (ID: %s) -> API fetched %u items",
+                   m_currentPath.c_str(), m_currentFolderId.c_str(), (uint32_t)m_cachedItems.size());
 
     for (auto& item : m_cachedItems)
     {
@@ -935,7 +951,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
         if (item.isFolder)
         {
-            AddItemToDir(dir, item.name.c_str(), true, GetCachedOrComputedFolderSize(item.id), &item.modifiedTime, pluginData);
+            int64_t folderSize = 0;
+            bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
+            AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
         }
         else
         {
@@ -949,7 +967,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
                 }
             }
 
-            AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+            AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
         }
     }
 
@@ -2185,6 +2203,8 @@ void CPluginFS::OnSpacePressedOnFolder(int panel, const CFileData* f)
     if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, folderSize) ||
         GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, folderSize, files, dirs))
     {
+        GDriveLog::Log("[SPACE] Folder '%s' (ID: %s) -> Found in cache: %lld B. Displaying in panel directly without recalculation.",
+                       folderName.c_str(), folderId.c_str(), (long long)folderSize);
         CFileData* nonConstF = const_cast<CFileData*>(f);
         nonConstF->Size.Value = folderSize;
         nonConstF->SizeValid = 1;
@@ -2193,6 +2213,8 @@ void CPluginFS::OnSpacePressedOnFolder(int panel, const CFileData* f)
     }
     else
     {
+        GDriveLog::Log("[SPACE] Folder '%s' (ID: %s) -> Not in size cache. Launching calculation dialog.",
+                       folderName.c_str(), folderId.c_str());
         HWND hMain = SalamanderGeneral->GetMainWindowHWND();
         CalculateFolderSize(hMain, panel);
     }
