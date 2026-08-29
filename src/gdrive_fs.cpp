@@ -13,6 +13,7 @@ CPluginInterfaceForFS InterfaceForFS;
 
 static const char* kMyDriveDir = "My Drive";
 static const char* kSharedDrivesDir = "Shared Drives";
+static const char* kSharedWithMeDir = "Shared with me";
 
 CPluginFS::CPluginFS(const char* fsName)
     : m_fsName(fsName ? fsName : "gdrive"),
@@ -24,6 +25,7 @@ CPluginFS::CPluginFS(const char* fsName)
     m_pathToIdCache["/"] = "";
     m_pathToIdCache["/My Drive"] = "root";
     m_pathToIdCache["/Shared Drives"] = "shared_drives_root";
+    m_pathToIdCache["/Shared with me"] = "shared_with_me_root";
 }
 
 CPluginFS::~CPluginFS()
@@ -176,6 +178,15 @@ bool CPluginFS::ResolveCurrentFolderId()
         return true;
     }
 
+    if (m_currentPath == "/Shared with me")
+    {
+        m_currentFolderId = "shared_with_me_root";
+        m_currentDriveId = "";
+        m_isSharedDrive = false;
+        m_pathToIdCache[m_currentPath] = "shared_with_me_root";
+        return true;
+    }
+
     std::string seg;
     std::istringstream ss(m_currentPath);
     std::string accumulated = "";
@@ -204,6 +215,14 @@ bool CPluginFS::ResolveCurrentFolderId()
             continue;
         }
 
+        if (accumulated == "/Shared with me")
+        {
+            parentId = "shared_with_me_root";
+            isShared = false;
+            m_pathToIdCache[accumulated] = "shared_with_me_root";
+            continue;
+        }
+
         auto cached = m_pathToIdCache.find(accumulated);
         if (cached != m_pathToIdCache.end())
         {
@@ -224,6 +243,29 @@ bool CPluginFS::ResolveCurrentFolderId()
                     {
                         parentId = d.id;
                         driveId = d.id;
+                        m_pathToIdCache[accumulated] = parentId;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) return false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else if (parentId == "shared_with_me_root")
+        {
+            std::vector<GDriveApi::GDriveItem> items;
+            if (GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items))
+            {
+                bool found = false;
+                for (const auto& item : items)
+                {
+                    if (item.isFolder && item.name == seg)
+                    {
+                        parentId = item.id;
                         m_pathToIdCache[accumulated] = parentId;
                         found = true;
                         break;
@@ -366,6 +408,15 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
             AddItemToDir(dir, kSharedDrivesDir, true, 0, &ft, pluginData);
         }
+
+        GDriveApi::GDriveItem itemSharedWithMe;
+        itemSharedWithMe.id = "shared_with_me_root";
+        itemSharedWithMe.name = kSharedWithMeDir;
+        itemSharedWithMe.isFolder = true;
+        m_cachedItems.push_back(itemSharedWithMe);
+
+        AddItemToDir(dir, kSharedWithMeDir, true, 0, &ft, pluginData);
+
         return TRUE;
     }
 
@@ -395,6 +446,48 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             m_pathToIdCache[subPath] = d.id;
 
             AddItemToDir(dir, d.name.c_str(), true, 0, &ft, pluginData);
+        }
+        return TRUE;
+    }
+
+    // 2b. Shared with me root: show all files & folders shared with the user
+    if (m_currentPath == "/Shared with me")
+    {
+        std::string err;
+        if (!GDriveApi::ApiClient::GetInstance().ListSharedWithMe(m_cachedItems, &err))
+        {
+            if (m_lastErrorPath != m_currentPath)
+            {
+                m_lastErrorPath = m_currentPath;
+                SalamanderGeneral->SalMessageBox(NULL, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            }
+            return TRUE;
+        }
+        m_lastErrorPath.clear();
+
+        for (auto& item : m_cachedItems)
+        {
+            std::string subPath = m_currentPath + "/" + item.name;
+            m_pathToIdCache[subPath] = item.id;
+
+            if (item.isFolder)
+            {
+                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+            }
+            else
+            {
+                std::string displayName = item.name;
+                if (item.isGoogleDoc && !item.exportExtension.empty())
+                {
+                    if (displayName.length() < item.exportExtension.length() ||
+                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+                    {
+                        displayName += item.exportExtension;
+                    }
+                }
+
+                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+            }
         }
         return TRUE;
     }
@@ -917,6 +1010,10 @@ void CPluginFS::CalculateFolderSize(HWND parent, int panel)
         if (_stricmp(folderName.c_str(), "My Drive") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_MY_DRIVE)) == 0)
         {
             folderId = "root";
+        }
+        else if (_stricmp(folderName.c_str(), "Shared with me") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_SHARED_WITH_ME)) == 0)
+        {
+            folderId = "shared_with_me_root";
         }
     }
 

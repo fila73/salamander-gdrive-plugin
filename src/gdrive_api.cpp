@@ -201,6 +201,68 @@ bool ApiClient::ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string
     return true;
 }
 
+bool ApiClient::ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string pageToken;
+
+    std::string q = "sharedWithMe = true and trashed = false";
+
+    while (true)
+    {
+        std::string url = "https://www.googleapis.com/drive/v3/files?"
+                          "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime)") +
+                          "&pageSize=1000" +
+                          "&supportsAllDrives=true" +
+                          "&includeItemsFromAllDrives=true";
+
+        if (!pageToken.empty())
+        {
+            url += "&pageToken=" + GDriveHttp::HttpClient::UrlEncode(pageToken);
+        }
+
+        auto resp = http.Get(url, token);
+        if (!resp.success)
+        {
+            if (errorOut) *errorOut = "Failed to list Shared with me items: " + ExtractErrorMessage(resp);
+            return false;
+        }
+
+        auto json = GDriveJson::Value::Parse(resp.body);
+        if (json.Has("files") && json.GetArray("files").IsArray())
+        {
+            const auto& filesArr = json.GetArray("files");
+            for (size_t i = 0; i < filesArr.Size(); ++i)
+            {
+                const auto& f = filesArr[i];
+                GDriveItem item;
+                item.id = f.GetString("id");
+                item.name = f.GetString("name");
+                item.mimeType = f.GetString("mimeType");
+                item.size = f.GetInt64("size", 0);
+                item.isFolder = (item.mimeType == kFolderMimeType);
+                item.modifiedTime = Iso8601ToFileTime(f.GetString("modifiedTime"));
+                item.isSharedDrive = false;
+                item.driveId = "";
+
+                SetupGoogleDocExport(item);
+
+                itemsOut.push_back(item);
+            }
+        }
+
+        pageToken = json.GetString("nextPageToken");
+        if (pageToken.empty())
+            break;
+    }
+
+    return true;
+}
+
 bool ApiClient::ListFolder(const std::string& folderId,
                            const std::string& driveId,
                            bool isSharedDrive,

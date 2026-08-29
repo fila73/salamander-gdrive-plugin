@@ -52,6 +52,7 @@ public:
 
     bool GetAbout(AboutInfo& info, std::string* errorOut = nullptr);
     bool ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string* errorOut = nullptr);
+    bool ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string* errorOut = nullptr);
     bool ListFolder(const std::string& folderId,
                     const std::string& driveId,
                     bool isSharedDrive,

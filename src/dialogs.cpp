@@ -336,7 +336,17 @@ bool CCalcSizeProgressDialog::Run()
 
         std::vector<GDriveApi::GDriveItem> items;
         std::string err;
-        if (!GDriveApi::ApiClient::GetInstance().ListFolder(currentId, m_driveId, m_isSharedDrive, items, &err))
+        bool listOk = false;
+        if (currentId == "shared_with_me_root")
+        {
+            listOk = GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items, &err);
+        }
+        else
+        {
+            listOk = GDriveApi::ApiClient::GetInstance().ListFolder(currentId, m_driveId, m_isSharedDrive, items, &err);
+        }
+
+        if (!listOk)
         {
             continue;
         }
