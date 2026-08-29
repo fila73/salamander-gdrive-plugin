@@ -8,6 +8,7 @@
 #include "dialogs.h"
 #include "gdrive_fs.h"
 #include "gdrive_cache.h"
+#include "gdrive_log.h"
 
 // Globals
 HINSTANCE DLLInstance = NULL;
@@ -204,6 +205,12 @@ void WINAPI CPluginInterface::LoadConfiguration(HWND parent, HKEY regKey, CSalam
     if (registry->GetValue(regKey, "CacheEnabled", REG_DWORD, &dwCacheEnabled, sizeof(dwCacheEnabled)))
     {
         GDriveCache::CacheManager::GetInstance().SetEnabled(dwCacheEnabled != 0);
+        GDriveLog::Log("[CONFIG] LoadConfiguration: CacheEnabled=%u", dwCacheEnabled);
+    }
+    else
+    {
+        GDriveCache::CacheManager::GetInstance().SetEnabled(true);
+        GDriveLog::Log("[CONFIG] LoadConfiguration: CacheEnabled not found, default to 1");
     }
 
     DWORD dwCacheInterval = 30000;
