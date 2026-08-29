@@ -10,8 +10,8 @@
 #error this file is not editable by Microsoft Visual C++
 #endif
 
-#define VERSINFO_MAJOR       1
-#define VERSINFO_MINORA      0
+#define VERSINFO_MAJOR       0
+#define VERSINFO_MINORA      2
 #define VERSINFO_MINORB      0
 
 #include "spl_vers.h"
