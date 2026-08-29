@@ -629,8 +629,16 @@ bool CCalcSizeProgressDialog::Run()
 
     GDriveCache::CacheManager::GetInstance().SaveToDisk();
 
-    if (hParent) EnableWindow(hParent, TRUE);
-    if (HWindow) DestroyWindow(HWindow);
+    if (hParent)
+    {
+        EnableWindow(hParent, TRUE);
+        SetForegroundWindow(hParent);
+    }
+    if (HWindow)
+    {
+        DestroyWindow(HWindow);
+        HWindow = NULL;
+    }
 
     char msg[1024];
     std::string szStr = FormatSize(m_totalBytes);

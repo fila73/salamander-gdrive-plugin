@@ -57,10 +57,11 @@ void Log(const char* fmt, ...)
     std::wstring logPath = GetLogFilePath();
     if (!logPath.empty())
     {
-        FILE* f = _wfopen(logPath.c_str(), L"a, ccs=UTF-8");
+        FILE* f = _wfopen(logPath.c_str(), L"ab");
         if (f)
         {
-            fputs(fullMsg.c_str(), f);
+            fwrite(fullMsg.data(), 1, fullMsg.size(), f);
+            fflush(f);
             fclose(f);
         }
     }
