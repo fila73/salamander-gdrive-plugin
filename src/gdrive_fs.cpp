@@ -132,6 +132,8 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
                                   const char* userPart, char* cutFileName, BOOL* pathWasCut,
                                   BOOL forceRefresh, int mode)
 {
+    std::string oldPath = m_currentPath;
+
     if (pathWasCut) *pathWasCut = FALSE;
     if (cutFileName) *cutFileName = '\0';
     if (fsName) lstrcpyn(fsName, AssignedFSName, MAX_PATH);
@@ -152,6 +154,21 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
 
     if (ResolveCurrentFolderId())
     {
+        // If navigating up from a subpath, populate cutFileName so Salamander focuses the exited folder
+        if (cutFileName && !oldPath.empty() && oldPath.length() > newPath.length())
+        {
+            if (oldPath.compare(0, newPath == "/" ? 0 : newPath.length(), newPath == "/" ? "" : newPath) == 0)
+            {
+                std::string rel = oldPath.substr(newPath == "/" ? 0 : newPath.length());
+                if (!rel.empty() && rel[0] == '/') rel = rel.substr(1);
+                if (!rel.empty())
+                {
+                    std::string ansiRel = GDriveHttp::HttpClient::Utf8ToAnsi(rel);
+                    lstrcpynA(cutFileName, ansiRel.c_str(), MAX_PATH);
+                    if (pathWasCut) *pathWasCut = TRUE;
+                }
+            }
+        }
         return TRUE;
     }
 
@@ -173,6 +190,16 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
         m_currentPath = fallbackPath;
         if (ResolveCurrentFolderId())
         {
+            if (cutFileName && !oldPath.empty() && oldPath.length() > fallbackPath.length())
+            {
+                std::string rel = oldPath.substr(fallbackPath == "/" ? 0 : fallbackPath.length());
+                if (!rel.empty() && rel[0] == '/') rel = rel.substr(1);
+                if (!rel.empty())
+                {
+                    std::string ansiRel = GDriveHttp::HttpClient::Utf8ToAnsi(rel);
+                    lstrcpynA(cutFileName, ansiRel.c_str(), MAX_PATH);
+                }
+            }
             if (pathWasCut) *pathWasCut = TRUE;
             return TRUE;
         }
