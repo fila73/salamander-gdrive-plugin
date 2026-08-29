@@ -152,6 +152,17 @@ BEGIN
     IDS_UPLOAD_PROGRESS_FMT                  "Uploading %s (%s / %s)..."
     IDS_STATUS_UPLOADING                     "Uploading to Google Drive..."
     IDS_ERR_CANNOT_UPLOAD_ROOT               "Cannot upload files directly to the root view. Please open 'My Drive' or a specific folder first."
+    IDS_MENU_OPEN_IN_BROWSER    "&Open in Web Browser"
+    IDS_MENU_COPY_LINK          "&Copy Link to Clipboard"
+    IDS_MENU_ADD_STAR           "&Add Star (Star item)"
+    IDS_MENU_REMOVE_STAR        "&Remove Star"
+    IDS_MENU_RESTORE_TRASH      "&Restore from Trash"
+    IDS_MENU_EMPTY_TRASH        "&Empty Trash..."
+    IDS_STARRED                 "Starred"
+    IDS_TRASH                   "Trash"
+    IDS_RECENT                  "Recent"
+    IDS_LINK_COPIED             "Web link was copied to clipboard."
+    IDS_CONFIRM_EMPTY_TRASH     "Are you sure you want to permanently delete all items in Trash?\n\nWarning: This operation cannot be undone!"
 END
 
 #endif // English resources

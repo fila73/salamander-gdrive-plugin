@@ -201,6 +201,24 @@ bool ApiClient::ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string
     return true;
 }
 
+static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool isSharedDrive = false, const std::string& driveId = "")
+{
+    item.id = f.GetString("id");
+    item.name = f.GetString("name");
+    item.mimeType = f.GetString("mimeType");
+    item.size = f.GetInt64("size", 0);
+    item.isFolder = (item.mimeType == kFolderMimeType);
+    item.modifiedTime = ApiClient::Iso8601ToFileTime(f.GetString("modifiedTime"));
+    item.isStarred = f.GetBool("starred", false);
+    item.isTrashed = f.GetBool("trashed", false);
+    item.webViewLink = f.GetString("webViewLink");
+    item.webContentLink = f.GetString("webContentLink");
+    item.isSharedDrive = isSharedDrive;
+    item.driveId = driveId;
+
+    ApiClient::SetupGoogleDocExport(item);
+}
+
 bool ApiClient::ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string* errorOut)
 {
     std::string token = GetToken(errorOut);
@@ -215,7 +233,7 @@ bool ApiClient::ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string*
     {
         std::string url = "https://www.googleapis.com/drive/v3/files?"
                           "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
-                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime)") +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
                           "&pageSize=1000" +
                           "&supportsAllDrives=true" +
                           "&includeItemsFromAllDrives=true";
@@ -238,19 +256,8 @@ bool ApiClient::ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string*
             const auto& filesArr = json.GetArray("files");
             for (size_t i = 0; i < filesArr.Size(); ++i)
             {
-                const auto& f = filesArr[i];
                 GDriveItem item;
-                item.id = f.GetString("id");
-                item.name = f.GetString("name");
-                item.mimeType = f.GetString("mimeType");
-                item.size = f.GetInt64("size", 0);
-                item.isFolder = (item.mimeType == kFolderMimeType);
-                item.modifiedTime = Iso8601ToFileTime(f.GetString("modifiedTime"));
-                item.isSharedDrive = false;
-                item.driveId = "";
-
-                SetupGoogleDocExport(item);
-
+                ParseItemFromJson(filesArr[i], item);
                 itemsOut.push_back(item);
             }
         }
@@ -258,6 +265,222 @@ bool ApiClient::ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string*
         pageToken = json.GetString("nextPageToken");
         if (pageToken.empty())
             break;
+    }
+
+    return true;
+}
+
+bool ApiClient::ListStarred(std::vector<GDriveItem>& itemsOut, std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string pageToken;
+
+    std::string q = "starred = true and trashed = false";
+
+    while (true)
+    {
+        std::string url = "https://www.googleapis.com/drive/v3/files?"
+                          "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                          "&pageSize=1000" +
+                          "&supportsAllDrives=true" +
+                          "&includeItemsFromAllDrives=true";
+
+        if (!pageToken.empty())
+        {
+            url += "&pageToken=" + GDriveHttp::HttpClient::UrlEncode(pageToken);
+        }
+
+        auto resp = http.Get(url, token);
+        if (!resp.success)
+        {
+            if (errorOut) *errorOut = "Failed to list Starred items: " + ExtractErrorMessage(resp);
+            return false;
+        }
+
+        auto json = GDriveJson::Value::Parse(resp.body);
+        if (json.Has("files") && json.GetArray("files").IsArray())
+        {
+            const auto& filesArr = json.GetArray("files");
+            for (size_t i = 0; i < filesArr.Size(); ++i)
+            {
+                GDriveItem item;
+                ParseItemFromJson(filesArr[i], item);
+                itemsOut.push_back(item);
+            }
+        }
+
+        pageToken = json.GetString("nextPageToken");
+        if (pageToken.empty())
+            break;
+    }
+
+    return true;
+}
+
+bool ApiClient::ListTrash(std::vector<GDriveItem>& itemsOut, std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string pageToken;
+
+    std::string q = "trashed = true";
+
+    while (true)
+    {
+        std::string url = "https://www.googleapis.com/drive/v3/files?"
+                          "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                          "&pageSize=1000" +
+                          "&supportsAllDrives=true" +
+                          "&includeItemsFromAllDrives=true";
+
+        if (!pageToken.empty())
+        {
+            url += "&pageToken=" + GDriveHttp::HttpClient::UrlEncode(pageToken);
+        }
+
+        auto resp = http.Get(url, token);
+        if (!resp.success)
+        {
+            if (errorOut) *errorOut = "Failed to list Trash items: " + ExtractErrorMessage(resp);
+            return false;
+        }
+
+        auto json = GDriveJson::Value::Parse(resp.body);
+        if (json.Has("files") && json.GetArray("files").IsArray())
+        {
+            const auto& filesArr = json.GetArray("files");
+            for (size_t i = 0; i < filesArr.Size(); ++i)
+            {
+                GDriveItem item;
+                ParseItemFromJson(filesArr[i], item);
+                itemsOut.push_back(item);
+            }
+        }
+
+        pageToken = json.GetString("nextPageToken");
+        if (pageToken.empty())
+            break;
+    }
+
+    return true;
+}
+
+bool ApiClient::ListRecent(std::vector<GDriveItem>& itemsOut, std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+
+    std::string q = "trashed = false";
+    std::string url = "https://www.googleapis.com/drive/v3/files?"
+                      "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
+                      "&orderBy=" + GDriveHttp::HttpClient::UrlEncode("viewedByMeTime desc,modifiedTime desc") +
+                      "&fields=" + GDriveHttp::HttpClient::UrlEncode("files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                      "&pageSize=100" +
+                      "&supportsAllDrives=true" +
+                      "&includeItemsFromAllDrives=true";
+
+    auto resp = http.Get(url, token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to list Recent items: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    auto json = GDriveJson::Value::Parse(resp.body);
+    if (json.Has("files") && json.GetArray("files").IsArray())
+    {
+        const auto& filesArr = json.GetArray("files");
+        for (size_t i = 0; i < filesArr.Size(); ++i)
+        {
+            GDriveItem item;
+            ParseItemFromJson(filesArr[i], item);
+            itemsOut.push_back(item);
+        }
+    }
+
+    return true;
+}
+
+bool ApiClient::SetStarred(const std::string& fileId, bool starred, std::string* errorOut)
+{
+    if (fileId.empty() || fileId == "root" || fileId == "shared_drives_root" || fileId == "shared_with_me_root")
+    {
+        if (errorOut) *errorOut = "Cannot modify star for root folder";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+                      "?supportsAllDrives=true";
+
+    GDriveJson::Value bodyObj;
+    bodyObj.Set("starred", starred);
+    std::string bodyStr = bodyObj.Serialize();
+
+    auto resp = http.Patch(url, bodyStr, "application/json; charset=UTF-8", token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to update starred status: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    return true;
+}
+
+bool ApiClient::RestoreFromTrash(const std::string& fileId, std::string* errorOut)
+{
+    if (fileId.empty())
+    {
+        if (errorOut) *errorOut = "Invalid file ID";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+                      "?supportsAllDrives=true";
+
+    GDriveJson::Value bodyObj;
+    bodyObj.Set("trashed", false);
+    std::string bodyStr = bodyObj.Serialize();
+
+    auto resp = http.Patch(url, bodyStr, "application/json; charset=UTF-8", token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to restore item from trash: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    return true;
+}
+
+bool ApiClient::EmptyTrash(std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/trash";
+
+    auto resp = http.Delete(url, token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to empty trash: " + ExtractErrorMessage(resp);
+        return false;
     }
 
     return true;
@@ -287,7 +510,7 @@ bool ApiClient::ListFolder(const std::string& folderId,
     {
         std::string url = "https://www.googleapis.com/drive/v3/files?"
                           "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
-                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime)") +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
                           "&pageSize=1000" +
                           "&supportsAllDrives=true" +
                           "&includeItemsFromAllDrives=true";
@@ -315,19 +538,8 @@ bool ApiClient::ListFolder(const std::string& folderId,
             const auto& filesArr = json.GetArray("files");
             for (size_t i = 0; i < filesArr.Size(); ++i)
             {
-                const auto& f = filesArr[i];
                 GDriveItem item;
-                item.id = f.GetString("id");
-                item.name = f.GetString("name");
-                item.mimeType = f.GetString("mimeType");
-                item.size = f.GetInt64("size", 0);
-                item.isFolder = (item.mimeType == kFolderMimeType);
-                item.modifiedTime = Iso8601ToFileTime(f.GetString("modifiedTime"));
-                item.isSharedDrive = isSharedDrive;
-                item.driveId = driveId;
-
-                SetupGoogleDocExport(item);
-
+                ParseItemFromJson(filesArr[i], item, isSharedDrive, driveId);
                 itemsOut.push_back(item);
             }
         }
@@ -347,7 +559,7 @@ bool ApiClient::GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, 
 
     GDriveHttp::HttpClient http;
     std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
-                      "?fields=" + GDriveHttp::HttpClient::UrlEncode("id,name,mimeType,size,modifiedTime") +
+                      "?fields=" + GDriveHttp::HttpClient::UrlEncode("id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink") +
                       "&supportsAllDrives=true";
 
     auto resp = http.Get(url, token);
@@ -358,14 +570,7 @@ bool ApiClient::GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, 
     }
 
     auto json = GDriveJson::Value::Parse(resp.body);
-    itemOut.id = json.GetString("id");
-    itemOut.name = json.GetString("name");
-    itemOut.mimeType = json.GetString("mimeType");
-    itemOut.size = json.GetInt64("size", 0);
-    itemOut.isFolder = (itemOut.mimeType == kFolderMimeType);
-    itemOut.modifiedTime = Iso8601ToFileTime(json.GetString("modifiedTime"));
-
-    SetupGoogleDocExport(itemOut);
+    ParseItemFromJson(json, itemOut);
     return true;
 }
 

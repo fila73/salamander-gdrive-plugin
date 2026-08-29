@@ -38,6 +38,12 @@
 #define CM_CONFIG                   1104
 #define CM_ABOUT                    1105
 #define CM_CALC_SIZE                1106
+#define CM_OPEN_IN_BROWSER          1107
+#define CM_COPY_LINK                1108
+#define CM_ADD_STAR                 1109
+#define CM_REMOVE_STAR              1110
+#define CM_RESTORE_TRASH            1111
+#define CM_EMPTY_TRASH              1112
 
 // String IDs for menus & dialogs
 #define IDS_MENU_CONNECT            2001
@@ -46,6 +52,12 @@
 #define IDS_MENU_CONFIG             2004
 #define IDS_MENU_ABOUT              2005
 #define IDS_MENU_CALC_SIZE          2006
+#define IDS_MENU_OPEN_IN_BROWSER    2007
+#define IDS_MENU_COPY_LINK          2008
+#define IDS_MENU_ADD_STAR           2009
+#define IDS_MENU_REMOVE_STAR        2010
+#define IDS_MENU_RESTORE_TRASH      2011
+#define IDS_MENU_EMPTY_TRASH        2012
 
 #define IDS_STATUS_CONNECTING       2101
 #define IDS_STATUS_DOWNLOADING      2102
@@ -85,5 +97,10 @@
 #define IDS_UPLOAD_PROGRESS_FMT                  2136
 #define IDS_STATUS_UPLOADING                     2137
 #define IDS_ERR_CANNOT_UPLOAD_ROOT               2138
+#define IDS_STARRED                              2139
+#define IDS_TRASH                                2140
+#define IDS_RECENT                               2141
+#define IDS_LINK_COPIED                          2142
+#define IDS_CONFIRM_EMPTY_TRASH                  2143
 
 #endif // __GDRIVE_RH2

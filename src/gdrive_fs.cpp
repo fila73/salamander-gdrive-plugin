@@ -14,6 +14,9 @@ CPluginInterfaceForFS InterfaceForFS;
 static const char* kMyDriveDir = "My Drive";
 static const char* kSharedDrivesDir = "Shared Drives";
 static const char* kSharedWithMeDir = "Shared with me";
+static const char* kStarredDir = "Starred";
+static const char* kRecentDir = "Recent";
+static const char* kTrashDir = "Trash";
 
 CPluginFS::CPluginFS(const char* fsName)
     : m_fsName(fsName ? fsName : "gdrive"),
@@ -26,6 +29,9 @@ CPluginFS::CPluginFS(const char* fsName)
     m_pathToIdCache["/My Drive"] = "root";
     m_pathToIdCache["/Shared Drives"] = "shared_drives_root";
     m_pathToIdCache["/Shared with me"] = "shared_with_me_root";
+    m_pathToIdCache["/Starred"] = "starred_root";
+    m_pathToIdCache["/Recent"] = "recent_root";
+    m_pathToIdCache["/Trash"] = "trash_root";
 }
 
 CPluginFS::~CPluginFS()
@@ -182,6 +188,33 @@ bool CPluginFS::ResolveCurrentFolderId()
         return true;
     }
 
+    if (_stricmp(m_currentPath.c_str(), "/Starred") == 0)
+    {
+        m_currentFolderId = "starred_root";
+        m_currentDriveId = "";
+        m_isSharedDrive = false;
+        m_pathToIdCache[m_currentPath] = "starred_root";
+        return true;
+    }
+
+    if (_stricmp(m_currentPath.c_str(), "/Recent") == 0)
+    {
+        m_currentFolderId = "recent_root";
+        m_currentDriveId = "";
+        m_isSharedDrive = false;
+        m_pathToIdCache[m_currentPath] = "recent_root";
+        return true;
+    }
+
+    if (_stricmp(m_currentPath.c_str(), "/Trash") == 0)
+    {
+        m_currentFolderId = "trash_root";
+        m_currentDriveId = "";
+        m_isSharedDrive = false;
+        m_pathToIdCache[m_currentPath] = "trash_root";
+        return true;
+    }
+
     auto it = m_pathToIdCache.find(m_currentPath);
     if (it != m_pathToIdCache.end())
     {
@@ -223,6 +256,30 @@ bool CPluginFS::ResolveCurrentFolderId()
             parentId = "shared_with_me_root";
             isShared = false;
             m_pathToIdCache[accumulated] = "shared_with_me_root";
+            continue;
+        }
+
+        if (_stricmp(accumulated.c_str(), "/Starred") == 0)
+        {
+            parentId = "starred_root";
+            isShared = false;
+            m_pathToIdCache[accumulated] = "starred_root";
+            continue;
+        }
+
+        if (_stricmp(accumulated.c_str(), "/Recent") == 0)
+        {
+            parentId = "recent_root";
+            isShared = false;
+            m_pathToIdCache[accumulated] = "recent_root";
+            continue;
+        }
+
+        if (_stricmp(accumulated.c_str(), "/Trash") == 0)
+        {
+            parentId = "trash_root";
+            isShared = false;
+            m_pathToIdCache[accumulated] = "trash_root";
             continue;
         }
 
@@ -421,6 +478,30 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
 
         AddItemToDir(dir, kSharedWithMeDir, true, 0, &ft, pluginData);
 
+        GDriveApi::GDriveItem itemStarred;
+        itemStarred.id = "starred_root";
+        itemStarred.name = kStarredDir;
+        itemStarred.isFolder = true;
+        m_cachedItems.push_back(itemStarred);
+
+        AddItemToDir(dir, kStarredDir, true, 0, &ft, pluginData);
+
+        GDriveApi::GDriveItem itemRecent;
+        itemRecent.id = "recent_root";
+        itemRecent.name = kRecentDir;
+        itemRecent.isFolder = true;
+        m_cachedItems.push_back(itemRecent);
+
+        AddItemToDir(dir, kRecentDir, true, 0, &ft, pluginData);
+
+        GDriveApi::GDriveItem itemTrash;
+        itemTrash.id = "trash_root";
+        itemTrash.name = kTrashDir;
+        itemTrash.isFolder = true;
+        m_cachedItems.push_back(itemTrash);
+
+        AddItemToDir(dir, kTrashDir, true, 0, &ft, pluginData);
+
         return TRUE;
     }
 
@@ -498,11 +579,147 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         return TRUE;
     }
 
+    // 2c. Starred root: show all starred files & folders
+    if (_stricmp(m_currentPath.c_str(), "/Starred") == 0)
+    {
+        std::vector<GDriveApi::GDriveItem> items;
+        std::string err;
+        if (!GDriveApi::ApiClient::GetInstance().ListStarred(items, &err))
+        {
+            if (m_lastErrorPath != m_currentPath)
+            {
+                m_lastErrorPath = m_currentPath;
+                SalamanderGeneral->SalMessageBox(NULL, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            }
+            return TRUE;
+        }
+        m_lastErrorPath.clear();
+
+        for (auto& item : items)
+        {
+            m_cachedItems.push_back(item);
+            std::string subPath = m_currentPath + "/" + item.name;
+            m_pathToIdCache[subPath] = item.id;
+
+            if (item.isFolder)
+            {
+                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+            }
+            else
+            {
+                std::string displayName = item.name;
+                if (item.isGoogleDoc && !item.exportExtension.empty())
+                {
+                    if (displayName.length() < item.exportExtension.length() ||
+                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+                    {
+                        displayName += item.exportExtension;
+                    }
+                }
+
+                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+            }
+        }
+        return TRUE;
+    }
+
+    // 2d. Recent root: show recent files & folders
+    if (_stricmp(m_currentPath.c_str(), "/Recent") == 0)
+    {
+        std::vector<GDriveApi::GDriveItem> items;
+        std::string err;
+        if (!GDriveApi::ApiClient::GetInstance().ListRecent(items, &err))
+        {
+            if (m_lastErrorPath != m_currentPath)
+            {
+                m_lastErrorPath = m_currentPath;
+                SalamanderGeneral->SalMessageBox(NULL, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            }
+            return TRUE;
+        }
+        m_lastErrorPath.clear();
+
+        for (auto& item : items)
+        {
+            m_cachedItems.push_back(item);
+            std::string subPath = m_currentPath + "/" + item.name;
+            m_pathToIdCache[subPath] = item.id;
+
+            if (item.isFolder)
+            {
+                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+            }
+            else
+            {
+                std::string displayName = item.name;
+                if (item.isGoogleDoc && !item.exportExtension.empty())
+                {
+                    if (displayName.length() < item.exportExtension.length() ||
+                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+                    {
+                        displayName += item.exportExtension;
+                    }
+                }
+
+                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+            }
+        }
+        return TRUE;
+    }
+
+    // 2e. Trash root: show trashed files & folders
+    if (_stricmp(m_currentPath.c_str(), "/Trash") == 0)
+    {
+        std::vector<GDriveApi::GDriveItem> items;
+        std::string err;
+        if (!GDriveApi::ApiClient::GetInstance().ListTrash(items, &err))
+        {
+            if (m_lastErrorPath != m_currentPath)
+            {
+                m_lastErrorPath = m_currentPath;
+                SalamanderGeneral->SalMessageBox(NULL, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            }
+            return TRUE;
+        }
+        m_lastErrorPath.clear();
+
+        for (auto& item : items)
+        {
+            m_cachedItems.push_back(item);
+            std::string subPath = m_currentPath + "/" + item.name;
+            m_pathToIdCache[subPath] = item.id;
+
+            if (item.isFolder)
+            {
+                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+            }
+            else
+            {
+                std::string displayName = item.name;
+                if (item.isGoogleDoc && !item.exportExtension.empty())
+                {
+                    if (displayName.length() < item.exportExtension.length() ||
+                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+                    {
+                        displayName += item.exportExtension;
+                    }
+                }
+
+                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+            }
+        }
+        return TRUE;
+    }
+
     // Guard against empty or invalid folder ID before calling ListFolder
-    if (m_currentFolderId.empty() || m_currentFolderId == "shared_drives_root" || m_currentFolderId == "shared_with_me_root")
+    if (m_currentFolderId.empty() || m_currentFolderId == "shared_drives_root" ||
+        m_currentFolderId == "shared_with_me_root" || m_currentFolderId == "starred_root" ||
+        m_currentFolderId == "recent_root" || m_currentFolderId == "trash_root")
     {
         ResolveCurrentFolderId();
-        if (m_currentFolderId.empty() || m_currentFolderId == "shared_drives_root" || m_currentFolderId == "shared_with_me_root")
+        if (m_currentFolderId.empty() || m_currentFolderId == "shared_drives_root" ||
+            m_currentFolderId == "shared_with_me_root" || m_currentFolderId == "starred_root" ||
+            m_currentFolderId == "recent_root" || m_currentFolderId == "trash_root")
         {
             if (m_lastErrorPath != m_currentPath)
             {
@@ -1041,7 +1258,60 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
     HMENU hMenu = CreatePopupMenu();
     if (!hMenu) return;
 
-    AppendMenuA(hMenu, MF_STRING, CM_CALC_SIZE, LoadStr(IDS_MENU_CALC_SIZE));
+    BOOL isDir = FALSE;
+    BOOL focused = (selectedFiles == 0 && selectedDirs == 0);
+    int index = 0;
+    const CFileData* f = focused ? SalamanderGeneral->GetPanelFocusedItem(panel, &isDir)
+                                 : SalamanderGeneral->GetPanelSelectedItem(panel, &index, &isDir);
+
+    const GDriveApi::GDriveItem* targetItem = nullptr;
+    if (f && strcmp(f->Name, "..") != 0)
+    {
+        for (const auto& it : m_cachedItems)
+        {
+            if (_stricmp(it.name.c_str(), f->Name) == 0)
+            {
+                targetItem = &it;
+                break;
+            }
+        }
+    }
+
+    bool isInsideTrash = (_stricmp(m_currentPath.c_str(), "/Trash") == 0);
+
+    if (isInsideTrash)
+    {
+        if (targetItem)
+        {
+            AppendMenuA(hMenu, MF_STRING, CM_RESTORE_TRASH, LoadStr(IDS_MENU_RESTORE_TRASH));
+            AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+        }
+        AppendMenuA(hMenu, MF_STRING, CM_EMPTY_TRASH, LoadStr(IDS_MENU_EMPTY_TRASH));
+    }
+    else
+    {
+        if (targetItem)
+        {
+            if (!targetItem->webViewLink.empty())
+            {
+                AppendMenuA(hMenu, MF_STRING, CM_OPEN_IN_BROWSER, LoadStr(IDS_MENU_OPEN_IN_BROWSER));
+                AppendMenuA(hMenu, MF_STRING, CM_COPY_LINK, LoadStr(IDS_MENU_COPY_LINK));
+                AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+            }
+
+            if (targetItem->isStarred)
+            {
+                AppendMenuA(hMenu, MF_STRING, CM_REMOVE_STAR, LoadStr(IDS_MENU_REMOVE_STAR));
+            }
+            else
+            {
+                AppendMenuA(hMenu, MF_STRING, CM_ADD_STAR, LoadStr(IDS_MENU_ADD_STAR));
+            }
+            AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+        }
+
+        AppendMenuA(hMenu, MF_STRING, CM_CALC_SIZE, LoadStr(IDS_MENU_CALC_SIZE));
+    }
 
     int cmd = TrackPopupMenu(hMenu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD,
                              menuX, menuY, 0, parent, NULL);
@@ -1050,6 +1320,71 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
     if (cmd == CM_CALC_SIZE)
     {
         CalculateFolderSize(parent, panel);
+    }
+    else if (cmd == CM_OPEN_IN_BROWSER && targetItem && !targetItem->webViewLink.empty())
+    {
+        ShellExecuteA(NULL, "open", targetItem->webViewLink.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    }
+    else if (cmd == CM_COPY_LINK && targetItem && !targetItem->webViewLink.empty())
+    {
+        if (OpenClipboard(parent))
+        {
+            EmptyClipboard();
+            HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, targetItem->webViewLink.length() + 1);
+            if (hGlob)
+            {
+                char* p = (char*)GlobalLock(hGlob);
+                if (p)
+                {
+                    strcpy(p, targetItem->webViewLink.c_str());
+                    GlobalUnlock(hGlob);
+                    SetClipboardData(CF_TEXT, hGlob);
+                }
+            }
+            CloseClipboard();
+            SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_LINK_COPIED), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONINFORMATION);
+        }
+    }
+    else if ((cmd == CM_ADD_STAR || cmd == CM_REMOVE_STAR) && targetItem)
+    {
+        bool makeStarred = (cmd == CM_ADD_STAR);
+        std::string err;
+        if (GDriveApi::ApiClient::GetInstance().SetStarred(targetItem->id, makeStarred, &err))
+        {
+            SalamanderGeneral->RefreshPanelPath(panel);
+        }
+        else
+        {
+            SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        }
+    }
+    else if (cmd == CM_RESTORE_TRASH && targetItem)
+    {
+        std::string err;
+        if (GDriveApi::ApiClient::GetInstance().RestoreFromTrash(targetItem->id, &err))
+        {
+            SalamanderGeneral->RefreshPanelPath(panel);
+        }
+        else
+        {
+            SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        }
+    }
+    else if (cmd == CM_EMPTY_TRASH)
+    {
+        if (SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_CONFIRM_EMPTY_TRASH), LoadStr(IDS_PLUGINNAME),
+                                             MB_YESNO | MB_ICONWARNING) == IDYES)
+        {
+            std::string err;
+            if (GDriveApi::ApiClient::GetInstance().EmptyTrash(&err))
+            {
+                SalamanderGeneral->RefreshPanelPath(panel);
+            }
+            else
+            {
+                SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            }
+        }
     }
 }
 

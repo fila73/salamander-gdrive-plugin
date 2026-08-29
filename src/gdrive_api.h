@@ -24,6 +24,10 @@ struct GDriveItem
     bool isFolder = false;
     bool isGoogleDoc = false;
     bool isSharedDrive = false;
+    bool isStarred = false;
+    bool isTrashed = false;
+    std::string webViewLink;
+    std::string webContentLink;
     std::string driveId;
     std::string exportMimeType;
     std::string exportExtension;
@@ -53,11 +57,18 @@ public:
     bool GetAbout(AboutInfo& info, std::string* errorOut = nullptr);
     bool ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string* errorOut = nullptr);
     bool ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string* errorOut = nullptr);
+    bool ListStarred(std::vector<GDriveItem>& itemsOut, std::string* errorOut = nullptr);
+    bool ListTrash(std::vector<GDriveItem>& itemsOut, std::string* errorOut = nullptr);
+    bool ListRecent(std::vector<GDriveItem>& itemsOut, std::string* errorOut = nullptr);
     bool ListFolder(const std::string& folderId,
                     const std::string& driveId,
                     bool isSharedDrive,
                     std::vector<GDriveItem>& itemsOut,
                     std::string* errorOut = nullptr);
+
+    bool SetStarred(const std::string& fileId, bool starred, std::string* errorOut = nullptr);
+    bool RestoreFromTrash(const std::string& fileId, std::string* errorOut = nullptr);
+    bool EmptyTrash(std::string* errorOut = nullptr);
 
     bool GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, std::string* errorOut = nullptr);
 

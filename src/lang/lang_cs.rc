@@ -152,6 +152,17 @@ BEGIN
     IDS_UPLOAD_PROGRESS_FMT                  "Nahrávám %s (%s / %s)..."
     IDS_STATUS_UPLOADING                     "Nahrávám na Google Disk..."
     IDS_ERR_CANNOT_UPLOAD_ROOT               "Do kořenového zobrazení nelze přímo nahrávat soubory. Nejprve prosím otevřete 'Můj disk' nebo konkrétní složku."
+    IDS_MENU_OPEN_IN_BROWSER    "&Otevřít ve webovém prohlížeči"
+    IDS_MENU_COPY_LINK          "&Kopírovat odkaz do schránky"
+    IDS_MENU_ADD_STAR           "&Přidat hvězdičku (Oblíbené)"
+    IDS_MENU_REMOVE_STAR        "&Odebrat hvězdičku"
+    IDS_MENU_RESTORE_TRASH      "&Obnovit z koše"
+    IDS_MENU_EMPTY_TRASH        "&Vysypat koš..."
+    IDS_STARRED                 "S hvězdičkou"
+    IDS_TRASH                   "Koš"
+    IDS_RECENT                  "Nedávné"
+    IDS_LINK_COPIED             "Webový odkaz byl zkopírován do schránky."
+    IDS_CONFIRM_EMPTY_TRASH     "Opravdu chcete trvale smazat všechny položky v Koši?\n\nUpozornění: Tuto operaci nelze vrátit zpět!"
 END
 
 #endif // Czech resources
