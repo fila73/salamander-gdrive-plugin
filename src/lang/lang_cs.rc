@@ -1,0 +1,152 @@
+// SPDX-FileCopyrightText: 2026 Open Salamander Authors & Red Salamander Authors
+// SPDX-FileContributor: Ported to Open Salamander framework by fila73
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#pragma code_page(65001)
+
+#include "lang.rh"
+
+#define APSTUDIO_READONLY_SYMBOLS
+#include "winresrc.h"
+#include "../gdrive.rh2"
+#undef APSTUDIO_READONLY_SYMBOLS
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CSY)
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+#ifdef APSTUDIO_INVOKED
+1 TEXTINCLUDE 
+BEGIN
+    "lang.rh\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winresrc.h""\r\n"
+    "#include ""../gdrive.rh2""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CSY)\r\n"
+    "LANGUAGE LANG_CZECH,SUBLANG_DEFAULT\r\n"
+    "#include ""lang_cs.rc2""\r\n"
+    "#endif\r\n"
+    "\0"
+END
+#endif // APSTUDIO_INVOKED
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_CFGPAGEGENERAL DIALOGEX 66, 53, 250, 180
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
+CAPTION "Google Disk"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "Přihlášení k účtu",IDC_STATIC_1,4,4,242,65
+    LTEXT           "Stav:",IDC_STATIC_2,12,18,30,8
+    LTEXT           "Nepřipojeno",IDC_CFG_ACCOUNT_STATUS,45,18,190,8
+    PUSHBUTTON      "&Přihlásit se ke Google...",IDC_CFG_LOGIN_BTN,12,32,100,14
+    PUSHBUTTON      "&Odhlásit / Odpojit",IDC_CFG_LOGOUT_BTN,118,32,100,14
+    CONTROL         "&Zobrazovat Sdílené disky (Team Drives)",IDC_CFG_USE_SHARED_DRIVES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,52,220,10
+
+    GROUPBOX        "Vlastní OAuth 2.0 Client",IDC_STATIC_3,4,73,242,102
+    LTEXT           "OAuth &Client ID:",IDC_STATIC_4,12,86,80,8
+    EDITTEXT        IDC_CFG_CLIENTID,12,97,224,14,ES_AUTOHSCROLL
+    LTEXT           "OAuth Client &Secret:",IDC_STATIC_5,12,116,80,8
+    EDITTEXT        IDC_CFG_CLIENTSECRET,12,127,224,14,ES_AUTOHSCROLL
+    LTEXT           "Poznámka: Pro přístup zadejte klíče typu Desktop App z Google Cloud Console.",IDC_STATIC_6,12,147,224,20
+END
+
+IDD_AUTH_PROGRESS DIALOGEX 0, 0, 230, 95
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Přihlášení ke Google Disku"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Dokončete prosím přihlášení ve svém webovém prohlížeči...",IDC_AUTH_BROWSER_MSG,15,15,200,20
+    CONTROL         "",IDC_AUTH_PROGRESS_BAR,"msctls_progress32",WS_BORDER,15,40,200,12
+    LTEXT           "Čekám na autorizaci...",IDC_AUTH_STATUS_LABEL,15,58,200,8
+    PUSHBUTTON      "Zrušit",IDCANCEL,85,72,60,14
+END
+
+IDD_CALC_SIZE_PROGRESS DIALOGEX 0, 0, 240, 110
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Výpočet velikosti složky"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Prohledávám:",IDC_STATIC_1,15,12,50,8
+    LTEXT           "",IDC_CALC_CURRENT_FOLDER,70,12,155,8,SS_PATHELLIPSIS
+    LTEXT           "Podsložky:",IDC_STATIC_2,15,26,50,8
+    LTEXT           "0",IDC_CALC_DIRS_COUNT,70,26,155,8
+    LTEXT           "Soubory:",IDC_STATIC_3,15,40,50,8
+    LTEXT           "0",IDC_CALC_FILES_COUNT,70,40,155,8
+    LTEXT           "Celková velikost:",IDC_STATIC_4,15,54,55,8
+    LTEXT           "0 B",IDC_CALC_TOTAL_SIZE,70,54,155,8
+    CONTROL         "",IDC_CALC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,15,68,210,12
+    PUSHBUTTON      "Zrušit",IDCANCEL,90,88,60,14
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_PLUGINNAME              "Google Disk"
+    IDS_ABOUT                   "O pluginu Google Disk"
+    IDS_PLUGIN_DESCRIPTION      "Plugin pro práci s Google Diskem v Open Salamanderu"
+    IDS_PLUGIN_HOME             "https://github.com/manison/OpenSalamander"
+    IDS_PLUGIN_BUGREP           "https://github.com/manison/OpenSalamander/issues"
+    IDS_PLUGIN_EMAIL            "filip.novak@gmail.com"
+    IDS_CFG_ALREADY_OPENED      "Konfigurační dialog je již otevřen."
+    IDS_CFG_TITLE               "Nastavení pluginu Google Disk"
+    IDS_REQUIRE_SAL500          "Tento plugin vyžaduje Open Salamander 5.0 nebo novější."
+
+    IDS_MENU_CONNECT            "&Otevřít Google Disk\tAlt+F1/F2"
+    IDS_MENU_DISCONNECT         "&Odpojit / Odhlásit"
+    IDS_MENU_REFRESH            "&Obnovit Google Disk\tCtrl+R"
+    IDS_MENU_CONFIG             "&Nastavení..."
+    IDS_MENU_ABOUT              "&O aplikaci..."
+    IDS_MENU_CALC_SIZE          "&Spočítat velikost složky..."
+
+    IDS_STATUS_CONNECTING       "Připojuji ke Google Disku..."
+    IDS_STATUS_DOWNLOADING      "Stahuji z Google Disku..."
+    IDS_STATUS_AUTH_REQUIRED    "Pro přístup ke Google Disku je vyžadováno přihlášení."
+    IDS_STATUS_AUTH_SUCCESS     "Přihlášení ke Google Disku bylo úspěšné!"
+    IDS_STATUS_AUTH_FAILED      "Přihlášení ke Google Disku selhalo."
+    IDS_AUTH_PROMPT_MSG         "Pro přístup ke Google Disku se prosím přihlaste přes webový prohlížeč."
+    IDS_AUTH_WAITING_BROWSER    "Čekám na dokončení přihlášení v prohlížeči..."
+    IDS_ERR_NETWORK             "Chyba sítě při komunikaci s Google Diskem."
+    IDS_ERR_HTTP                "HTTP chyba Google Disku: %d"
+    IDS_ERR_AUTH_CANCELLED      "Přihlášení bylo zrušeno."
+    IDS_ERR_PATH_NOT_FOUND      "Cesta na Google Disku nebyla nalezena: %s"
+    IDS_DOWNLOAD_PROGRESS_FMT   "Stahuji %s (%s / %s)..."
+    IDS_CONFIRM_DISCONNECT      "Opravdu se chcete odhlásit a vymazat uložené přihlašovací údaje?"
+    IDS_LOGGED_IN_AS            "Přihlášen jako: %s"
+    IDS_NOT_LOGGED_IN           "Nepřihlášen"
+    IDS_MY_DRIVE                "Můj disk"
+    IDS_SHARED_DRIVES           "Sdílené disky"
+    IDS_SHARED_WITH_ME          "Sdíleno se mnou"
+    IDS_EXPORT_DOCX             "Exportuji Google Dokument do formátu Word (.docx)..."
+    IDS_EXPORT_XLSX             "Exportuji Google Tabulku do formátu Excel (.xlsx)..."
+    IDS_EXPORT_PPTX             "Exportuji Google Prezentaci do formátu PowerPoint (.pptx)..."
+    IDS_EXPORT_PDF              "Exportuji do formátu PDF (.pdf)..."
+    IDS_ERR_NO_CLIENT_ID        "Není nakonfigurováno OAuth Client ID.\n\nOtevřete prosím Konfiguraci pluginu Google Disk a zadejte své Client ID a Client Secret z Google Cloud Console."
+    IDS_CALC_TITLE              "Velikost složky na Google Disku"
+    IDS_CALC_RESULT_FMT         "Položka: %s\n\nPočet podsložek: %d\nPočet souborů: %d\n\nCelková velikost: %s (%s bajtů)"
+    IDS_CALC_CANCELLED_FMT      "Výpočet byl přerušen uživatelem.\n\nPoložka: %s\n\nNalezeno podsložek: %d\nNalezeno souborů: %d\n\nZjištěná velikost: %s (%s bajtů)"
+END
+
+#endif // Czech resources
+
+#ifndef APSTUDIO_INVOKED
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CSY)
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+#include "lang_cs.rc2"
+#endif
+#endif

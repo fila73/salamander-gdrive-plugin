@@ -1,0 +1,35 @@
+// SPDX-FileCopyrightText: 2026 Open Salamander Authors, Red Salamander Authors & Ondrej Kotas
+// SPDX-FileContributor: Dark Mode host policy and theme integration based on fork by Ondrej Kotas (KRtkovo-eu-AI)
+// SPDX-FileContributor: Ported to Open Salamander framework by fila73
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#ifndef __GDRIVE_VERSINFO_RH2
+#define __GDRIVE_VERSINFO_RH2
+
+#if defined(APSTUDIO_INVOKED) && !defined(APSTUDIO_READONLY_SYMBOLS)
+#error this file is not editable by Microsoft Visual C++
+#endif
+
+#define VERSINFO_MAJOR       1
+#define VERSINFO_MINORA      0
+#define VERSINFO_MINORB      0
+
+#include "spl_vers.h"
+
+#define VERSINFO_COPYRIGHT   "Copyright \xA9 2026 Open Salamander Authors & Red Salamander Authors. Ported by fila73."
+#define VERSINFO_COMPANY     "Open Salamander & Red Salamander"
+
+#define VERSINFO_DESCRIPTION "Google Drive Filesystem Plugin for Open Salamander (by fila73)"
+
+#ifdef _LANG
+#define VERSINFO_INTERNAL    "ENGLISH"
+#define VERSINFO_ORIGINAL    VERSINFO_INTERNAL ".SLG"
+#else
+#define VERSINFO_INTERNAL    "GDRIVE"
+#define VERSINFO_ORIGINAL    VERSINFO_INTERNAL ".SPL"
+#endif
+
+#define VERSINFO_SLG_WEB     "https://github.com/manison/OpenSalamander"
+#define VERSINFO_SLG_COMMENT "Google Drive language module"
+
+#endif // __GDRIVE_VERSINFO_RH2

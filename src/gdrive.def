@@ -1,0 +1,6 @@
+LIBRARY "gdrive.spl"
+
+EXPORTS
+    SalamanderPluginGetReqVer @1
+    SalamanderPluginGetSDKVer @2
+    SalamanderPluginEntry     @3

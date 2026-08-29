@@ -1,0 +1,152 @@
+// SPDX-FileCopyrightText: 2026 Open Salamander Authors & Red Salamander Authors
+// SPDX-FileContributor: Ported to Open Salamander framework by fila73
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#pragma code_page(65001)
+
+#include "lang.rh"
+
+#define APSTUDIO_READONLY_SYMBOLS
+#include "winresrc.h"
+#include "../gdrive.rh2"
+#undef APSTUDIO_READONLY_SYMBOLS
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+#ifdef APSTUDIO_INVOKED
+1 TEXTINCLUDE 
+BEGIN
+    "lang.rh\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winresrc.h""\r\n"
+    "#include ""../gdrive.rh2""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)\r\n"
+    "LANGUAGE LANG_ENGLISH,SUBLANG_ENGLISH_US\r\n"
+    "#include ""lang_en.rc2""\r\n"
+    "#endif\r\n"
+    "\0"
+END
+#endif // APSTUDIO_INVOKED
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_CFGPAGEGENERAL DIALOGEX 66, 53, 250, 180
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
+CAPTION "Google Drive"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "Account Authentication",IDC_STATIC_1,4,4,242,65
+    LTEXT           "Status:",IDC_STATIC_2,12,18,30,8
+    LTEXT           "Not connected",IDC_CFG_ACCOUNT_STATUS,45,18,190,8
+    PUSHBUTTON      "&Sign in with Google...",IDC_CFG_LOGIN_BTN,12,32,100,14
+    PUSHBUTTON      "&Sign out / Disconnect",IDC_CFG_LOGOUT_BTN,118,32,100,14
+    CONTROL         "&Include Shared Drives (Team Drives)",IDC_CFG_USE_SHARED_DRIVES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,52,220,10
+
+    GROUPBOX        "Custom OAuth 2.0 Client",IDC_STATIC_3,4,73,242,102
+    LTEXT           "OAuth &Client ID:",IDC_STATIC_4,12,86,80,8
+    EDITTEXT        IDC_CFG_CLIENTID,12,97,224,14,ES_AUTOHSCROLL
+    LTEXT           "OAuth Client &Secret:",IDC_STATIC_5,12,116,80,8
+    EDITTEXT        IDC_CFG_CLIENTSECRET,12,127,224,14,ES_AUTOHSCROLL
+    LTEXT           "Note: To use custom keys, create a Desktop App project in Google Cloud Console.",IDC_STATIC_6,12,147,224,20
+END
+
+IDD_AUTH_PROGRESS DIALOGEX 0, 0, 230, 95
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Google Drive Sign In"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Please complete sign-in in your web browser...",IDC_AUTH_BROWSER_MSG,15,15,200,20
+    CONTROL         "",IDC_AUTH_PROGRESS_BAR,"msctls_progress32",WS_BORDER,15,40,200,12
+    LTEXT           "Waiting for authorization...",IDC_AUTH_STATUS_LABEL,15,58,200,8
+    PUSHBUTTON      "Cancel",IDCANCEL,85,72,60,14
+END
+
+IDD_CALC_SIZE_PROGRESS DIALOGEX 0, 0, 240, 110
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Calculate Folder Size"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Scanning:",IDC_STATIC_1,15,12,50,8
+    LTEXT           "",IDC_CALC_CURRENT_FOLDER,70,12,155,8,SS_PATHELLIPSIS
+    LTEXT           "Folders:",IDC_STATIC_2,15,26,50,8
+    LTEXT           "0",IDC_CALC_DIRS_COUNT,70,26,155,8
+    LTEXT           "Files:",IDC_STATIC_3,15,40,50,8
+    LTEXT           "0",IDC_CALC_FILES_COUNT,70,40,155,8
+    LTEXT           "Total size:",IDC_STATIC_4,15,54,55,8
+    LTEXT           "0 B",IDC_CALC_TOTAL_SIZE,70,54,155,8
+    CONTROL         "",IDC_CALC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,15,68,210,12
+    PUSHBUTTON      "Cancel",IDCANCEL,90,88,60,14
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_PLUGINNAME              "Google Drive"
+    IDS_ABOUT                   "About Google Drive Plugin"
+    IDS_PLUGIN_DESCRIPTION      "Google Drive Filesystem Plugin for Open Salamander"
+    IDS_PLUGIN_HOME             "https://github.com/manison/OpenSalamander"
+    IDS_PLUGIN_BUGREP           "https://github.com/manison/OpenSalamander/issues"
+    IDS_PLUGIN_EMAIL            "filip.novak@gmail.com"
+    IDS_CFG_ALREADY_OPENED      "Configuration dialog is already open."
+    IDS_CFG_TITLE               "Google Drive Configuration"
+    IDS_REQUIRE_SAL500          "This plugin requires Open Salamander 5.0 or later."
+
+    IDS_MENU_CONNECT            "&Open Google Drive\tAlt+F1/F2"
+    IDS_MENU_DISCONNECT         "&Disconnect / Sign Out"
+    IDS_MENU_REFRESH            "&Refresh Google Drive\tCtrl+R"
+    IDS_MENU_CONFIG             "&Configuration..."
+    IDS_MENU_ABOUT              "&About..."
+    IDS_MENU_CALC_SIZE          "&Calculate Folder Size..."
+
+    IDS_STATUS_CONNECTING       "Connecting to Google Drive..."
+    IDS_STATUS_DOWNLOADING      "Downloading from Google Drive..."
+    IDS_STATUS_AUTH_REQUIRED    "Sign-in required to access Google Drive."
+    IDS_STATUS_AUTH_SUCCESS     "Successfully signed in to Google Drive!"
+    IDS_STATUS_AUTH_FAILED      "Google Drive authentication failed."
+    IDS_AUTH_PROMPT_MSG         "To access Google Drive, please sign in using your web browser."
+    IDS_AUTH_WAITING_BROWSER    "Waiting for browser authentication response..."
+    IDS_ERR_NETWORK             "Network error communicating with Google Drive."
+    IDS_ERR_HTTP                "Google Drive HTTP error: %d"
+    IDS_ERR_AUTH_CANCELLED      "Authentication was cancelled."
+    IDS_ERR_PATH_NOT_FOUND      "Google Drive path not found: %s"
+    IDS_DOWNLOAD_PROGRESS_FMT   "Downloading %s (%s / %s)..."
+    IDS_CONFIRM_DISCONNECT      "Are you sure you want to disconnect and remove saved credentials?"
+    IDS_LOGGED_IN_AS            "Signed in as: %s"
+    IDS_NOT_LOGGED_IN           "Not signed in"
+    IDS_MY_DRIVE                "My Drive"
+    IDS_SHARED_DRIVES           "Shared Drives"
+    IDS_SHARED_WITH_ME          "Shared with me"
+    IDS_EXPORT_DOCX             "Exporting Google Doc to Word document (.docx)..."
+    IDS_EXPORT_XLSX             "Exporting Google Sheet to Excel spreadsheet (.xlsx)..."
+    IDS_EXPORT_PPTX             "Exporting Google Slides to PowerPoint (.pptx)..."
+    IDS_EXPORT_PDF              "Exporting to PDF document (.pdf)..."
+    IDS_ERR_NO_CLIENT_ID        "Google OAuth Client ID is not configured.\n\nPlease open Plugins -> Google Drive -> Configuration and enter your OAuth Client ID and Client Secret from Google Cloud Console."
+    IDS_CALC_TITLE              "Google Drive Folder Size"
+    IDS_CALC_RESULT_FMT         "Item: %s\n\nSubfolders: %d\nFiles: %d\n\nTotal size: %s (%s bytes)"
+    IDS_CALC_CANCELLED_FMT      "Calculation was cancelled by user.\n\nItem: %s\n\nSubfolders found: %d\nFiles found: %d\n\nScanned size: %s (%s bytes)"
+END
+
+#endif // English resources
+
+#ifndef APSTUDIO_INVOKED
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#include "lang_en.rc2"
+#endif
+#endif

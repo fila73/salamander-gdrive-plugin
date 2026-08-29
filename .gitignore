@@ -1,0 +1,12 @@
+*.o
+*.res
+*.spl
+*.slg
+*.zip
+release_stage/
+.vscode/
+build/
+*.map
+*.log
+*.dmp
+.gemini/

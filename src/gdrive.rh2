@@ -1,0 +1,77 @@
+// SPDX-FileCopyrightText: 2026 Open Salamander Authors & Red Salamander Authors
+// SPDX-FileContributor: Ported to Open Salamander framework by fila73
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#ifndef __GDRIVE_RH2
+#define __GDRIVE_RH2
+
+#if defined(APSTUDIO_INVOKED) && !defined(APSTUDIO_READONLY_SYMBOLS)
+#error this file is not editable by Microsoft Visual C++
+#endif
+
+#define IDC_STATIC_1 3000
+#include "statics.rh2" // 3000 to 3039 are reserved
+
+#define IDS_PLUGINNAME              46
+#define IDS_ABOUT                   47
+#define IDS_PLUGIN_DESCRIPTION      48
+#define IDS_PLUGIN_HOME             49
+#define IDS_PLUGIN_BUGREP           50
+#define IDS_PLUGIN_EMAIL            51
+#define IDS_CFG_ALREADY_OPENED      52
+#define IDS_CFG_TITLE               54
+#define IDS_REQUIRE_SAL500          56
+
+#define IDI_FILE                    1000
+#define IDI_DIR                     1001
+#define IDI_FS                      1002
+#define IDI_GDRIVE                  1003
+
+#define IDB_TOOLBAR16_PNG           102
+#define IDB_TOOLBAR256_PNG          103
+#define IDB_GRAYALPHA_PNG           104
+
+// Commands
+#define CM_OPEN_GDRIVE              1101
+#define CM_DISCONNECT               1102
+#define CM_REFRESH                  1103
+#define CM_CONFIG                   1104
+#define CM_ABOUT                    1105
+#define CM_CALC_SIZE                1106
+
+// String IDs for menus & dialogs
+#define IDS_MENU_CONNECT            2001
+#define IDS_MENU_DISCONNECT         2002
+#define IDS_MENU_REFRESH            2003
+#define IDS_MENU_CONFIG             2004
+#define IDS_MENU_ABOUT              2005
+#define IDS_MENU_CALC_SIZE          2006
+
+#define IDS_STATUS_CONNECTING       2101
+#define IDS_STATUS_DOWNLOADING      2102
+#define IDS_STATUS_AUTH_REQUIRED    2103
+#define IDS_STATUS_AUTH_SUCCESS     2104
+#define IDS_STATUS_AUTH_FAILED      2105
+#define IDS_AUTH_PROMPT_MSG         2106
+#define IDS_AUTH_WAITING_BROWSER    2107
+#define IDS_ERR_NETWORK             2108
+#define IDS_ERR_HTTP                2109
+#define IDS_ERR_AUTH_CANCELLED      2110
+#define IDS_ERR_PATH_NOT_FOUND      2111
+#define IDS_DOWNLOAD_PROGRESS_FMT   2112
+#define IDS_CONFIRM_DISCONNECT      2113
+#define IDS_LOGGED_IN_AS            2114
+#define IDS_NOT_LOGGED_IN           2115
+#define IDS_MY_DRIVE                2116
+#define IDS_SHARED_DRIVES           2117
+#define IDS_SHARED_WITH_ME          2118
+#define IDS_EXPORT_DOCX             2119
+#define IDS_EXPORT_XLSX             2120
+#define IDS_EXPORT_PPTX             2121
+#define IDS_EXPORT_PDF              2122
+#define IDS_ERR_NO_CLIENT_ID        2123
+#define IDS_CALC_TITLE              2124
+#define IDS_CALC_RESULT_FMT         2125
+#define IDS_CALC_CANCELLED_FMT      2126
+
+#endif // __GDRIVE_RH2

@@ -1,0 +1,62 @@
+CROSS_COMPILE ?= 
+CXX = $(CROSS_COMPILE)g++
+CC = $(CROSS_COMPILE)gcc
+RC = $(CROSS_COMPILE)windres
+
+SALAMAND_DIR = ../salamander-plugins/salamand
+SHARED_DIR = ../salamander-plugins/salamand/plugins/shared
+
+CXXFLAGS = -O2 -Wall -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-function -Wno-parentheses -std=c++17 \
+    -DWIN32 -D_WIN32 -D_WINDOWS -D_USRDLL -DWINVER=0x0601 -D_WIN32_WINNT=0x0601 \
+    -D_CRT_SECURE_NO_WARNINGS -DUNICODE_NOT_USED -D_FILE_OFFSET_BITS=64 \
+    -Isrc -Isrc/lang -I$(SHARED_DIR) -I$(SALAMAND_DIR)
+
+LDFLAGS = -shared -s -static -static-libgcc -static-libstdc++ \
+    -lwinhttp -lcrypt32 -lws2_32 -lshlwapi -lcomctl32 -lcomdlg32 -lole32 -lshell32 -lgdi32 -lmsimg32 -luxtheme -ldwmapi
+
+CPP_SRCS = \
+    src/gdrivedarkmode.cpp \
+    src/gdrive_json.cpp \
+    src/gdrive_http.cpp \
+    src/gdrive_auth.cpp \
+    src/gdrive_api.cpp \
+    src/gdrive_fs.cpp \
+    src/dialogs.cpp \
+    src/menu.cpp \
+    src/gdrive.cpp \
+    $(SHARED_DIR)/auxtools.cpp \
+    $(SHARED_DIR)/dbg.cpp \
+    $(SHARED_DIR)/mhandles.cpp \
+    $(SHARED_DIR)/winliblt.cpp \
+    $(SHARED_DIR)/plugindarkmode.cpp
+
+CPP_OBJS = $(CPP_SRCS:.cpp=.o)
+ALL_OBJS = $(CPP_OBJS) src/gdrive.res
+
+all: gdrive.spl english.slg czech.slg
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/gdrive.res: src/gdrive.rc
+	cd src && $(RC) -O coff -I. -Ilang -I$(CURDIR)/$(SHARED_DIR) -I$(CURDIR)/$(SALAMAND_DIR) -i gdrive.rc -o gdrive.res
+
+src/lang/lang_en.res: src/lang/lang_en.rc
+	cd src/lang && $(RC) -O coff -I. -I.. -I$(CURDIR)/$(SHARED_DIR) -I$(CURDIR)/$(SALAMAND_DIR) -i lang_en.rc -o lang_en.res
+
+src/lang/lang_cs.res: src/lang/lang_cs.rc
+	cd src/lang && $(RC) -O coff -I. -I.. -I$(CURDIR)/$(SHARED_DIR) -I$(CURDIR)/$(SALAMAND_DIR) -i lang_cs.rc -o lang_cs.res
+
+gdrive.spl: $(ALL_OBJS) src/gdrive.def
+	$(CXX) -shared src/gdrive.def $(ALL_OBJS) $(LDFLAGS) -o $@
+
+english.slg: src/lang/lang_en.res
+	$(CXX) -shared -nostdlib -Wl,-e,0 $< -o $@
+
+czech.slg: src/lang/lang_cs.res
+	$(CXX) -shared -nostdlib -Wl,-e,0 $< -o $@
+
+clean:
+	-del /Q /F $(subst /,\,$(CPP_OBJS)) 2>nul
+	-del /Q /F src\gdrive.res src\lang\lang_en.res src\lang\lang_cs.res 2>nul
+	-del /Q /F gdrive.spl english.slg czech.slg 2>nul
