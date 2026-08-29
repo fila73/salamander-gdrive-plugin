@@ -70,6 +70,12 @@ public:
     bool RestoreFromTrash(const std::string& fileId, std::string* errorOut = nullptr);
     bool EmptyTrash(std::string* errorOut = nullptr);
 
+    bool GetStartPageToken(std::string& tokenOut, std::string* errorOut = nullptr);
+    bool GetChanges(const std::string& pageToken,
+                    std::vector<std::string>& changedFolderIdsOut,
+                    std::string& newStartPageTokenOut,
+                    std::string* errorOut = nullptr);
+
     bool GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, std::string* errorOut = nullptr);
 
     bool CreateFolder(const std::string& parentFolderId,

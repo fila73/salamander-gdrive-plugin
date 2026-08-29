@@ -20,6 +20,7 @@ CPP_SRCS = \
     src/gdrive_http.cpp \
     src/gdrive_auth.cpp \
     src/gdrive_api.cpp \
+    src/gdrive_cache.cpp \
     src/gdrive_fs.cpp \
     src/dialogs.cpp \
     src/menu.cpp \

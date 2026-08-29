@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "precomp.h"
+#include <set>
 #include "gdrive_api.h"
 #include "gdrive_auth.h"
 #include "gdrive_http.h"
@@ -483,6 +484,123 @@ bool ApiClient::EmptyTrash(std::string* errorOut)
         return false;
     }
 
+    return true;
+}
+
+bool ApiClient::GetStartPageToken(std::string& tokenOut, std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/changes/startPageToken?supportsAllDrives=true";
+
+    auto resp = http.Get(url, token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to get start page token: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    auto json = GDriveJson::Value::Parse(resp.body);
+    tokenOut = json.GetString("startPageToken");
+    return !tokenOut.empty();
+}
+
+bool ApiClient::GetChanges(const std::string& pageToken,
+                          std::vector<std::string>& changedFolderIdsOut,
+                          std::string& newStartPageTokenOut,
+                          std::string* errorOut)
+{
+    if (pageToken.empty())
+    {
+        if (errorOut) *errorOut = "Invalid page token";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string currentPageToken = pageToken;
+    std::set<std::string> uniqueFolderIds;
+
+    while (true)
+    {
+        std::string url = "https://www.googleapis.com/drive/v3/changes?"
+                          "pageToken=" + GDriveHttp::HttpClient::UrlEncode(currentPageToken) +
+                          "&pageSize=1000" +
+                          "&supportsAllDrives=true" +
+                          "&includeItemsFromAllDrives=true" +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,mimeType,parents,trashed))");
+
+        auto resp = http.Get(url, token);
+        if (!resp.success)
+        {
+            if (errorOut) *errorOut = "Failed to get changes: " + ExtractErrorMessage(resp);
+            return false;
+        }
+
+        auto json = GDriveJson::Value::Parse(resp.body);
+        if (json.Has("changes") && json.GetArray("changes").IsArray())
+        {
+            const auto& changesArr = json.GetArray("changes");
+            for (size_t i = 0; i < changesArr.Size(); ++i)
+            {
+                const auto& ch = changesArr[i];
+                if (ch.Has("file") && ch.GetObject("file").IsObject())
+                {
+                    const auto& fileObj = ch.GetObject("file");
+                    std::string mime = fileObj.GetString("mimeType");
+                    std::string fId = fileObj.GetString("id");
+
+                    if (mime == kFolderMimeType && !fId.empty())
+                    {
+                        uniqueFolderIds.insert(fId);
+                    }
+
+                    if (fileObj.Has("parents") && fileObj.GetArray("parents").IsArray())
+                    {
+                        const auto& parentsArr = fileObj.GetArray("parents");
+                        for (size_t p = 0; p < parentsArr.Size(); ++p)
+                        {
+                            std::string pId = parentsArr[p].AsString();
+                            if (!pId.empty())
+                            {
+                                uniqueFolderIds.insert(pId);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    std::string fId = ch.GetString("fileId");
+                    if (!fId.empty())
+                    {
+                        uniqueFolderIds.insert(fId);
+                    }
+                }
+            }
+        }
+
+        std::string newStart = json.GetString("newStartPageToken");
+        if (!newStart.empty())
+        {
+            newStartPageTokenOut = newStart;
+        }
+
+        std::string next = json.GetString("nextPageToken");
+        if (!next.empty())
+        {
+            currentPageToken = next;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    changedFolderIdsOut.assign(uniqueFolderIds.begin(), uniqueFolderIds.end());
     return true;
 }
 

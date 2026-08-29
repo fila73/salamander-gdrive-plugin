@@ -6,6 +6,7 @@
 #include "gdrive_fs.h"
 #include "gdrive_auth.h"
 #include "gdrive_api.h"
+#include "gdrive_cache.h"
 #include "gdrive_http.h"
 #include "dialogs.h"
 
@@ -505,6 +506,49 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         return TRUE;
     }
 
+    // Check cache synchronization with Changes API
+    if (forceRefresh)
+    {
+        GDriveCache::CacheManager::GetInstance().InvalidateFolder(m_currentFolderId);
+        GDriveCache::CacheManager::GetInstance().CheckForRemoteChanges(true);
+    }
+    else
+    {
+        GDriveCache::CacheManager::GetInstance().CheckForRemoteChanges(false);
+    }
+
+    // Check if we have a cache hit for the current folder
+    std::vector<GDriveApi::GDriveItem> cachedList;
+    if (!m_currentFolderId.empty() && GDriveCache::CacheManager::GetInstance().GetFolder(m_currentFolderId, cachedList))
+    {
+        for (const auto& item : cachedList)
+        {
+            m_cachedItems.push_back(item);
+            std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + item.name;
+            m_pathToIdCache[subPath] = item.id;
+
+            if (item.isFolder)
+            {
+                AddItemToDir(dir, item.name.c_str(), true, 0, &item.modifiedTime, pluginData);
+            }
+            else
+            {
+                std::string displayName = item.name;
+                if (item.isGoogleDoc && !item.exportExtension.empty())
+                {
+                    if (displayName.length() < item.exportExtension.length() ||
+                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+                    {
+                        displayName += item.exportExtension;
+                    }
+                }
+
+                AddItemToDir(dir, displayName.c_str(), false, item.size, &item.modifiedTime, pluginData);
+            }
+        }
+        return TRUE;
+    }
+
     // 2. Shared Drives root: show all Shared Drives
     if (_stricmp(m_currentPath.c_str(), "/Shared Drives") == 0)
     {
@@ -520,6 +564,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             return TRUE;
         }
         m_lastErrorPath.clear();
+
+        GDriveCache::CacheManager::GetInstance().PutFolder("shared_drives_root", drives);
 
         FILETIME ft = {0, 0};
         GetSystemTimeAsFileTime(&ft);
@@ -550,6 +596,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             return TRUE;
         }
         m_lastErrorPath.clear();
+
+        GDriveCache::CacheManager::GetInstance().PutFolder("shared_with_me_root", items);
 
         for (auto& item : items)
         {
@@ -595,6 +643,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         }
         m_lastErrorPath.clear();
 
+        GDriveCache::CacheManager::GetInstance().PutFolder("starred_root", items);
+
         for (auto& item : items)
         {
             m_cachedItems.push_back(item);
@@ -639,6 +689,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         }
         m_lastErrorPath.clear();
 
+        GDriveCache::CacheManager::GetInstance().PutFolder("recent_root", items);
+
         for (auto& item : items)
         {
             m_cachedItems.push_back(item);
@@ -682,6 +734,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
             return TRUE;
         }
         m_lastErrorPath.clear();
+
+        GDriveCache::CacheManager::GetInstance().PutFolder("trash_root", items);
 
         for (auto& item : items)
         {
@@ -742,6 +796,8 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         return TRUE;
     }
     m_lastErrorPath.clear();
+
+    GDriveCache::CacheManager::GetInstance().PutFolder(m_currentFolderId, m_cachedItems);
 
     for (auto& item : m_cachedItems)
     {
@@ -971,6 +1027,8 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
         }
     }
 
+    GDriveCache::CacheManager::GetInstance().RenameItem(m_currentFolderId, fileId, newName);
+
     return TRUE;
 }
 
@@ -1018,6 +1076,8 @@ BOOL WINAPI CPluginFS::CreateDir(const char* fsName, int mode, HWND parent, char
     std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + newName;
     m_pathToIdCache[subPath] = newItem.id;
     m_cachedItems.push_back(newItem);
+
+    GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(m_currentFolderId, newItem);
 
     return TRUE;
 }
@@ -1139,6 +1199,8 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
                 break;
             }
         }
+
+        GDriveCache::CacheManager::GetInstance().RemoveItem(m_currentFolderId, id);
     }
 
     return TRUE;
@@ -1374,6 +1436,7 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
         std::string err;
         if (GDriveApi::ApiClient::GetInstance().SetStarred(targetItem->id, makeStarred, &err))
         {
+            GDriveCache::CacheManager::GetInstance().SetStarStatus(targetItem->id, makeStarred);
             SalamanderGeneral->RefreshPanelPath(panel);
         }
         else
@@ -1386,6 +1449,7 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
         std::string err;
         if (GDriveApi::ApiClient::GetInstance().RestoreFromTrash(targetItem->id, &err))
         {
+            GDriveCache::CacheManager::GetInstance().RemoveItem("trash_root", targetItem->id);
             SalamanderGeneral->RefreshPanelPath(panel);
         }
         else
@@ -1401,6 +1465,7 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
             std::string err;
             if (GDriveApi::ApiClient::GetInstance().EmptyTrash(&err))
             {
+                GDriveCache::CacheManager::GetInstance().InvalidateFolder("trash_root");
                 SalamanderGeneral->RefreshPanelPath(panel);
             }
             else
@@ -1515,6 +1580,8 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
     m_pathToIdCache[subPath] = newItem.id;
     m_cachedItems.push_back(newItem);
 
+    GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(parentFolderId, newItem);
+
     return true;
 }
 
@@ -1533,6 +1600,8 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
 
     std::string folderSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + dirName;
     m_pathToIdCache[folderSubPath] = newFolder.id;
+
+    GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(parentFolderId, newFolder);
 
     std::wstring searchPattern = localDirPath;
     if (!searchPattern.empty() && searchPattern.back() != L'\\')
