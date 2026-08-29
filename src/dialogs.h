@@ -40,13 +40,26 @@ public:
     virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 
 private:
-    void UpdateStatusText();
+    void RefreshAccountsList();
+};
+
+class CConfigPageCache : public CCommonPropSheetPage
+{
+public:
+    CConfigPageCache();
+
+    virtual void Transfer(CTransferInfo& ti) override;
+    virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+
+private:
+    void UpdateCacheStatus();
 };
 
 class CConfigDialog : public CPropertyDialog
 {
 protected:
     CConfigPageGeneral PageGeneral;
+    CConfigPageCache PageCache;
 
 public:
     CConfigDialog(HWND parent);

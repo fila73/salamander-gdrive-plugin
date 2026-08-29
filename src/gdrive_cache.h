@@ -34,6 +34,15 @@ public:
     void SetCheckIntervalMs(DWORD ms) { m_checkIntervalMs = ms; }
     DWORD GetCheckIntervalMs() const { return m_checkIntervalMs; }
 
+    void SetCurrentAccount(const std::string& email);
+    const std::string& GetCurrentAccount() const { return m_currentAccountEmail; }
+
+    // Account switching and disk persistence
+    void SwitchAccount(const std::string& newAccountEmail);
+    bool LoadFromDisk();
+    bool SaveToDisk();
+    void ClearDiskCache(const std::string& accountEmail = "");
+
     // Retrieve cached folder contents if valid. Returns true if cache hit.
     bool GetFolder(const std::string& folderKey, std::vector<GDriveApi::GDriveItem>& itemsOut);
 
@@ -64,13 +73,17 @@ public:
 
 private:
     CacheManager();
-    ~CacheManager() = default;
+    ~CacheManager();
 
+    std::wstring GetCacheFilePath(const std::string& accountEmail) const;
+
+    std::string m_currentAccountEmail;
     std::map<std::string, CachedFolder> m_folders;
     std::string m_startPageToken;
     uint64_t m_lastChangeCheckTick = 0;
     DWORD m_checkIntervalMs = 30000; // 30 seconds default
     bool m_enabled = true;
+    bool m_dirty = false;
     std::mutex m_mutex;
 };
 

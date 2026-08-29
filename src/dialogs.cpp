@@ -38,18 +38,53 @@ void CCommonPropSheetPage::NotifDlgJustCreated()
     SalamanderGUI->ArrangeHorizontalLines(HWindow);
 }
 
+#include "gdrive_cache.h"
+
 CConfigPageGeneral::CConfigPageGeneral()
-    : CCommonPropSheetPage(NULL, HLanguage, IDD_CFGPAGEGENERAL, IDD_CFGPAGEGENERAL, PSP_HASHELP, NULL)
+    : CCommonPropSheetPage(LoadStr(IDS_CFG_PAGE_GENERAL), HLanguage, IDD_CFGPAGEGENERAL, IDD_CFGPAGEGENERAL, PSP_HASHELP, NULL)
 {
 }
 
-void CConfigPageGeneral::UpdateStatusText()
+void CConfigPageGeneral::RefreshAccountsList()
 {
-    std::string status = GDriveAuth::AuthManager::GetInstance().GetAccountDisplay();
-    SetDlgItemTextA(HWindow, IDC_CFG_ACCOUNT_STATUS, status.c_str());
+    HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
+    if (!hCombo) return;
 
-    bool isAuth = GDriveAuth::AuthManager::GetInstance().IsAuthenticated();
-    EnableWindow(GetDlgItem(HWindow, IDC_CFG_LOGOUT_BTN), isAuth ? TRUE : FALSE);
+    SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
+
+    auto accounts = GDriveAuth::AuthManager::GetInstance().GetAccounts();
+    int activeIndex = -1;
+
+    for (size_t i = 0; i < accounts.size(); ++i)
+    {
+        std::string display = accounts[i].email;
+        if (!accounts[i].displayName.empty() && accounts[i].displayName != accounts[i].email)
+        {
+            display += " (" + accounts[i].displayName + ")";
+        }
+        if (accounts[i].isActive)
+        {
+            display += " [Active]";
+            activeIndex = (int)i;
+        }
+
+        int idx = (int)SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)display.c_str());
+        SendMessage(hCombo, CB_SETITEMDATA, idx, (LPARAM)i);
+    }
+
+    if (accounts.empty())
+    {
+        SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_NOT_LOGGED_IN));
+        SendMessage(hCombo, CB_SETCURSEL, 0, 0);
+        EnableWindow(GetDlgItem(HWindow, IDC_CFG_ACCOUNT_SWITCH_BTN), FALSE);
+        EnableWindow(GetDlgItem(HWindow, IDC_CFG_ACCOUNT_REMOVE_BTN), FALSE);
+    }
+    else
+    {
+        SendMessage(hCombo, CB_SETCURSEL, activeIndex >= 0 ? activeIndex : 0, 0);
+        EnableWindow(GetDlgItem(HWindow, IDC_CFG_ACCOUNT_SWITCH_BTN), TRUE);
+        EnableWindow(GetDlgItem(HWindow, IDC_CFG_ACCOUNT_REMOVE_BTN), TRUE);
+    }
 }
 
 void CConfigPageGeneral::Transfer(CTransferInfo& ti)
@@ -82,14 +117,14 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     if (uMsg == WM_INITDIALOG)
     {
-        UpdateStatusText();
+        RefreshAccountsList();
     }
     else if (uMsg == WM_COMMAND)
     {
         WORD ctrlId = LOWORD(wParam);
         WORD notifyCode = HIWORD(wParam);
 
-        if (ctrlId == IDC_CFG_LOGIN_BTN && notifyCode == BN_CLICKED)
+        if (ctrlId == IDC_CFG_ACCOUNT_ADD_BTN && notifyCode == BN_CLICKED)
         {
             char szClientId[512] = {0};
             char szClientSecret[512] = {0};
@@ -99,7 +134,7 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
             GDriveAuth::AuthManager::GetInstance().SetClientSecret(szClientSecret);
 
             std::string err;
-            if (GDriveAuth::AuthManager::GetInstance().LaunchInteractiveAuth(HWindow, &err))
+            if (GDriveAuth::AuthManager::GetInstance().AddAccount(HWindow, &err))
             {
                 SalamanderGeneral->SalMessageBox(HWindow, LoadStr(IDS_STATUS_AUTH_SUCCESS), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONINFORMATION);
             }
@@ -107,16 +142,131 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
             {
                 SalamanderGeneral->SalMessageBox(HWindow, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
             }
-            UpdateStatusText();
+            RefreshAccountsList();
             return TRUE;
         }
-        else if (ctrlId == IDC_CFG_LOGOUT_BTN && notifyCode == BN_CLICKED)
+        else if (ctrlId == IDC_CFG_ACCOUNT_SWITCH_BTN && notifyCode == BN_CLICKED)
         {
-            if (SalamanderGeneral->SalMessageBox(HWindow, LoadStr(IDS_CONFIRM_DISCONNECT), LoadStr(IDS_PLUGINNAME), MB_YESNO | MB_ICONQUESTION) == IDYES)
+            HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
+            int curSel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+            auto accounts = GDriveAuth::AuthManager::GetInstance().GetAccounts();
+            if (curSel >= 0 && curSel < (int)accounts.size())
             {
-                GDriveAuth::AuthManager::GetInstance().Logout();
-                UpdateStatusText();
+                GDriveAuth::AuthManager::GetInstance().SwitchAccount(accounts[curSel].email);
+                RefreshAccountsList();
             }
+            return TRUE;
+        }
+        else if (ctrlId == IDC_CFG_ACCOUNT_REMOVE_BTN && notifyCode == BN_CLICKED)
+        {
+            HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
+            int curSel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+            auto accounts = GDriveAuth::AuthManager::GetInstance().GetAccounts();
+            if (curSel >= 0 && curSel < (int)accounts.size())
+            {
+                char msg[512] = {0};
+                snprintf(msg, sizeof(msg), LoadStr(IDS_CONFIRM_REMOVE_ACCOUNT), accounts[curSel].email.c_str());
+                if (SalamanderGeneral->SalMessageBox(HWindow, msg, LoadStr(IDS_PLUGINNAME), MB_YESNO | MB_ICONQUESTION) == IDYES)
+                {
+                    GDriveAuth::AuthManager::GetInstance().RemoveAccount(accounts[curSel].email);
+                    RefreshAccountsList();
+                }
+            }
+            return TRUE;
+        }
+    }
+
+    return CCommonPropSheetPage::DialogProc(uMsg, wParam, lParam);
+}
+
+//
+// CConfigPageCache
+//
+
+CConfigPageCache::CConfigPageCache()
+    : CCommonPropSheetPage(LoadStr(IDS_CFG_PAGE_CACHE), HLanguage, IDD_CFGPAGECACHE, IDD_CFGPAGECACHE, PSP_HASHELP, NULL)
+{
+}
+
+void CConfigPageCache::UpdateCacheStatus()
+{
+    std::string acc = GDriveCache::CacheManager::GetInstance().GetCurrentAccount();
+    char buf[256] = {0};
+    if (!acc.empty())
+    {
+        snprintf(buf, sizeof(buf), "Active account: %s (Isolated cache)", acc.c_str());
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "No active account");
+    }
+    SetDlgItemTextA(HWindow, IDC_CFG_CACHE_STATUS, buf);
+}
+
+void CConfigPageCache::Transfer(CTransferInfo& ti)
+{
+    int enabled = GDriveCache::CacheManager::GetInstance().IsEnabled() ? 1 : 0;
+    ti.CheckBox(IDC_CFG_CACHE_ENABLED, enabled);
+
+    if (ti.Type == ttDataFromWindow)
+    {
+        GDriveCache::CacheManager::GetInstance().SetEnabled(enabled != 0);
+
+        HWND hCombo = GetDlgItem(HWindow, IDC_CFG_CACHE_INTERVAL_COMBO);
+        if (hCombo)
+        {
+            int curSel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+            DWORD ms = 30000;
+            switch (curSel)
+            {
+            case 0: ms = 10000; break;
+            case 1: ms = 30000; break;
+            case 2: ms = 60000; break;
+            case 3: ms = 300000; break;
+            case 4: ms = 0xFFFFFFFF; break;
+            default: ms = 30000; break;
+            }
+            GDriveCache::CacheManager::GetInstance().SetCheckIntervalMs(ms);
+        }
+    }
+}
+
+INT_PTR CConfigPageCache::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    if (uMsg == WM_INITDIALOG)
+    {
+        HWND hCombo = GetDlgItem(HWindow, IDC_CFG_CACHE_INTERVAL_COMBO);
+        if (hCombo)
+        {
+            SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_TTL_10SEC));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_TTL_30SEC));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_TTL_1MIN));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_TTL_5MIN));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_TTL_MANUAL));
+
+            DWORD curMs = GDriveCache::CacheManager::GetInstance().GetCheckIntervalMs();
+            int sel = 1; // 30s default
+            if (curMs <= 10000) sel = 0;
+            else if (curMs <= 30000) sel = 1;
+            else if (curMs <= 60000) sel = 2;
+            else if (curMs <= 300000) sel = 3;
+            else sel = 4;
+
+            SendMessage(hCombo, CB_SETCURSEL, sel, 0);
+        }
+        UpdateCacheStatus();
+    }
+    else if (uMsg == WM_COMMAND)
+    {
+        WORD ctrlId = LOWORD(wParam);
+        WORD notifyCode = HIWORD(wParam);
+
+        if (ctrlId == IDC_CFG_CACHE_CLEAR_BTN && notifyCode == BN_CLICKED)
+        {
+            GDriveCache::CacheManager::GetInstance().ClearDiskCache();
+            SalamanderGeneral->SalMessageBox(HWindow, LoadStr(IDS_CACHE_CLEARED), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONINFORMATION);
+            UpdateCacheStatus();
             return TRUE;
         }
     }
@@ -178,6 +328,7 @@ CConfigDialog::CConfigDialog(HWND parent)
                       NULL, &LastCfgPage, CenterCallback)
 {
     Add(&PageGeneral);
+    Add(&PageCache);
 }
 
 void OnConfiguration(HWND hParent)

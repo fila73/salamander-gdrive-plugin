@@ -2,10 +2,36 @@
 // Copyright (c) 2026 Open Salamander Google Drive Plugin Authors
 
 #include "gdrive_cache.h"
+#include "gdrive_http.h"
 #include <algorithm>
+#include <fstream>
+#include <shlobj.h>
 
 namespace GDriveCache
 {
+
+static const uint32_t kCacheMagic = 0x43444C53; // "SLDC"
+static const uint32_t kCacheVersion = 1;
+
+static void WriteString(std::ostream& os, const std::string& s)
+{
+    uint32_t len = (uint32_t)s.length();
+    os.write((const char*)&len, sizeof(len));
+    if (len > 0)
+    {
+        os.write(s.data(), len);
+    }
+}
+
+static std::string ReadString(std::istream& is)
+{
+    uint32_t len = 0;
+    is.read((char*)&len, sizeof(len));
+    if (len == 0 || is.fail()) return "";
+    std::string s(len, '\0');
+    is.read(&s[0], len);
+    return s;
+}
 
 CacheManager& CacheManager::GetInstance()
 {
@@ -15,6 +41,318 @@ CacheManager& CacheManager::GetInstance()
 
 CacheManager::CacheManager()
 {
+}
+
+CacheManager::~CacheManager()
+{
+    SaveToDisk();
+}
+
+std::wstring CacheManager::GetCacheFilePath(const std::string& accountEmail) const
+{
+    wchar_t appData[MAX_PATH] = {0};
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appData)))
+    {
+        return L"";
+    }
+
+    std::wstring dir = std::wstring(appData) + L"\\Open Salamander\\plugins\\gdrive";
+    CreateDirectoryW((std::wstring(appData) + L"\\Open Salamander").c_str(), NULL);
+    CreateDirectoryW((std::wstring(appData) + L"\\Open Salamander\\plugins").c_str(), NULL);
+    CreateDirectoryW(dir.c_str(), NULL);
+
+    std::string safeEmail = accountEmail.empty() ? "default" : accountEmail;
+    std::replace(safeEmail.begin(), safeEmail.end(), '@', '_');
+    std::replace(safeEmail.begin(), safeEmail.end(), '.', '_');
+    std::replace(safeEmail.begin(), safeEmail.end(), ':', '_');
+    std::replace(safeEmail.begin(), safeEmail.end(), '/', '_');
+    std::replace(safeEmail.begin(), safeEmail.end(), '\\', '_');
+
+    return dir + L"\\cache_" + GDriveHttp::HttpClient::Utf8ToWide(safeEmail) + L".bin";
+}
+
+void CacheManager::SetCurrentAccount(const std::string& email)
+{
+    if (m_currentAccountEmail != email)
+    {
+        SwitchAccount(email);
+    }
+}
+
+void CacheManager::SwitchAccount(const std::string& newAccountEmail)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // Save existing cache to disk if modified
+    if (m_dirty && !m_currentAccountEmail.empty())
+    {
+        std::wstring path = GetCacheFilePath(m_currentAccountEmail);
+        if (!path.empty())
+        {
+            std::string utf8Path = GDriveHttp::HttpClient::WideToUtf8(path);
+            std::ofstream os(utf8Path, std::ios::binary);
+            if (os.is_open())
+            {
+                uint32_t magic = kCacheMagic;
+                uint32_t version = kCacheVersion;
+                os.write((const char*)&magic, sizeof(magic));
+                os.write((const char*)&version, sizeof(version));
+                WriteString(os, m_currentAccountEmail);
+                WriteString(os, m_startPageToken);
+                os.write((const char*)&m_lastChangeCheckTick, sizeof(m_lastChangeCheckTick));
+
+                uint32_t folderCount = (uint32_t)m_folders.size();
+                os.write((const char*)&folderCount, sizeof(folderCount));
+
+                for (const auto& [key, folder] : m_folders)
+                {
+                    WriteString(os, folder.folderKey);
+                    os.write((const char*)&folder.lastFetchedTick, sizeof(folder.lastFetchedTick));
+                    uint8_t validByte = folder.isValid ? 1 : 0;
+                    os.write((const char*)&validByte, sizeof(validByte));
+
+                    uint32_t itemCount = (uint32_t)folder.items.size();
+                    os.write((const char*)&itemCount, sizeof(itemCount));
+
+                    for (const auto& item : folder.items)
+                    {
+                        WriteString(os, item.id);
+                        WriteString(os, item.name);
+                        WriteString(os, item.mimeType);
+                        os.write((const char*)&item.size, sizeof(item.size));
+                        os.write((const char*)&item.modifiedTime, sizeof(item.modifiedTime));
+                        uint8_t flags = (item.isFolder ? 1 : 0) |
+                                        (item.isGoogleDoc ? 2 : 0) |
+                                        (item.isSharedDrive ? 4 : 0) |
+                                        (item.isStarred ? 8 : 0) |
+                                        (item.isTrashed ? 16 : 0);
+                        os.write((const char*)&flags, sizeof(flags));
+                        WriteString(os, item.webViewLink);
+                        WriteString(os, item.webContentLink);
+                        WriteString(os, item.driveId);
+                        WriteString(os, item.exportMimeType);
+                        WriteString(os, item.exportExtension);
+                    }
+                }
+            }
+        }
+    }
+
+    m_folders.clear();
+    m_startPageToken.clear();
+    m_lastChangeCheckTick = 0;
+    m_currentAccountEmail = newAccountEmail;
+    m_dirty = false;
+
+    // Load new account cache from disk
+    if (!m_currentAccountEmail.empty())
+    {
+        std::wstring path = GetCacheFilePath(m_currentAccountEmail);
+        if (!path.empty())
+        {
+            std::string utf8Path = GDriveHttp::HttpClient::WideToUtf8(path);
+            std::ifstream is(utf8Path, std::ios::binary);
+            if (is.is_open())
+            {
+                uint32_t magic = 0, version = 0;
+                is.read((char*)&magic, sizeof(magic));
+                is.read((char*)&version, sizeof(version));
+
+                if (magic == kCacheMagic && version == kCacheVersion)
+                {
+                    std::string account = ReadString(is);
+                    m_startPageToken = ReadString(is);
+                    is.read((char*)&m_lastChangeCheckTick, sizeof(m_lastChangeCheckTick));
+
+                    uint32_t folderCount = 0;
+                    is.read((char*)&folderCount, sizeof(folderCount));
+
+                    for (uint32_t f = 0; f < folderCount && !is.eof(); ++f)
+                    {
+                        CachedFolder folder;
+                        folder.folderKey = ReadString(is);
+                        is.read((char*)&folder.lastFetchedTick, sizeof(folder.lastFetchedTick));
+                        uint8_t validByte = 0;
+                        is.read((char*)&validByte, sizeof(validByte));
+                        folder.isValid = (validByte != 0);
+
+                        uint32_t itemCount = 0;
+                        is.read((char*)&itemCount, sizeof(itemCount));
+
+                        for (uint32_t i = 0; i < itemCount && !is.eof(); ++i)
+                        {
+                            GDriveApi::GDriveItem item;
+                            item.id = ReadString(is);
+                            item.name = ReadString(is);
+                            item.mimeType = ReadString(is);
+                            is.read((char*)&item.size, sizeof(item.size));
+                            is.read((char*)&item.modifiedTime, sizeof(item.modifiedTime));
+                            uint8_t flags = 0;
+                            is.read((char*)&flags, sizeof(flags));
+                            item.isFolder = (flags & 1) != 0;
+                            item.isGoogleDoc = (flags & 2) != 0;
+                            item.isSharedDrive = (flags & 4) != 0;
+                            item.isStarred = (flags & 8) != 0;
+                            item.isTrashed = (flags & 16) != 0;
+                            item.webViewLink = ReadString(is);
+                            item.webContentLink = ReadString(is);
+                            item.driveId = ReadString(is);
+                            item.exportMimeType = ReadString(is);
+                            item.exportExtension = ReadString(is);
+
+                            folder.items.push_back(item);
+                        }
+
+                        m_folders[folder.folderKey] = folder;
+                    }
+                }
+            }
+        }
+    }
+}
+
+bool CacheManager::SaveToDisk()
+{
+    if (!m_enabled || m_currentAccountEmail.empty()) return false;
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::wstring path = GetCacheFilePath(m_currentAccountEmail);
+    if (path.empty()) return false;
+
+    std::string utf8Path = GDriveHttp::HttpClient::WideToUtf8(path);
+    std::ofstream os(utf8Path, std::ios::binary);
+    if (!os.is_open()) return false;
+
+    uint32_t magic = kCacheMagic;
+    uint32_t version = kCacheVersion;
+    os.write((const char*)&magic, sizeof(magic));
+    os.write((const char*)&version, sizeof(version));
+    WriteString(os, m_currentAccountEmail);
+    WriteString(os, m_startPageToken);
+    os.write((const char*)&m_lastChangeCheckTick, sizeof(m_lastChangeCheckTick));
+
+    uint32_t folderCount = (uint32_t)m_folders.size();
+    os.write((const char*)&folderCount, sizeof(folderCount));
+
+    for (const auto& [key, folder] : m_folders)
+    {
+        WriteString(os, folder.folderKey);
+        os.write((const char*)&folder.lastFetchedTick, sizeof(folder.lastFetchedTick));
+        uint8_t validByte = folder.isValid ? 1 : 0;
+        os.write((const char*)&validByte, sizeof(validByte));
+
+        uint32_t itemCount = (uint32_t)folder.items.size();
+        os.write((const char*)&itemCount, sizeof(itemCount));
+
+        for (const auto& item : folder.items)
+        {
+            WriteString(os, item.id);
+            WriteString(os, item.name);
+            WriteString(os, item.mimeType);
+            os.write((const char*)&item.size, sizeof(item.size));
+            os.write((const char*)&item.modifiedTime, sizeof(item.modifiedTime));
+            uint8_t flags = (item.isFolder ? 1 : 0) |
+                            (item.isGoogleDoc ? 2 : 0) |
+                            (item.isSharedDrive ? 4 : 0) |
+                            (item.isStarred ? 8 : 0) |
+                            (item.isTrashed ? 16 : 0);
+            os.write((const char*)&flags, sizeof(flags));
+            WriteString(os, item.webViewLink);
+            WriteString(os, item.webContentLink);
+            WriteString(os, item.driveId);
+            WriteString(os, item.exportMimeType);
+            WriteString(os, item.exportExtension);
+        }
+    }
+
+    m_dirty = false;
+    return true;
+}
+
+bool CacheManager::LoadFromDisk()
+{
+    if (!m_enabled || m_currentAccountEmail.empty()) return false;
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::wstring path = GetCacheFilePath(m_currentAccountEmail);
+    if (path.empty()) return false;
+
+    std::string utf8Path = GDriveHttp::HttpClient::WideToUtf8(path);
+    std::ifstream is(utf8Path, std::ios::binary);
+    if (!is.is_open()) return false;
+
+    uint32_t magic = 0, version = 0;
+    is.read((char*)&magic, sizeof(magic));
+    is.read((char*)&version, sizeof(version));
+
+    if (magic != kCacheMagic || version != kCacheVersion)
+        return false;
+
+    std::string account = ReadString(is);
+    m_startPageToken = ReadString(is);
+    is.read((char*)&m_lastChangeCheckTick, sizeof(m_lastChangeCheckTick));
+
+    uint32_t folderCount = 0;
+    is.read((char*)&folderCount, sizeof(folderCount));
+
+    m_folders.clear();
+
+    for (uint32_t f = 0; f < folderCount && !is.eof(); ++f)
+    {
+        CachedFolder folder;
+        folder.folderKey = ReadString(is);
+        is.read((char*)&folder.lastFetchedTick, sizeof(folder.lastFetchedTick));
+        uint8_t validByte = 0;
+        is.read((char*)&validByte, sizeof(validByte));
+        folder.isValid = (validByte != 0);
+
+        uint32_t itemCount = 0;
+        is.read((char*)&itemCount, sizeof(itemCount));
+
+        for (uint32_t i = 0; i < itemCount && !is.eof(); ++i)
+        {
+            GDriveApi::GDriveItem item;
+            item.id = ReadString(is);
+            item.name = ReadString(is);
+            item.mimeType = ReadString(is);
+            is.read((char*)&item.size, sizeof(item.size));
+            is.read((char*)&item.modifiedTime, sizeof(item.modifiedTime));
+            uint8_t flags = 0;
+            is.read((char*)&flags, sizeof(flags));
+            item.isFolder = (flags & 1) != 0;
+            item.isGoogleDoc = (flags & 2) != 0;
+            item.isSharedDrive = (flags & 4) != 0;
+            item.isStarred = (flags & 8) != 0;
+            item.isTrashed = (flags & 16) != 0;
+            item.webViewLink = ReadString(is);
+            item.webContentLink = ReadString(is);
+            item.driveId = ReadString(is);
+            item.exportMimeType = ReadString(is);
+            item.exportExtension = ReadString(is);
+
+            folder.items.push_back(item);
+        }
+
+        m_folders[folder.folderKey] = folder;
+    }
+
+    m_dirty = false;
+    return true;
+}
+
+void CacheManager::ClearDiskCache(const std::string& accountEmail)
+{
+    std::string email = accountEmail.empty() ? m_currentAccountEmail : accountEmail;
+    std::wstring path = GetCacheFilePath(email);
+    if (!path.empty())
+    {
+        DeleteFileW(path.c_str());
+    }
+
+    if (email == m_currentAccountEmail)
+    {
+        InvalidateAll();
+    }
 }
 
 bool CacheManager::GetFolder(const std::string& folderKey, std::vector<GDriveApi::GDriveItem>& itemsOut)
@@ -41,6 +379,7 @@ void CacheManager::PutFolder(const std::string& folderKey, const std::vector<GDr
     entry.items = items;
     entry.lastFetchedTick = GetTickCount64();
     entry.isValid = true;
+    m_dirty = true;
 
     // Ensure we have a start page token for change tracking
     if (m_startPageToken.empty())
@@ -57,6 +396,7 @@ void CacheManager::InvalidateFolder(const std::string& folderKey)
     if (it != m_folders.end())
     {
         it->second.isValid = false;
+        m_dirty = true;
     }
 }
 
@@ -69,9 +409,9 @@ void CacheManager::InvalidateFolderIds(const std::vector<std::string>& folderIds
         if (it != m_folders.end())
         {
             it->second.isValid = false;
+            m_dirty = true;
         }
     }
-    // Also invalidate virtual views when changes occur
     InvalidateVirtualFolders();
 }
 
@@ -84,18 +424,19 @@ void CacheManager::InvalidateAll()
     }
     m_startPageToken.clear();
     m_lastChangeCheckTick = 0;
+    m_dirty = true;
 }
 
 void CacheManager::InvalidateVirtualFolders()
 {
     auto itStarred = m_folders.find("starred_root");
-    if (itStarred != m_folders.end()) itStarred->second.isValid = false;
+    if (itStarred != m_folders.end()) { itStarred->second.isValid = false; m_dirty = true; }
 
     auto itRecent = m_folders.find("recent_root");
-    if (itRecent != m_folders.end()) itRecent->second.isValid = false;
+    if (itRecent != m_folders.end()) { itRecent->second.isValid = false; m_dirty = true; }
 
     auto itTrash = m_folders.find("trash_root");
-    if (itTrash != m_folders.end()) itTrash->second.isValid = false;
+    if (itTrash != m_folders.end()) { itTrash->second.isValid = false; m_dirty = true; }
 }
 
 bool CacheManager::CheckForRemoteChanges(bool forceCheck)
@@ -120,6 +461,7 @@ bool CacheManager::CheckForRemoteChanges(bool forceCheck)
             std::lock_guard<std::mutex> lock(m_mutex);
             m_startPageToken = token;
             m_lastChangeCheckTick = now;
+            m_dirty = true;
         }
         return true;
     }
@@ -136,6 +478,7 @@ bool CacheManager::CheckForRemoteChanges(bool forceCheck)
         if (!newStartToken.empty())
         {
             m_startPageToken = newStartToken;
+            m_dirty = true;
         }
 
         if (!changedFolders.empty())
@@ -149,6 +492,7 @@ bool CacheManager::CheckForRemoteChanges(bool forceCheck)
                 }
             }
             InvalidateVirtualFolders();
+            m_dirty = true;
         }
         return true;
     }
@@ -176,6 +520,7 @@ void CacheManager::AddOrUpdateItem(const std::string& folderKey, const GDriveApi
         {
             it->second.items.push_back(item);
         }
+        m_dirty = true;
     }
     InvalidateVirtualFolders();
 }
@@ -192,6 +537,7 @@ void CacheManager::RemoveItem(const std::string& folderKey, const std::string& f
                                return item.id == fileId;
                            }),
             it->second.items.end());
+        m_dirty = true;
     }
     InvalidateVirtualFolders();
 }
@@ -210,6 +556,7 @@ void CacheManager::RenameItem(const std::string& folderKey, const std::string& f
                 break;
             }
         }
+        m_dirty = true;
     }
     InvalidateVirtualFolders();
 }
@@ -230,6 +577,7 @@ void CacheManager::SetStarStatus(const std::string& fileId, bool starred)
             }
         }
     }
+    m_dirty = true;
     InvalidateVirtualFolders();
 }
 

@@ -102,5 +102,16 @@
 #define IDS_RECENT                               2141
 #define IDS_LINK_COPIED                          2142
 #define IDS_CONFIRM_EMPTY_TRASH                  2143
+#define IDS_CFG_PAGE_GENERAL                     2150
+#define IDS_CFG_PAGE_CACHE                       2151
+#define IDS_CACHE_CLEARED                        2152
+#define IDS_CONFIRM_REMOVE_ACCOUNT               2153
+#define IDS_TTL_10SEC                            2154
+#define IDS_TTL_30SEC                            2155
+#define IDS_TTL_1MIN                             2156
+#define IDS_TTL_5MIN                             2157
+#define IDS_TTL_MANUAL                           2158
+#define IDS_MENU_SWITCH_ACCOUNT                  2159
+#define IDS_MENU_ADD_ACCOUNT                     2160
 
 #endif // __GDRIVE_RH2

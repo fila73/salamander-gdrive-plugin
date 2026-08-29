@@ -44,22 +44,39 @@ END
 
 IDD_CFGPAGEGENERAL DIALOGEX 66, 53, 250, 180
 STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
-CAPTION "Google Drive"
+CAPTION "Accounts & General"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    GROUPBOX        "Account Authentication",IDC_STATIC_1,4,4,242,65
-    LTEXT           "Status:",IDC_STATIC_2,12,18,30,8
-    LTEXT           "Not connected",IDC_CFG_ACCOUNT_STATUS,45,18,190,8
-    PUSHBUTTON      "&Sign in with Google...",IDC_CFG_LOGIN_BTN,12,32,100,14
-    PUSHBUTTON      "&Sign out / Disconnect",IDC_CFG_LOGOUT_BTN,118,32,100,14
-    CONTROL         "&Include Shared Drives (Team Drives)",IDC_CFG_USE_SHARED_DRIVES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,52,220,10
+    GROUPBOX        "Google Accounts",IDC_STATIC_1,4,4,242,76
+    LTEXT           "Active Account:",IDC_STATIC_2,12,18,55,8
+    COMBOBOX        IDC_CFG_ACCOUNTS_COMBO,70,16,166,100,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Add Account...",IDC_CFG_ACCOUNT_ADD_BTN,12,34,68,14
+    PUSHBUTTON      "&Set Active",IDC_CFG_ACCOUNT_SWITCH_BTN,84,34,68,14
+    PUSHBUTTON      "&Remove",IDC_CFG_ACCOUNT_REMOVE_BTN,156,34,68,14
+    CONTROL         "&Include Shared Drives (Team Drives)",IDC_CFG_USE_SHARED_DRIVES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,58,220,10
 
-    GROUPBOX        "Custom OAuth 2.0 Client",IDC_STATIC_3,4,73,242,102
-    LTEXT           "OAuth &Client ID:",IDC_STATIC_4,12,86,80,8
-    EDITTEXT        IDC_CFG_CLIENTID,12,97,224,14,ES_AUTOHSCROLL
-    LTEXT           "OAuth Client &Secret:",IDC_STATIC_5,12,116,80,8
-    EDITTEXT        IDC_CFG_CLIENTSECRET,12,127,224,14,ES_AUTOHSCROLL
-    LTEXT           "Note: To use custom keys, create a Desktop App project in Google Cloud Console.",IDC_STATIC_6,12,147,224,20
+    GROUPBOX        "Custom OAuth 2.0 Client",IDC_STATIC_3,4,84,242,92
+    LTEXT           "OAuth &Client ID:",IDC_STATIC_4,12,96,80,8
+    EDITTEXT        IDC_CFG_CLIENTID,12,107,224,14,ES_AUTOHSCROLL
+    LTEXT           "OAuth Client &Secret:",IDC_STATIC_5,12,124,80,8
+    EDITTEXT        IDC_CFG_CLIENTSECRET,12,135,224,14,ES_AUTOHSCROLL
+    LTEXT           "Note: To use custom keys, create a Desktop App in Google Cloud Console.",IDC_STATIC_6,12,153,224,18
+END
+
+IDD_CFGPAGECACHE DIALOGEX 66, 53, 250, 180
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
+CAPTION "Cache & Sync"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "Metadata Cache",IDC_STATIC_1,4,4,242,100
+    CONTROL         "&Enable persistent metadata cache on disk",IDC_CFG_CACHE_ENABLED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,18,220,10
+    LTEXT           "Changes check frequency (TTL):",IDC_STATIC_2,12,36,220,8
+    COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,48,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Cache status: Ready (Isolated per account)",IDC_CFG_CACHE_STATUS,12,68,220,8
+    PUSHBUTTON      "&Clear Cache for Active Account",IDC_CFG_CACHE_CLEAR_BTN,12,82,140,14
+
+    GROUPBOX        "Information",IDC_STATIC_3,4,108,242,68
+    LTEXT           "The smart cache dramatically speeds up folder browsing.\nChanges on Google Drive are detected using the Changes API without unnecessary full folder re-downloads.\n\nEach account maintains its own isolated disk cache file in your profile.",IDC_STATIC_4,12,120,224,50
 END
 
 IDD_AUTH_PROGRESS DIALOGEX 0, 0, 230, 95
@@ -163,6 +180,17 @@ BEGIN
     IDS_RECENT                  "Recent"
     IDS_LINK_COPIED             "Web link was copied to clipboard."
     IDS_CONFIRM_EMPTY_TRASH     "Are you sure you want to permanently delete all items in Trash?\n\nWarning: This operation cannot be undone!"
+    IDS_CFG_PAGE_GENERAL        "Accounts & General"
+    IDS_CFG_PAGE_CACHE          "Cache & Sync"
+    IDS_CACHE_CLEARED           "Local cache for active account was cleared."
+    IDS_CONFIRM_REMOVE_ACCOUNT  "Are you sure you want to remove account '%s' and its local cache?"
+    IDS_TTL_10SEC               "10 seconds (High precision)"
+    IDS_TTL_30SEC               "30 seconds (Recommended)"
+    IDS_TTL_1MIN                "1 minute"
+    IDS_TTL_5MIN                "5 minutes"
+    IDS_TTL_MANUAL              "Manual only (Ctrl+R)"
+    IDS_MENU_SWITCH_ACCOUNT     "Switch &Account"
+    IDS_MENU_ADD_ACCOUNT        "&Add New Account..."
 END
 
 #endif // English resources

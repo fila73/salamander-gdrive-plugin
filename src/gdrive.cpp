@@ -117,6 +117,8 @@ CPluginInterfaceAbstract* WINAPI SalamanderPluginEntry(CSalamanderPluginEntryAbs
 // CPluginInterface implementation
 //
 
+#include "gdrive_cache.h"
+
 void WINAPI CPluginInterface::About(HWND parent)
 {
     OnAbout(parent);
@@ -124,6 +126,7 @@ void WINAPI CPluginInterface::About(HWND parent)
 
 BOOL WINAPI CPluginInterface::Release(HWND parent, BOOL force)
 {
+    GDriveCache::CacheManager::GetInstance().SaveToDisk();
     GDriveDarkMode::ReleaseTheme();
     ReleaseWinLib(DLLInstance);
     return TRUE;
@@ -137,6 +140,18 @@ void WINAPI CPluginInterface::LoadConfiguration(HWND parent, HKEY regKey, CSalam
     if (registry->GetValue(regKey, "IncludeSharedDrives", REG_DWORD, &dwShared, sizeof(dwShared)))
     {
         CfgIncludeSharedDrives = (dwShared != 0);
+    }
+
+    DWORD dwCacheEnabled = 1;
+    if (registry->GetValue(regKey, "CacheEnabled", REG_DWORD, &dwCacheEnabled, sizeof(dwCacheEnabled)))
+    {
+        GDriveCache::CacheManager::GetInstance().SetEnabled(dwCacheEnabled != 0);
+    }
+
+    DWORD dwCacheInterval = 30000;
+    if (registry->GetValue(regKey, "CacheCheckIntervalMs", REG_DWORD, &dwCacheInterval, sizeof(dwCacheInterval)))
+    {
+        GDriveCache::CacheManager::GetInstance().SetCheckIntervalMs(dwCacheInterval);
     }
 
     char szClientId[512] = {0};
@@ -163,11 +178,19 @@ void WINAPI CPluginInterface::SaveConfiguration(HWND parent, HKEY regKey, CSalam
     DWORD dwShared = CfgIncludeSharedDrives ? 1 : 0;
     registry->SetValue(regKey, "IncludeSharedDrives", REG_DWORD, &dwShared, sizeof(dwShared));
 
+    DWORD dwCacheEnabled = GDriveCache::CacheManager::GetInstance().IsEnabled() ? 1 : 0;
+    registry->SetValue(regKey, "CacheEnabled", REG_DWORD, &dwCacheEnabled, sizeof(dwCacheEnabled));
+
+    DWORD dwCacheInterval = GDriveCache::CacheManager::GetInstance().GetCheckIntervalMs();
+    registry->SetValue(regKey, "CacheCheckIntervalMs", REG_DWORD, &dwCacheInterval, sizeof(dwCacheInterval));
+
     std::string cid = GDriveAuth::AuthManager::GetInstance().GetClientId();
     registry->SetValue(regKey, "ClientId", REG_SZ, cid.c_str(), (int)cid.length() + 1);
 
     std::string sec = GDriveAuth::AuthManager::GetInstance().GetClientSecret();
     registry->SetValue(regKey, "ClientSecret", REG_SZ, sec.c_str(), (int)sec.length() + 1);
+
+    GDriveCache::CacheManager::GetInstance().SaveToDisk();
 }
 
 void WINAPI CPluginInterface::Configuration(HWND parent)

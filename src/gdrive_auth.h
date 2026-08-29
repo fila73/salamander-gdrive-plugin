@@ -27,6 +27,13 @@ struct AuthTokens
     std::string accountName;
 };
 
+struct AccountProfile
+{
+    std::string email;
+    std::string displayName;
+    bool isActive = false;
+};
+
 class AuthManager
 {
 public:
@@ -38,6 +45,12 @@ public:
 
     bool LaunchInteractiveAuth(HWND hParent, std::string* errorOut = nullptr);
     void Logout();
+
+    // Multi-account management
+    std::vector<AccountProfile> GetAccounts();
+    bool SwitchAccount(const std::string& email);
+    bool RemoveAccount(const std::string& email);
+    bool AddAccount(HWND hParent, std::string* errorOut = nullptr);
 
     bool LoadSavedTokens();
     bool SaveTokens();

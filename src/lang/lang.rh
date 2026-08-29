@@ -27,6 +27,16 @@
 #define IDC_CALC_TOTAL_SIZE             514
 #define IDC_CALC_PROGRESS_BAR           515
 
+#define IDD_CFGPAGECACHE                520
+#define IDC_CFG_CACHE_ENABLED           521
+#define IDC_CFG_CACHE_INTERVAL_COMBO    522
+#define IDC_CFG_CACHE_CLEAR_BTN         523
+#define IDC_CFG_CACHE_STATUS            524
+#define IDC_CFG_ACCOUNTS_COMBO          525
+#define IDC_CFG_ACCOUNT_ADD_BTN         526
+#define IDC_CFG_ACCOUNT_REMOVE_BTN      527
+#define IDC_CFG_ACCOUNT_SWITCH_BTN      528
+
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        8500

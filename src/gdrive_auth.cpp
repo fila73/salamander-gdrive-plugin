@@ -4,18 +4,33 @@
 
 #include "precomp.h"
 #include "gdrive_auth.h"
+#include "gdrive_cache.h"
 #include "gdrive_http.h"
 #include "gdrive_json.h"
+#include <algorithm>
 
 namespace GDriveAuth
 {
 
 static const wchar_t* kRegSubKey = L"Software\\Altap\\Salamander\\Plugins\\gdrive";
+static const wchar_t* kRegAccountsSubKey = L"Software\\Altap\\Salamander\\Plugins\\gdrive\\Accounts";
+static const wchar_t* kRegValActiveAccount = L"ActiveAccount";
 static const wchar_t* kRegValRefreshToken = L"EncryptedRefreshToken";
 static const wchar_t* kRegValClientId = L"OAuthClientId";
 static const wchar_t* kRegValClientSecret = L"OAuthClientSecret";
 static const wchar_t* kRegValAccountEmail = L"AccountEmail";
 static const wchar_t* kRegValAccountName = L"AccountName";
+
+static std::wstring MakeSafeAccountKey(const std::string& email)
+{
+    std::string safe = email.empty() ? "default" : email;
+    std::replace(safe.begin(), safe.end(), '@', '_');
+    std::replace(safe.begin(), safe.end(), '.', '_');
+    std::replace(safe.begin(), safe.end(), ':', '_');
+    std::replace(safe.begin(), safe.end(), '/', '_');
+    std::replace(safe.begin(), safe.end(), '\\', '_');
+    return GDriveHttp::HttpClient::Utf8ToWide(safe);
+}
 
 AuthManager& AuthManager::GetInstance()
 {
@@ -536,11 +551,21 @@ bool AuthManager::LaunchInteractiveAuth(HWND hParent, std::string* errorOut)
 void AuthManager::Logout()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    std::string email = m_tokens.accountEmail;
     m_tokens = AuthTokens();
+
+    if (!email.empty())
+    {
+        std::wstring wSafeKey = MakeSafeAccountKey(email);
+        std::wstring accSubKey = std::wstring(kRegAccountsSubKey) + L"\\" + wSafeKey;
+        RegDeleteKeyW(HKEY_CURRENT_USER, accSubKey.c_str());
+        GDriveCache::CacheManager::GetInstance().ClearDiskCache(email);
+    }
 
     HKEY hKey = NULL;
     if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, KEY_WRITE, &hKey) == ERROR_SUCCESS)
     {
+        RegDeleteValueW(hKey, kRegValActiveAccount);
         RegDeleteValueW(hKey, kRegValRefreshToken);
         RegDeleteValueW(hKey, kRegValAccountEmail);
         RegDeleteValueW(hKey, kRegValAccountName);
@@ -564,34 +589,52 @@ bool AuthManager::SaveTokens()
         return false;
     }
 
-    HKEY hKey = NULL;
+    // 1. Save main plugin config (ClientId, ClientSecret, ActiveAccount)
+    HKEY hKeyMain = NULL;
     DWORD disposition = 0;
-    if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, NULL, 0, KEY_WRITE, NULL, &hKey, &disposition) == ERROR_SUCCESS)
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, NULL, 0, KEY_WRITE, NULL, &hKeyMain, &disposition) == ERROR_SUCCESS)
     {
-        RegSetValueExW(hKey, kRegValRefreshToken, 0, REG_BINARY, outBlob.pbData, outBlob.cbData);
-
         std::wstring wClientId = GDriveHttp::HttpClient::Utf8ToWide(m_clientId);
-        RegSetValueExW(hKey, kRegValClientId, 0, REG_SZ, (const BYTE*)wClientId.c_str(), (DWORD)(wClientId.length() + 1) * sizeof(wchar_t));
+        RegSetValueExW(hKeyMain, kRegValClientId, 0, REG_SZ, (const BYTE*)wClientId.c_str(), (DWORD)(wClientId.length() + 1) * sizeof(wchar_t));
 
         if (!m_clientSecret.empty())
         {
             std::wstring wSecret = GDriveHttp::HttpClient::Utf8ToWide(m_clientSecret);
-            RegSetValueExW(hKey, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSecret.c_str(), (DWORD)(wSecret.length() + 1) * sizeof(wchar_t));
+            RegSetValueExW(hKeyMain, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSecret.c_str(), (DWORD)(wSecret.length() + 1) * sizeof(wchar_t));
         }
 
         if (!m_tokens.accountEmail.empty())
         {
             std::wstring wEmail = GDriveHttp::HttpClient::Utf8ToWide(m_tokens.accountEmail);
-            RegSetValueExW(hKey, kRegValAccountEmail, 0, REG_SZ, (const BYTE*)wEmail.c_str(), (DWORD)(wEmail.length() + 1) * sizeof(wchar_t));
+            RegSetValueExW(hKeyMain, kRegValActiveAccount, 0, REG_SZ, (const BYTE*)wEmail.c_str(), (DWORD)(wEmail.length() + 1) * sizeof(wchar_t));
         }
 
-        if (!m_tokens.accountName.empty())
+        RegCloseKey(hKeyMain);
+    }
+
+    // 2. Save under Accounts\<safe_email>
+    if (!m_tokens.accountEmail.empty())
+    {
+        std::wstring wSafeKey = MakeSafeAccountKey(m_tokens.accountEmail);
+        std::wstring accSubKey = std::wstring(kRegAccountsSubKey) + L"\\" + wSafeKey;
+        HKEY hKeyAcc = NULL;
+        if (RegCreateKeyExW(HKEY_CURRENT_USER, accSubKey.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hKeyAcc, &disposition) == ERROR_SUCCESS)
         {
-            std::wstring wName = GDriveHttp::HttpClient::Utf8ToWide(m_tokens.accountName);
-            RegSetValueExW(hKey, kRegValAccountName, 0, REG_SZ, (const BYTE*)wName.c_str(), (DWORD)(wName.length() + 1) * sizeof(wchar_t));
+            RegSetValueExW(hKeyAcc, kRegValRefreshToken, 0, REG_BINARY, outBlob.pbData, outBlob.cbData);
+
+            std::wstring wEmail = GDriveHttp::HttpClient::Utf8ToWide(m_tokens.accountEmail);
+            RegSetValueExW(hKeyAcc, kRegValAccountEmail, 0, REG_SZ, (const BYTE*)wEmail.c_str(), (DWORD)(wEmail.length() + 1) * sizeof(wchar_t));
+
+            if (!m_tokens.accountName.empty())
+            {
+                std::wstring wName = GDriveHttp::HttpClient::Utf8ToWide(m_tokens.accountName);
+                RegSetValueExW(hKeyAcc, kRegValAccountName, 0, REG_SZ, (const BYTE*)wName.c_str(), (DWORD)(wName.length() + 1) * sizeof(wchar_t));
+            }
+
+            RegCloseKey(hKeyAcc);
         }
 
-        RegCloseKey(hKey);
+        GDriveCache::CacheManager::GetInstance().SetCurrentAccount(m_tokens.accountEmail);
     }
 
     LocalFree(outBlob.pbData);
@@ -626,36 +669,69 @@ bool AuthManager::LoadSavedTokens()
             m_clientSecret = loadedSecret;
     }
 
+    // Check ActiveAccount
+    wchar_t szActiveAcc[256] = {0};
+    DWORD cbActiveAcc = sizeof(szActiveAcc);
+    std::string activeEmail;
+    if (RegQueryValueExW(hKey, kRegValActiveAccount, NULL, NULL, (LPBYTE)szActiveAcc, &cbActiveAcc) == ERROR_SUCCESS)
+    {
+        activeEmail = GDriveHttp::HttpClient::WideToUtf8(szActiveAcc);
+    }
+
+    RegCloseKey(hKey);
+
+    // If active account exists, load from Accounts\<safe_email>
+    HKEY hKeyAcc = NULL;
+    bool openedAccountKey = false;
+
+    if (!activeEmail.empty())
+    {
+        std::wstring accSubKey = std::wstring(kRegAccountsSubKey) + L"\\" + MakeSafeAccountKey(activeEmail);
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, accSubKey.c_str(), 0, KEY_READ, &hKeyAcc) == ERROR_SUCCESS)
+        {
+            openedAccountKey = true;
+        }
+    }
+
+    // Fallback to main key for legacy configurations
+    if (!openedAccountKey)
+    {
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, KEY_READ, &hKeyAcc) != ERROR_SUCCESS)
+        {
+            return false;
+        }
+    }
+
     // Read account email and name
     wchar_t szEmail[256] = {0};
     DWORD cbEmail = sizeof(szEmail);
-    if (RegQueryValueExW(hKey, kRegValAccountEmail, NULL, NULL, (LPBYTE)szEmail, &cbEmail) == ERROR_SUCCESS)
+    if (RegQueryValueExW(hKeyAcc, kRegValAccountEmail, NULL, NULL, (LPBYTE)szEmail, &cbEmail) == ERROR_SUCCESS)
     {
         m_tokens.accountEmail = GDriveHttp::HttpClient::WideToUtf8(szEmail);
     }
 
     wchar_t szName[256] = {0};
     DWORD cbName = sizeof(szName);
-    if (RegQueryValueExW(hKey, kRegValAccountName, NULL, NULL, (LPBYTE)szName, &cbName) == ERROR_SUCCESS)
+    if (RegQueryValueExW(hKeyAcc, kRegValAccountName, NULL, NULL, (LPBYTE)szName, &cbName) == ERROR_SUCCESS)
     {
         m_tokens.accountName = GDriveHttp::HttpClient::WideToUtf8(szName);
     }
 
     // Read encrypted refresh token
     DWORD cbData = 0;
-    if (RegQueryValueExW(hKey, kRegValRefreshToken, NULL, NULL, NULL, &cbData) != ERROR_SUCCESS || cbData == 0)
+    if (RegQueryValueExW(hKeyAcc, kRegValRefreshToken, NULL, NULL, NULL, &cbData) != ERROR_SUCCESS || cbData == 0)
     {
-        RegCloseKey(hKey);
+        RegCloseKey(hKeyAcc);
         return false;
     }
 
     std::vector<BYTE> encData(cbData);
-    if (RegQueryValueExW(hKey, kRegValRefreshToken, NULL, NULL, encData.data(), &cbData) != ERROR_SUCCESS)
+    if (RegQueryValueExW(hKeyAcc, kRegValRefreshToken, NULL, NULL, encData.data(), &cbData) != ERROR_SUCCESS)
     {
-        RegCloseKey(hKey);
+        RegCloseKey(hKeyAcc);
         return false;
     }
-    RegCloseKey(hKey);
+    RegCloseKey(hKeyAcc);
 
     DATA_BLOB inBlob{};
     inBlob.pbData = encData.data();
@@ -670,7 +746,196 @@ bool AuthManager::LoadSavedTokens()
     m_tokens.refreshToken = std::string((char*)outBlob.pbData, outBlob.cbData);
     LocalFree(outBlob.pbData);
 
+    if (!m_tokens.accountEmail.empty())
+    {
+        GDriveCache::CacheManager::GetInstance().SetCurrentAccount(m_tokens.accountEmail);
+        GDriveCache::CacheManager::GetInstance().LoadFromDisk();
+    }
+
     return !m_tokens.refreshToken.empty();
+}
+
+std::vector<AccountProfile> AuthManager::GetAccounts()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::vector<AccountProfile> accounts;
+
+    HKEY hKeyAccounts = NULL;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegAccountsSubKey, 0, KEY_READ, &hKeyAccounts) == ERROR_SUCCESS)
+    {
+        wchar_t subKeyName[256] = {0};
+        DWORD index = 0;
+        DWORD nameLen = sizeof(subKeyName) / sizeof(subKeyName[0]);
+
+        while (RegEnumKeyExW(hKeyAccounts, index, subKeyName, &nameLen, NULL, NULL, NULL, NULL) == ERROR_SUCCESS)
+        {
+            std::wstring fullSubKey = std::wstring(kRegAccountsSubKey) + L"\\" + subKeyName;
+            HKEY hKeyItem = NULL;
+            if (RegOpenKeyExW(HKEY_CURRENT_USER, fullSubKey.c_str(), 0, KEY_READ, &hKeyItem) == ERROR_SUCCESS)
+            {
+                AccountProfile profile;
+                wchar_t szVal[256] = {0};
+                DWORD cbVal = sizeof(szVal);
+
+                if (RegQueryValueExW(hKeyItem, kRegValAccountEmail, NULL, NULL, (LPBYTE)szVal, &cbVal) == ERROR_SUCCESS)
+                {
+                    profile.email = GDriveHttp::HttpClient::WideToUtf8(szVal);
+                }
+
+                cbVal = sizeof(szVal);
+                if (RegQueryValueExW(hKeyItem, kRegValAccountName, NULL, NULL, (LPBYTE)szVal, &cbVal) == ERROR_SUCCESS)
+                {
+                    profile.displayName = GDriveHttp::HttpClient::WideToUtf8(szVal);
+                }
+
+                if (!profile.email.empty())
+                {
+                    profile.isActive = (_stricmp(profile.email.c_str(), m_tokens.accountEmail.c_str()) == 0);
+                    accounts.push_back(profile);
+                }
+
+                RegCloseKey(hKeyItem);
+            }
+
+            index++;
+            nameLen = sizeof(subKeyName) / sizeof(subKeyName[0]);
+        }
+        RegCloseKey(hKeyAccounts);
+    }
+
+    if (accounts.empty() && !m_tokens.accountEmail.empty())
+    {
+        AccountProfile prof;
+        prof.email = m_tokens.accountEmail;
+        prof.displayName = m_tokens.accountName;
+        prof.isActive = true;
+        accounts.push_back(prof);
+    }
+
+    return accounts;
+}
+
+bool AuthManager::SwitchAccount(const std::string& email)
+{
+    if (email.empty()) return false;
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (_stricmp(email.c_str(), m_tokens.accountEmail.c_str()) == 0)
+        {
+            return true; // already active
+        }
+    }
+
+    // Save tokens of active account first
+    SaveTokens();
+
+    std::wstring accSubKey = std::wstring(kRegAccountsSubKey) + L"\\" + MakeSafeAccountKey(email);
+    HKEY hKeyAcc = NULL;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, accSubKey.c_str(), 0, KEY_READ, &hKeyAcc) != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    std::string newEmail, newName, newRefreshToken;
+
+    wchar_t szBuf[256] = {0};
+    DWORD cbBuf = sizeof(szBuf);
+    if (RegQueryValueExW(hKeyAcc, kRegValAccountEmail, NULL, NULL, (LPBYTE)szBuf, &cbBuf) == ERROR_SUCCESS)
+    {
+        newEmail = GDriveHttp::HttpClient::WideToUtf8(szBuf);
+    }
+
+    cbBuf = sizeof(szBuf);
+    if (RegQueryValueExW(hKeyAcc, kRegValAccountName, NULL, NULL, (LPBYTE)szBuf, &cbBuf) == ERROR_SUCCESS)
+    {
+        newName = GDriveHttp::HttpClient::WideToUtf8(szBuf);
+    }
+
+    DWORD cbData = 0;
+    if (RegQueryValueExW(hKeyAcc, kRegValRefreshToken, NULL, NULL, NULL, &cbData) == ERROR_SUCCESS && cbData > 0)
+    {
+        std::vector<BYTE> encData(cbData);
+        if (RegQueryValueExW(hKeyAcc, kRegValRefreshToken, NULL, NULL, encData.data(), &cbData) == ERROR_SUCCESS)
+        {
+            DATA_BLOB inBlob{}, outBlob{};
+            inBlob.pbData = encData.data();
+            inBlob.cbData = cbData;
+            if (CryptUnprotectData(&inBlob, NULL, NULL, NULL, NULL, 0, &outBlob))
+            {
+                newRefreshToken = std::string((char*)outBlob.pbData, outBlob.cbData);
+                LocalFree(outBlob.pbData);
+            }
+        }
+    }
+    RegCloseKey(hKeyAcc);
+
+    if (newRefreshToken.empty())
+    {
+        return false;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_tokens.accountEmail = newEmail;
+        m_tokens.accountName = newName;
+        m_tokens.refreshToken = newRefreshToken;
+        m_tokens.accessToken = "";
+        m_tokens.expiresAt = 0;
+    }
+
+    // Set ActiveAccount in registry
+    HKEY hKeyMain = NULL;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, KEY_WRITE, &hKeyMain) == ERROR_SUCCESS)
+    {
+        std::wstring wEmail = GDriveHttp::HttpClient::Utf8ToWide(newEmail);
+        RegSetValueExW(hKeyMain, kRegValActiveAccount, 0, REG_SZ, (const BYTE*)wEmail.c_str(), (DWORD)(wEmail.length() + 1) * sizeof(wchar_t));
+        RegCloseKey(hKeyMain);
+    }
+
+    // Switch persistent cache
+    GDriveCache::CacheManager::GetInstance().SwitchAccount(newEmail);
+
+    // Refresh token for the new account
+    GetValidAccessToken();
+
+    return true;
+}
+
+bool AuthManager::AddAccount(HWND hParent, std::string* errorOut)
+{
+    return LaunchInteractiveAuth(hParent, errorOut);
+}
+
+bool AuthManager::RemoveAccount(const std::string& email)
+{
+    if (email.empty()) return false;
+
+    std::wstring accSubKey = std::wstring(kRegAccountsSubKey) + L"\\" + MakeSafeAccountKey(email);
+    RegDeleteKeyW(HKEY_CURRENT_USER, accSubKey.c_str());
+
+    GDriveCache::CacheManager::GetInstance().ClearDiskCache(email);
+
+    bool wasActive = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        wasActive = (_stricmp(email.c_str(), m_tokens.accountEmail.c_str()) == 0);
+    }
+
+    if (wasActive)
+    {
+        auto remaining = GetAccounts();
+        if (!remaining.empty())
+        {
+            SwitchAccount(remaining[0].email);
+        }
+        else
+        {
+            Logout();
+        }
+    }
+
+    return true;
 }
 
 } // namespace GDriveAuth
