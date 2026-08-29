@@ -59,7 +59,7 @@ BEGIN
     LTEXT           "OAuth &Client ID:",IDC_STATIC_4,12,96,80,8
     EDITTEXT        IDC_CFG_CLIENTID,12,107,224,14,ES_AUTOHSCROLL
     LTEXT           "OAuth Client &Secret:",IDC_STATIC_5,12,124,80,8
-    EDITTEXT        IDC_CFG_CLIENTSECRET,12,135,224,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_CFG_CLIENTSECRET,12,135,224,14,ES_PASSWORD | ES_AUTOHSCROLL
     LTEXT           "Note: To use custom keys, create a Desktop App in Google Cloud Console.",IDC_STATIC_6,12,153,224,18
 END
 
