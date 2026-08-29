@@ -507,12 +507,14 @@ bool CCalcSizeProgressDialog::Run()
     GDriveCache::CacheManager::GetInstance().CheckForRemoteChanges(false);
 
     std::queue<std::string> folderQueue;
+    std::vector<std::string> visitedFolderIds;
     folderQueue.push(m_folderId);
 
     while (!folderQueue.empty() && !m_cancelled)
     {
         std::string currentId = folderQueue.front();
         folderQueue.pop();
+        visitedFolderIds.push_back(currentId);
 
         ProcessMessages();
         if (m_cancelled) break;
@@ -570,6 +572,16 @@ bool CCalcSizeProgressDialog::Run()
 
     if (!m_cancelled)
     {
+        // Compute and store exact sizes for every visited subfolder (bottom-up from leaves to root)
+        for (auto it = visitedFolderIds.rbegin(); it != visitedFolderIds.rend(); ++it)
+        {
+            int64_t subSize = 0;
+            int files = 0, dirs = 0;
+            if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(*it, subSize, files, dirs))
+            {
+                GDriveCache::CacheManager::GetInstance().SetFolderSize(*it, subSize);
+            }
+        }
         GDriveCache::CacheManager::GetInstance().SetFolderSize(m_folderId, m_totalBytes);
     }
 
