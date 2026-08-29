@@ -47,22 +47,22 @@ Každý vytvořený nebo upravovaný soubor musí na prvních řádcích obsahov
 
 #### Běžné zdrojové soubory pluginu:
 ```cpp
-// SPDX-FileCopyrightText: 2026 Open Salamander Authors & Red Salamander Authors
-// SPDX-FileContributor: Ported to Open Salamander framework by fila73
+// SPDX-FileCopyrightText: 2026 fila73
+// SPDX-FileContributor: Inspired by Red Salamander
 // SPDX-License-Identifier: GPL-2.0-or-later
 ```
 
 #### Soubory obsahující integraci Dark Mode (`*darkmode.cpp`, `*darkmode.h`, `versinfo.rh2`):
 ```cpp
-// SPDX-FileCopyrightText: 2026 Open Salamander Authors, Red Salamander Authors & Ondrej Kotas
+// SPDX-FileCopyrightText: 2026 fila73 & Ondrej Kotas
 // SPDX-FileContributor: Dark Mode host policy and theme integration based on fork by Ondrej Kotas (KRtkovo-eu-AI)
-// SPDX-FileContributor: Ported to Open Salamander framework by fila73
+// SPDX-FileContributor: Inspired by Red Salamander
 // SPDX-License-Identifier: GPL-2.0-or-later
 ```
 
 ### 2. Struktura souboru `LICENSE` v kořenu repozitáře
 
-Kořenový soubor `LICENSE` obsahuje plný text **GNU General Public License v2.0** a doplňující ujednání pro převzaté komponenty:
+Kořenový soubor `LICENSE` obsahuje text **GNU General Public License v2.0**:
 
 ```text
 GNU GENERAL PUBLIC LICENSE
@@ -74,32 +74,8 @@ Copyright (C) 1989, 1991 Free Software Foundation, Inc.
 Everyone is permitted to copy and distribute verbatim copies
 of this license document, but changing it is not allowed.
 
-This plugin is part of / compatible with Open Salamander and is licensed under GPL-2.0-or-later.
-
-Portions of this plugin are derived or ported from RedSalamander:
--------------------------------------------------------------------------------
-MIT License
-
-Copyright (c) 2026 RedSalamander
-Ported to Open Salamander framework by fila73
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Copyright (C) 2026 fila73. Inspired by Red Salamander.
+This plugin is compatible with Open Salamander and is licensed under the GNU General Public License v2.0 or later (GPL-2.0-or-later).
 ```
 
 ---

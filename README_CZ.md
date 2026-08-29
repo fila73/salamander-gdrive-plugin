@@ -113,5 +113,6 @@ Příkaz vytvoří:
 Licencováno pod **GNU General Public License v2.0 nebo novější** ([GPL-2.0-or-later](LICENSE)).  
 Všechny zdrojové soubory obsahují standardizované SPDX hlavičky.
 
-- Portováno do Open Salamanderu: **fila73**.
+- Autor: **fila73**
+- Inspirováno projektem **Red Salamander**
 - Integrace Dark Mode podle forku **Ondrej Kotas (KRtkovo-eu-AI)**.

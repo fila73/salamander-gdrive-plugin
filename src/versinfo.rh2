@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: 2026 Open Salamander Authors, Red Salamander Authors & Ondrej Kotas
+// SPDX-FileCopyrightText: 2026 fila73 & Ondrej Kotas
 // SPDX-FileContributor: Dark Mode host policy and theme integration based on fork by Ondrej Kotas (KRtkovo-eu-AI)
-// SPDX-FileContributor: Ported to Open Salamander framework by fila73
+// SPDX-FileContributor: Inspired by Red Salamander
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifndef __GDRIVE_VERSINFO_RH2
@@ -16,8 +16,8 @@
 
 #include "spl_vers.h"
 
-#define VERSINFO_COPYRIGHT   "Copyright \xA9 2026 Open Salamander Authors & Red Salamander Authors. Ported by fila73."
-#define VERSINFO_COMPANY     "Open Salamander & Red Salamander"
+#define VERSINFO_COPYRIGHT   "Copyright \xA9 2026 fila73. Inspired by Red Salamander."
+#define VERSINFO_COMPANY     "fila73"
 
 #define VERSINFO_DESCRIPTION "Google Drive Filesystem Plugin for Open Salamander (by fila73)"
 

@@ -113,5 +113,6 @@ This compiles:
 Licensed under the **GNU General Public License v2.0 or later** ([GPL-2.0-or-later](LICENSE)).  
 SPDX headers are present in all source files.
 
-- Ported to Open Salamander framework by **fila73**.
+- Author: **fila73**
+- Inspired by **Red Salamander**
 - Dark Mode integration based on the Salamander fork by **Ondrej Kotas (KRtkovo-eu-AI)**.
