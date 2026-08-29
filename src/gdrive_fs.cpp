@@ -509,7 +509,10 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     // Check cache synchronization with Changes API
     if (forceRefresh)
     {
-        GDriveCache::CacheManager::GetInstance().InvalidateFolder(m_currentFolderId);
+        if (!GDriveCache::CacheManager::GetInstance().IsSmartCtrlR())
+        {
+            GDriveCache::CacheManager::GetInstance().InvalidateFolder(m_currentFolderId);
+        }
         GDriveCache::CacheManager::GetInstance().CheckForRemoteChanges(true);
     }
     else

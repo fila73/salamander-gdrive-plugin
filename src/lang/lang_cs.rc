@@ -68,15 +68,16 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
 CAPTION "Mezipaměť a synchronizace"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    GROUPBOX        "Mezipaměť metadat",IDC_STATIC_1,4,4,242,100
+    GROUPBOX        "Mezipaměť metadat a synchronizace",IDC_STATIC_1,4,4,242,116
     CONTROL         "&Povolit trvalou mezipaměť metadat na disku",IDC_CFG_CACHE_ENABLED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,18,220,10
-    LTEXT           "Frekvence kontroly změn na disku (TTL):",IDC_STATIC_2,12,36,220,8
-    COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,48,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Stav mezipaměti: Připraveno (Odděleno pro každý účet)",IDC_CFG_CACHE_STATUS,12,68,220,8
-    PUSHBUTTON      "&Vymazat mezipaměť aktivního účtu",IDC_CFG_CACHE_CLEAR_BTN,12,82,150,14
+    LTEXT           "Frekvence kontroly změn (TTL):",IDC_STATIC_2,12,32,220,8
+    COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,44,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "&Ctrl+R: Nevynucovat refresh, pokud složka není změněna",IDC_CFG_SMART_CTRL_R,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,62,224,10
+    LTEXT           "Stav mezipaměti: Připraveno (izolováno pro účet)",IDC_CFG_CACHE_STATUS,12,78,220,8
+    PUSHBUTTON      "&Vymazat mezipaměť aktivního účtu",IDC_CFG_CACHE_CLEAR_BTN,12,92,140,14
 
-    GROUPBOX        "Informace",IDC_STATIC_3,4,108,242,68
-    LTEXT           "Inteligentní mezipaměť výrazně zrychluje procházení složek.\nZměny na Google Disku se zjišťují přes Changes API bez nutnosti znovu stahovat celé složky.\n\nKaždý přihlášený účet má svůj vlastní izolovaný soubor mezipaměti v profilu.",IDC_STATIC_4,12,120,224,50
+    GROUPBOX        "Informace",IDC_STATIC_3,4,124,242,52
+    LTEXT           "Inteligentní mezipaměť zrychluje procházení složek na 0 ms.\nZměny na Google Disku jsou detekovány přes Changes API bez zbytečného plošného stahování celých složek.",IDC_STATIC_4,12,136,224,36
 END
 
 IDD_AUTH_PROGRESS DIALOGEX 0, 0, 230, 95

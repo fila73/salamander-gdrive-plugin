@@ -208,9 +208,13 @@ void CConfigPageCache::Transfer(CTransferInfo& ti)
     int enabled = GDriveCache::CacheManager::GetInstance().IsEnabled() ? 1 : 0;
     ti.CheckBox(IDC_CFG_CACHE_ENABLED, enabled);
 
+    int smartCtrlR = GDriveCache::CacheManager::GetInstance().IsSmartCtrlR() ? 1 : 0;
+    ti.CheckBox(IDC_CFG_SMART_CTRL_R, smartCtrlR);
+
     if (ti.Type == ttDataFromWindow)
     {
         GDriveCache::CacheManager::GetInstance().SetEnabled(enabled != 0);
+        GDriveCache::CacheManager::GetInstance().SetSmartCtrlR(smartCtrlR != 0);
 
         HWND hCombo = GetDlgItem(HWindow, IDC_CFG_CACHE_INTERVAL_COMBO);
         if (hCombo)

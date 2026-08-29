@@ -34,6 +34,9 @@ public:
     void SetCheckIntervalMs(DWORD ms) { m_checkIntervalMs = ms; }
     DWORD GetCheckIntervalMs() const { return m_checkIntervalMs; }
 
+    void SetSmartCtrlR(bool smart) { m_smartCtrlR = smart; }
+    bool IsSmartCtrlR() const { return m_smartCtrlR; }
+
     void SetCurrentAccount(const std::string& email);
     const std::string& GetCurrentAccount() const { return m_currentAccountEmail; }
 
@@ -82,6 +85,7 @@ private:
     std::string m_startPageToken;
     uint64_t m_lastChangeCheckTick = 0;
     DWORD m_checkIntervalMs = 30000; // 30 seconds default
+    bool m_smartCtrlR = false; // By default Ctrl+R forces reload of current folder
     bool m_enabled = true;
     bool m_dirty = false;
     std::mutex m_mutex;

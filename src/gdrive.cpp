@@ -154,6 +154,12 @@ void WINAPI CPluginInterface::LoadConfiguration(HWND parent, HKEY regKey, CSalam
         GDriveCache::CacheManager::GetInstance().SetCheckIntervalMs(dwCacheInterval);
     }
 
+    DWORD dwSmartCtrlR = 0;
+    if (registry->GetValue(regKey, "SmartCtrlR", REG_DWORD, &dwSmartCtrlR, sizeof(dwSmartCtrlR)))
+    {
+        GDriveCache::CacheManager::GetInstance().SetSmartCtrlR(dwSmartCtrlR != 0);
+    }
+
     char szClientId[512] = {0};
     if (registry->GetValue(regKey, "ClientId", REG_SZ, szClientId, sizeof(szClientId)))
     {
@@ -183,6 +189,9 @@ void WINAPI CPluginInterface::SaveConfiguration(HWND parent, HKEY regKey, CSalam
 
     DWORD dwCacheInterval = GDriveCache::CacheManager::GetInstance().GetCheckIntervalMs();
     registry->SetValue(regKey, "CacheCheckIntervalMs", REG_DWORD, &dwCacheInterval, sizeof(dwCacheInterval));
+
+    DWORD dwSmartCtrlR = GDriveCache::CacheManager::GetInstance().IsSmartCtrlR() ? 1 : 0;
+    registry->SetValue(regKey, "SmartCtrlR", REG_DWORD, &dwSmartCtrlR, sizeof(dwSmartCtrlR));
 
     std::string cid = GDriveAuth::AuthManager::GetInstance().GetClientId();
     registry->SetValue(regKey, "ClientId", REG_SZ, cid.c_str(), (int)cid.length() + 1);
