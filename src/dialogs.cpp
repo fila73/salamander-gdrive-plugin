@@ -508,6 +508,8 @@ bool CCalcSizeProgressDialog::Run()
 
     std::queue<std::string> folderQueue;
     std::vector<std::string> visitedFolderIds;
+    std::map<std::string, int64_t> directFolderBytes;
+    std::map<std::string, std::vector<std::string>> childFoldersMap;
     folderQueue.push(m_folderId);
 
     while (!folderQueue.empty() && !m_cancelled)
@@ -550,6 +552,9 @@ bool CCalcSizeProgressDialog::Run()
             continue;
         }
 
+        int64_t myFilesBytes = 0;
+        std::vector<std::string> mySubfolders;
+
         for (const auto& it : items)
         {
             ProcessMessages();
@@ -558,6 +563,7 @@ bool CCalcSizeProgressDialog::Run()
             if (it.isFolder)
             {
                 m_totalDirs++;
+                mySubfolders.push_back(it.id);
                 folderQueue.push(it.id);
                 UpdateUI(it.name);
             }
@@ -565,22 +571,37 @@ bool CCalcSizeProgressDialog::Run()
             {
                 m_totalFiles++;
                 m_totalBytes += it.size;
+                myFilesBytes += it.size;
                 UpdateUI("");
             }
         }
+
+        directFolderBytes[currentId] = myFilesBytes;
+        childFoldersMap[currentId] = mySubfolders;
     }
 
     if (!m_cancelled)
     {
+        std::map<std::string, int64_t> computedFolderSizes;
         // Compute and store exact sizes for every visited subfolder (bottom-up from leaves to root)
         for (auto it = visitedFolderIds.rbegin(); it != visitedFolderIds.rend(); ++it)
         {
-            int64_t subSize = 0;
-            int files = 0, dirs = 0;
-            if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(*it, subSize, files, dirs))
+            const std::string& id = *it;
+            int64_t totalForThisFolder = directFolderBytes[id];
+            auto itChildren = childFoldersMap.find(id);
+            if (itChildren != childFoldersMap.end())
             {
-                GDriveCache::CacheManager::GetInstance().SetFolderSize(*it, subSize);
+                for (const auto& childId : itChildren->second)
+                {
+                    auto itChildSize = computedFolderSizes.find(childId);
+                    if (itChildSize != computedFolderSizes.end())
+                    {
+                        totalForThisFolder += itChildSize->second;
+                    }
+                }
             }
+            computedFolderSizes[id] = totalForThisFolder;
+            GDriveCache::CacheManager::GetInstance().SetFolderSize(id, totalForThisFolder);
         }
         GDriveCache::CacheManager::GetInstance().SetFolderSize(m_folderId, m_totalBytes);
     }

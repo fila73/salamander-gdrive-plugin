@@ -427,15 +427,16 @@ bool CacheManager::ComputeFolderSizeFromCache(const std::string& folderId, int64
     filesCountOut = 0;
     dirsCountOut = 0;
 
+    auto itSize = m_folderSizes.find(folderId);
+    if (itSize != m_folderSizes.end())
+    {
+        sizeOut = itSize->second;
+        return true;
+    }
+
     auto itRoot = m_folders.find(folderId);
     if (itRoot == m_folders.end() || !itRoot->second.isValid)
     {
-        auto itSize = m_folderSizes.find(folderId);
-        if (itSize != m_folderSizes.end())
-        {
-            sizeOut = itSize->second;
-            return true;
-        }
         return false;
     }
 
