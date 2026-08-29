@@ -635,6 +635,9 @@ bool CTransferProgressDialog::Start()
 {
     if (!Create()) return false;
 
+    HWND hParent = Parent;
+    if (hParent) EnableWindow(hParent, FALSE);
+
     ShowWindow(HWindow, SW_SHOW);
     UpdateWindow(HWindow);
 
@@ -658,10 +661,37 @@ bool CTransferProgressDialog::Start()
     return true;
 }
 
+void CTransferProgressDialog::SetCurrentFile(const std::string& fileName, int64_t totalBytes)
+{
+    m_fileName = fileName;
+    m_totalBytes = totalBytes;
+    m_startTick = GetTickCount();
+    m_lastUpdateTick = m_startTick;
+
+    if (HWindow)
+    {
+        std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(m_fileName);
+        SetDlgItemTextA(HWindow, IDC_TRANSFER_FILENAME, ansiFileName.c_str());
+
+        HWND hPb = GetDlgItem(HWindow, IDC_TRANSFER_PROGRESSBAR);
+        if (hPb)
+        {
+            SendMessage(hPb, PBM_SETPOS, 0, 0);
+        }
+        UpdateUI(0, m_totalBytes);
+    }
+}
+
 void CTransferProgressDialog::Stop()
 {
     if (HWindow)
     {
+        HWND hParent = Parent;
+        if (hParent)
+        {
+            EnableWindow(hParent, TRUE);
+            SetForegroundWindow(hParent);
+        }
         DestroyWindow(HWindow);
         HWindow = NULL;
     }

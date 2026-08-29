@@ -108,6 +108,7 @@ public:
 
     bool Start();
     void Stop();
+    void SetCurrentFile(const std::string& fileName, int64_t totalBytes);
 
     bool OnProgress(int64_t bytesTransferred, int64_t totalBytes);
     bool IsCancelled() const { return m_cancelled; }
