@@ -1,131 +1,81 @@
-# Google Drive API v3 — Možnosti a plán dalších funkcí
+# Google Drive Plugin — Stav implementace a Roadmapa
 
-Tento dokument shrnuje funkce **Google Drive API v3**, které zatím v pluginu pro Open Salamander nejsou implementovány, rozdělené podle priorit a technické náročnosti.
-
----
-
-## 1. Souborové operace zápisu (Zápis a úpravy na disku)
-
-Aktuální verze pluginu je pouze pro čtení (Download, View, Calc Size). Google Drive API podporuje plné CRUD operace:
-
-### 1.1 Nahrávání na Google Disk (Upload / F5 Copy do pluginu)
-- **API endpoint:** `POST https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable` nebo `multipart`
-- **Salamander rozhraní:** `CPluginFS::CopyOrMoveFromDiskToFS`
-- **Funkcionalita:**
-  - Nahrávání jednotlivých souborů i celých adresářových stromů z lokálního disku do Google Disku.
-  - Podpora *Resumable Upload* pro velké soubory (> 5 MB) s možností navázání při výpadku sítě a live progress dialogem.
-  - Řešení kolizí (Přepsat / Přeskočit / Přejmenovat).
-
-### 1.2 Vytváření nových složek (F7 Create Directory)
-- **API endpoint:** `POST https://www.googleapis.com/drive/v3/files` s tělem `{"name": "...", "mimeType": "application/vnd.google-apps.folder", "parents": ["<parent_id>"]}`
-- **Salamander rozhraní:** `CPluginFS::CreateDir`
-- **Funkcionalita:** Vytvoření nové podsložky v aktuální složce na disku (včetně Můj disk i Sdílené disky).
-
-### 1.3 Mazání souborů a složek (F8 / Delete)
-- **API endpoint:**
-  - *Do koše (Trash)*: `PATCH https://www.googleapis.com/drive/v3/files/{fileId}` s `{"trashed": true}`
-  - *Trvalé smazání*: `DELETE https://www.googleapis.com/drive/v3/files/{fileId}`
-- **Salamander rozhraní:** `CPluginFS::Delete`
-- **Funkcionalita:** Bezpečné přesunutí vybraných souborů/složek do Koše Google Disku, případně volba trvalého smazání s klávesou Shift.
-
-### 1.4 Přejmenování a přesun (F6 Move / Shift+F6 Quick Rename)
-- **API endpoint:** `PATCH https://www.googleapis.com/drive/v3/files/{fileId}` s `{"name": "novy_nazev"}` nebo `addParents=...&removeParents=...`
-- **Salamander rozhraní:** `CPluginFS::QuickRename`, `CPluginFS::CopyOrMoveFromFS` (při přesunu v rámci stejného FS)
-- **Funkcionalita:** Rychlé přejmenování na místě i přesun souborů mezi složkami bez nutnosti stahování a opětovného nahrávání.
+Tento dokument shrnuje stav implementace jednotlivých funkcí **Google Drive API v3** v pluginu pro Open Salamander a plán budoucích rozšíření.
 
 ---
 
-## 2. Speciální virtuální pohledy (Virtual Folders)
+## 🟢 1. Dokončené funkce (Realizováno a otestováno)
 
-Google Drive API umožňuje filtrovat položky pomocí bohatých dotazů (`q` parametr):
+### 1.1 Zápisové a souborové operace
+- [x] **F7 – Vytvoření složky (`CreateDir`)**: `POST https://www.googleapis.com/drive/v3/files?supportsAllDrives=true`
+- [x] **Shift+F6 – Rychlé přejmenování (`QuickRename`)**: `PATCH https://www.googleapis.com/drive/v3/files/{id}?supportsAllDrives=true`
+- [x] **F8 – Mazání položek (`Delete`)**:
+  - Standardní F8: Přesun do Koše Google Disku (`PATCH` s `{"trashed": true}`).
+  - Shift+F8: Trvalé smazání položky (`DELETE`).
+- [x] **F5 – Nahrávání z disku na Google Disk (`CopyOrMoveFromDiskToFS`)**:
+  - Streamovaný multipart upload (256 KB buffer) pro soubory i rekurzivní adresářové stromy.
+- [x] **F5 – Stahování z Google Disku na lokální disk**:
+  - Podpora jednotlivých souborů i celých rekurzivních složek.
+- [x] **Ukazatel volného místa na disku (`GetFSFreeSpace`)**:
+  - Zobrazení volné a celkové kapacity Google Disku v patičce panelu.
 
-### 2.1 S hvězdičkou / Oblíbené (`Starred`)
-- **API dotaz:** `starred = true and trashed = false`
-- **Umístění:** Virtuální uzel v kořeni `/Starred` (česky *S hvězdičkou*).
-- **Funkcionalita:** Rychlý přístup ke klíčovým dokumentům a složkám označeným hvězdičkou.
-- **Kontextové menu:** Možnost položce hvězdičku přidat / odebrat (`PATCH files/{id}` s `{"starred": true/false}`).
+### 1.2 Virtuální pohledy (Virtual Folders) & Kontextové menu
+- [x] **`/Starred`** (S hvězdičkou / Oblíbené)
+- [x] **`/Recent`** (Poslední / Nedávné soubory)
+- [x] **`/Trash`** (Koš s možností obnovení souborů i vysypání celého koše)
+- [x] **Kontextové menu**:
+  - *Otevřít ve webovém prohlížeči* (`webViewLink`)
+  - *Kopírovat odkaz do schránky*
+  - *Přidat / Odebrat hvězdičku*
+  - *Obnovit z koše* / *Vysypat koš...*
+  - *Spočítat velikost složky...* (`CCalcSizeProgressDialog` s možností přerušení klávesou Esc)
 
-### 2.2 Koš (`Trash`)
-- **API dotaz:** `trashed = true`
-- **Umístění:** Virtuální uzel `/Trash` (česky *Koš*).
-- **Funkcionalita:** 
-  - Procházení smazaných položek.
-  - Obnovení souborů z koše (`{"trashed": false}`).
-  - Příkaz „Vysypat koš“ (`DELETE https://www.googleapis.com/drive/v3/files/trash`).
+### 1.3 Inteligentní mezipaměť (Smart Cache) & Changes API
+- [x] **Okamžité procházení (0 ms latence)**: Obsah složek v RAM mezipaměti.
+- [x] **Detekce změn pomocí Changes API (`changes.list`)**:
+  - Periodická kontrola podle nastavitelného intervalu (TTL).
+  - Selektivní zneplatnění pouze změněných složek namísto plošného stahování celých stromů.
+- [x] **Okamžité lokální mutace**: Zápisové operace v Salamanderu okamžitě aktualizují cache.
+- [x] **Perzistentní disková mezipaměť**:
+  - Ukládání mezipaměti na disk do `%APPDATA%\Open Salamander\plugins\gdrive\cache_<email_hash>.bin`.
+  - Automatické uložení při ukončení a načtení při startu Salamandera.
 
-### 2.3 Poslední / Nedávné (`Recent`)
-- **API dotaz:** `trashed = false` se řazením `orderBy=viewedByMeTime desc` nebo `modifiedTime desc` (omezeno např. na 100 položek).
-- **Umístění:** Virtuální uzel `/Recent`.
+### 1.4 Správa více účtů (Multi-Account)
+- [x] **Registr Google účtů**: Možnost přihlásit více Google účtů současně (např. osobní i firemní).
+- [x] **100% oddělení dat**: Každý účet má vlastní nezávislou diskovou i paměťovou cache.
+- [x] **Přepínání účtů**: Možnost okamžitého přepnutí aktivního účtu v dialogu Konfigurace.
+- [x] **Šifrování tokenů**: Refresh tokeny chráněny pomocí Windows DPAPI.
+
+### 1.5 Konfigurační dialog (Property Sheet)
+- [x] **Záložka „Účty a obecné“**: Správa přihlášených účtů (Přidat, Aktivovat, Odebrat), volba zobrazení Sdílených disků, vlastní OAuth klíče.
+- [x] **Záložka „Mezipaměť a synchronizace“**: Zapnutí/vypnutí cache, nastavení TTL intervalu kontroly změn (10 s, 30 s, 1 min, 5 min, ručně), tlačítko pro vymazání cache.
 
 ---
 
-## 3. Hledání na Google Disku (Alt+F7 / Find Files)
+## 🟡 2. Budoucí rozšíření (Roadmapa)
 
+### 2.1 Hledání na Google Disku (Alt+F7 / Find Files)
 - **API endpoint:** `GET https://www.googleapis.com/drive/v3/files?q=...`
-- **Salamander rozhraní:** `CPluginFS::OpenFindDialog` nebo integrace do standardního vyhledávání.
+- **Salamander rozhraní:** `CPluginFS::OpenFindDialog`
 - **Možnosti dotazů:**
   - Hledání podle názvu: `name contains 'rozpocet'`
   - **Fulltextové vyhledávání v obsahu**: `fullText contains 'smlouva'` (Google indexuje text uvnitř Docs, Sheets, PDF, TXT i obrázků s OCR).
   - Filtrování podle typu (dokumenty, tabulky, obrázky, složky).
   - Filtrování podle data změny / autora.
 
----
-
-## 4. Sdílení a webová integrace (Permissions & Web Links)
-
-### 4.1 Kontextové menu – Akce Google Disku
-- **Otevřít v prohlížeči (Open in Browser):**
-  - Využije se atribut `webViewLink` z metadat souboru. Otevře soubor přímo v Google Docs/Sheets v defaultním browseru.
-- **Kopírovat odkaz pro sdílení (Copy shareable link):**
-  - Zkopíruje webový odkaz na soubor do schránky Windows.
-- **Správa oprávnění (Share / Permissions Dialog):**
-  - **API endpointy:** `GET/POST/DELETE https://www.googleapis.com/drive/v3/files/{fileId}/permissions`
-  - Vlastní dialog v pluginu zobrazující, kdo má k souboru přístup (čtenář, komentátor, editor) s možností přidat e-mail nového spolupracovníka.
-
----
-
-## 5. Historie verzí (Revisions API)
-
+### 2.2 Historie verzí (Revisions API)
 - **API endpoint:** `GET https://www.googleapis.com/drive/v3/files/{fileId}/revisions`
 - **Funkcionalita:**
-  - Google Drive uchovává předchozí verze souborů (zejména binárních a kancelářských).
   - Dialog „Historie verzí...“ v kontextovém menu souboru.
-  - Možnost zobrazit datum, autora úpravy, stáhnout kteroukoli starší verzi nebo obnovit starší verzi jako aktuální.
+  - Zobrazení data úpravy, autora, možnost stažení starší verze nebo její obnovení.
 
----
+### 2.3 Správa oprávnění ke sdílení (Permissions Dialog)
+- **API endpointy:** `GET/POST/DELETE https://www.googleapis.com/drive/v3/files/{fileId}/permissions`
+- **Funkcionalita:**
+  - Dialog pro zobrazení a úpravu sdílení položky (přidání spolupracovníků, nastavení role: čtenář / komentátor / editor).
 
-## 6. Miniatury a náhledy (Thumbnails / ThumbLoader)
-
+### 2.4 Miniatury v panelu (Thumbnails / ThumbLoader)
 - **API vlastnost:** `thumbnailLink` v metadatovém objektu souboru.
 - **Salamander rozhraní:** `CPluginInterfaceForThumbLoaderAbstract`
 - **Funkcionalita:**
-  - Zobrazování náhledů obrázků, PDF a Google Dokumentů přímo v režimu miniatur panelu Salamandera bez nutnosti stahovat celý originální soubor.
-
----
-
-## 7. Zkratky (Shortcuts API)
-
-- **MIME typ:** `application/vnd.google-apps.shortcut`
-- **API vlastnost:** `shortcutDetails.targetId`, `shortcutDetails.targetMimeType`
-- **Funkcionalita:**
-  - Google Drive podporuje zástupce (shortcuts) na jiné soubory a složky.
-  - Plugin může zástupce transparentně otevírat nebo navigovat na cílovou složku.
-
----
-
-## 8. Změny a synchronizace (Changes API)
-
-- **API endpoint:** `GET https://www.googleapis.com/drive/v3/changes` (se `startPageToken`)
-- **Funkcionalita:**
-  - Umožňuje zjišťovat přírůstkové změny bez nutnosti znovu procházet celé složky (efektivní cache invalidace a notifikace o změnách).
-
----
-
-## Doporučený plán implementace po fázích
-
-| Fáze | Zaměření | Klíčové funkce |
-|---|---|---|
-| **Fáze 1** | **Zápis a správa souborů** | F7 Vytvořit složku, F8 Smazat (do Koše), Shift+F6 Přejmenovat, F5 Upload souborů |
-| **Fáze 2** | **Virtuální složky a web integrace** | `/Starred`, `/Trash` (včetně vysypání/obnovení), kontextové menu "Otevřít na webu" |
-| **Fáze 3** | **Vyhledávání a miniatury** | Vyhledávací dialog s fulltextem, ThumbLoader pro náhledy v panelech |
-| **Fáze 4** | **Pokročilá správa** | Správa oprávnění (sdílení), Historie verzí (Revisions) |
+  - Zobrazování náhledů obrázků, PDF a Google Dokumentů přímo v režimu miniatur panelu Salamandera.

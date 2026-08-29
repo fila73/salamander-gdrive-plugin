@@ -1,33 +1,57 @@
 # Plugin Google Disk pro Open Salamander
 
-Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dark Mode fork **KRtkovo-eu-AI/salamander**), který umožňuje procházet, prohlížet, zjišťovat velikosti a stahovat soubory a složky z **Google Disku** (včetně *Můj disk* a *Sdílených disků*) přímo ze dvou panelů Salamandera.
+Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dark Mode fork **KRtkovo-eu-AI/salamander**), který umožňuje procházet, spravovat, nahrávat, stahovat a organizovat soubory a složky na **Google Disku** přímo ze dvou panelů Salamandera s bleskovou inteligentní mezipamětí.
 
 ---
 
 ## ✨ Klíčové funkce
 
-- 🔒 **Bezpečné přihlášení (OAuth 2.0 s PKCE)**:
-  - Přihlášení přes výchozí webový prohlížeč bez nutnosti zadávat hesla do aplikace.
-  - Možnost zadat vlastní **OAuth Client ID** a **OAuth Client Secret** přímo v konfiguračním dialogu pluginu.
-- 🔑 **Šifrované uložení tokenů (Windows DPAPI)**:
-  - Refresh token je bezpečně zašifrován v rámci uživatelského profilu Windows.
-  - **Tichá obnova (Silent Refresh)**: Přístupové tokeny se na pozadí automaticky obnovují bez opakovaného otevírání prohlížeče.
-- 📁 **Kompletní podpora Google Disku**:
-  - **Můj disk (My Drive)**: Osobní úložiště Google Disku.
-  - **Sdílené disky (Shared Drives)**: Týmové disky Google Workspace.
-  - **Sdíleno se mnou (Shared with me)**: Přístup ke složkám a souborům sdíleným s vaším účtem.
-- ⚡ **Výpočet velikosti složek (Kontextové menu / Hlavní menu)**:
-  - Rekurzivní skenování velikosti a počtu položek s živým dialogem průběhu.
-  - Možnost okamžitého přerušení (tlačítko **Zrušit** nebo klávesa `Esc`) se zobrazením částečných statistik.
-  - Automatické promítnutí výsledné velikosti do panelu Salamandera – **nahradí `DIR` / `ADR` ve sloupci Velikost**.
-- 📥 **Kopírování a stahování (F5)**:
-  - Stahování jednotlivých souborů i celých stromů složek na lokální disk.
-- 👁️ **Interní prohlížeč (F3)**:
-  - Rychlé prohlížení souborů s automatickou mezipamětí.
-- 📄 **Export Google Dokumentů**:
-  - Automatický převod formátů Google Dokumenty, Tabulky a Prezentace do standardních formátů (`.docx`, `.xlsx`, `.pptx`, `.pdf`).
-- 🌙 **Plná podpora Dark Mode**:
-  - Tmavý režim plně ladící s barevným schématem tmavého motivu Open Salamandera.
+### 🚀 Inteligentní paměťová a trvalá disková mezipaměť (Cache)
+- **Okamžité procházení (0 ms latence)**: Obsah navštívených složek je uložen v paměti RAM a ukládán na disk do `%APPDATA%\Open Salamander\plugins\gdrive\cache_<email_hash>.bin`.
+- **Synchronizace přes Google Drive Changes API (`changes.list`)**:
+  - Periodická lehká kontrola změn pomocí synchronizačního tokenu podle nastavitelného intervalu (10 s, 30 s, 1 min, 5 min nebo ručně přes `Ctrl+R`).
+  - Selektivní zneplatnění pouze těch složek, kde došlo ke změně, namísto stahování celých stromů.
+  - Nulové zbytečné síťové dotazy, pokud se na vzdáleném disku nic nezměnilo.
+
+### 👥 Správa více účtů (Multi-Account) a přepínání
+- Možnost mít přihlášeno **více Google účtů současně** (např. osobní a firemní).
+- **100% oddělení dat**: Každý účet má vlastní nezávislou diskovou i paměťovou cache.
+- Snadné přepínání aktivního účtu, přidávání i odebírání přímo v dialogu Konfigurace.
+- **Šifrované uložení tokenů (Windows DPAPI)**: Bezpečné šifrování v rámci uživatelského profilu Windows.
+- **Tichá obnova (Silent Refresh)**: Přístupové tokeny se na pozadí automaticky obnovují bez otevírání prohlížeče.
+
+### ✏️ Zápisové a souborové operace
+- 📁 **F7 – Vytvoření složky (`CreateDir`)**: Vytváření nových složek v *Můj disk*, *Sdílených discích* i podsložkách.
+- ✏️ **Shift+F6 – Rychlé přejmenování (`QuickRename`)**: Okamžité přejmenování souborů a složek přímo v panelu.
+- 🗑️ **F8 – Mazání a přesun do Koše (`Delete`)**:
+  - Standardní stisk `F8`: Přesun položky do Koše Google Disku.
+  - Stisk `Shift+F8`: Trvalé smazání z Google Disku.
+- 📤 **F5 – Nahrávání na Google Disk (`CopyOrMoveFromDiskToFS`)**:
+  - Streamovaný multipart upload (256 KB buffer) s podporou jednotlivých souborů i rekurzivních stromů složek.
+- 📥 **F5 – Stahování na lokální disk**:
+  - Rychlé stahování se stavovým dialogem průběhu.
+- 👁️ **F3 – Interní prohlížeč**:
+  - Okamžitý náhled vzdálených souborů s automatickou mezipamětí.
+- 📊 **Ukazatel volného místa na disku**:
+  - Zobrazení volné a celkové kapacity Google Disku v patičce panelu Salamandera.
+
+### ⭐ Virtuální složky a kontextové menu
+- **Virtuální pohledy**:
+  - `/Starred` (S hvězdičkou / Oblíbené)
+  - `/Recent` (Nedávné soubory)
+  - `/Trash` (Koš s možností obnovení a vysypání)
+- **Bohaté kontextové menu**:
+  - *Otevřít ve webovém prohlížeči*
+  - *Kopírovat odkaz do schránky*
+  - *Přidat / Odebrat hvězdičku*
+  - *Obnovit z koše* / *Vysypat koš...*
+  - *Spočítat velikost složky...* (Rekurzivní skener s možností přerušení klávesou Esc)
+
+### 📄 Automatický export Google Dokumentů
+- Automatický převod formátů Google Dokumenty, Tabulky a Prezentace do standardních formátů (`.docx`, `.xlsx`, `.pptx`, `.pdf`) při stahování nebo náhledu.
+
+### 🌙 Plná podpora Dark Mode
+- Tmavý režim plně ladící s barevným schématem tmavého motivu Open Salamandera.
 
 ---
 
@@ -46,7 +70,7 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
    ```
 3. Spusťte **Open Salamander**, přejděte do **Plugins → Plugins Manager...**, klikněte na **Add...** a vyberte `gdrive.spl`.
 4. V panelu stiskněte **Alt+F1** nebo **Alt+F2** a zvolte disk **gdrive:**.
-5. V menu **Plugins → Google Disk → Nastavení...** zadejte své přihlašovací údaje (Client ID a Client Secret).
+5. V menu **Plugins → Google Disk → Nastavení...** přidejte svůj Google účet.
 
 ---
 
@@ -60,7 +84,7 @@ Pro připojení k vašemu Google Disku si v [Google Cloud Console](https://conso
 4. Přejděte do **Credentials → Create Credentials → OAuth Client ID**:
    - Typ aplikace: **Desktop App**.
 5. Zkopírujte vygenerované **Client ID** a **Client Secret**.
-6. V Open Salamanderu otevřete **Plugins → Google Disk → Nastavení...**, vložte oba klíče a klikněte na **Přihlásit se**.
+6. V Open Salamanderu otevřete **Plugins → Google Disk → Nastavení...**, vložte oba klíče a klikněte na **Přidat účet...**.
 
 ---
 

@@ -1,33 +1,57 @@
 # Google Drive Plugin for Open Salamander
 
-A full-featured filesystem and viewer plugin for **Open Salamander** (and the Dark Mode fork **KRtkovo-eu-AI/salamander**), allowing you to browse, view, calculate sizes, and download files and folders from **Google Drive** (including *My Drive* and *Shared Drives*) directly within Salamander's dual-pane interface.
+A full-featured filesystem, management, and viewer plugin for **Open Salamander** (and the Dark Mode fork **KRtkovo-eu-AI/salamander**), allowing you to browse, manage, upload, download, and organize files and folders on **Google Drive** directly within Salamander's dual-pane interface with zero-latency caching.
 
 ---
 
 ## ✨ Features
 
-- 🔒 **Secure Authentication (OAuth 2.0 with PKCE)**:
-  - Sign in conveniently using your default web browser without sharing passwords with the application.
-  - User-configurable **OAuth Client ID** and **OAuth Client Secret** in the plugin Configuration dialog.
-- 🔑 **Encrypted Token Storage (Windows DPAPI)**:
-  - Refresh tokens are securely encrypted per Windows user profile.
-  - **Silent Refresh**: Access tokens are refreshed in the background without recurring browser popups.
-- 📁 **Complete Google Drive Support**:
-  - **My Drive**: Personal Google Drive storage.
-  - **Shared Drives**: Google Workspace Team Drives.
-  - **Shared with me**: Access items shared with your account.
-- ⚡ **Folder Size Calculation (Space / Context Menu)**:
-  - Recursive folder size and item count scanner with live progress dialog.
-  - Graceful cancellation support (**Cancel** button or `Esc` key) returning partial statistics.
-  - Automatically updates the panel and replaces `DIR` / `ADR` in the **Size** column with the formatted folder size.
-- 📥 **Copying & Downloading (F5)**:
-  - Download single files or entire directory trees recursively to the local disk.
-- 👁️ **Built-in Viewer (F3)**:
-  - Fast file previewing with automatic caching.
-- 📄 **Google Docs Export**:
-  - Automatically converts Google Docs, Sheets, and Slides into standard formats (`.docx`, `.xlsx`, `.pptx`, `.pdf`).
-- 🌙 **Full Dark Mode Support**:
-  - Seamless dark theme integration matching Open Salamander's dark mode palette.
+### 🚀 Smart In-Memory & Persistent Disk Metadata Cache
+- **Instant 0 ms Browsing**: Folder contents are cached in RAM and persisted across Salamander restarts to `%APPDATA%\Open Salamander\plugins\gdrive\cache_<email_hash>.bin`.
+- **Google Drive Changes API Synchronization (`changes.list`)**:
+  - Automatically queries changes using a lightweight page token based on a configurable TTL interval (10s, 30s, 1m, 5m, or Manual via `Ctrl+R`).
+  - Selectively invalidates only modified folders instead of re-downloading whole trees.
+  - Zero unnecessary network requests if nothing changed on remote storage.
+
+### 👥 Multi-Account Registry & Seamless Switching
+- Sign in to **multiple Google accounts** simultaneously (e.g. personal and work).
+- **100% Data Isolation**: Each account maintains its own isolated disk cache file.
+- Switch active accounts or add/remove accounts directly from the Configuration dialog or menu.
+- **Encrypted Storage (Windows DPAPI)**: Refresh tokens are securely protected with Windows DPAPI per user profile.
+- **Silent Background Refresh**: Access tokens renew automatically without browser popups.
+
+### ✏️ Complete File Management & Write Operations
+- 📁 **F7 – Create Folder (`CreateDir`)**: Create new folders in *My Drive*, *Shared Drives*, and subfolders.
+- ✏️ **Shift+F6 – Quick Rename (`QuickRename`)**: Rename files and folders directly in the panel.
+- 🗑️ **F8 – Trash & Permanent Delete (`Delete`)**:
+  - Standard `F8`: Move item to Google Drive Trash.
+  - `Shift+F8`: Permanently delete item.
+- 📤 **F5 – Upload Files & Folders (`CopyOrMoveFromDiskToFS`)**:
+  - High-throughput streaming multipart upload (256 KB buffer) supporting single files and recursive directory structures.
+- 📥 **F5 – Download to Local Disk**:
+  - Fast download with live progress dialog.
+- 👁️ **F3 – Internal Viewer**:
+  - Instant preview of remote files with automatic temp caching.
+- 📊 **Drive Quota & Free Space Indicator**:
+  - Displays remaining and total storage space in Salamander's panel footer.
+
+### ⭐ Virtual Views & Context Menu
+- **Virtual Folders**:
+  - `/Starred` (Starred / favorite items)
+  - `/Recent` (Recently modified files)
+  - `/Trash` (Trash view with restore capabilities)
+- **Rich Context Menu**:
+  - *Open in Web Browser* (Direct Google Drive web view)
+  - *Copy Link to Clipboard*
+  - *Add / Remove Star*
+  - *Restore from Trash* / *Empty Trash...*
+  - *Calculate Folder Size...* (Recursive scanner with Esc/Cancel support)
+
+### 📄 Google Docs Auto-Export
+- Automatically converts Google Docs, Sheets, and Slides into standard office formats (`.docx`, `.xlsx`, `.pptx`, `.pdf`) on download or viewing.
+
+### 🌙 Dark Mode Support
+- Fully integrated dark theme matching Open Salamander's native dark mode palette.
 
 ---
 
@@ -46,21 +70,21 @@ A full-featured filesystem and viewer plugin for **Open Salamander** (and the Da
    ```
 3. Open **Open Salamander**, go to **Plugins → Plugins Manager...**, click **Add...**, and select `gdrive.spl`.
 4. In either panel, press **Alt+F1** or **Alt+F2** and select **gdrive:**.
-5. In **Plugins → Google Drive → Configuration...**, enter your Google OAuth Client ID and Secret (or follow the setup guide below).
+5. In **Plugins → Google Drive → Configuration...**, add your account and configure cache settings.
 
 ---
 
 ## ⚙️ Google Cloud OAuth Setup
 
-To connect to your Google Drive account, create a free desktop application credential in the [Google Cloud Console](https://console.cloud.google.com/):
+To connect to your Google Drive account:
 
-1. Create a new project in Google Cloud Console.
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
 2. Enable the **Google Drive API** under **APIs & Services → Library**.
 3. Configure the **OAuth Consent Screen** (User Type: *External*, add your email as a *Test User*).
 4. Go to **Credentials → Create Credentials → OAuth Client ID**:
    - Application Type: **Desktop App**.
 5. Copy the generated **Client ID** and **Client Secret**.
-6. In Open Salamander, go to **Plugins → Google Drive → Configuration...**, paste the credentials, and click **Sign In**.
+6. In Open Salamander, go to **Plugins → Google Drive → Configuration...**, paste the credentials, and click **Add Account...**.
 
 ---
 
@@ -89,5 +113,5 @@ This compiles:
 Licensed under the **GNU General Public License v2.0 or later** ([GPL-2.0-or-later](LICENSE)).  
 SPDX headers are present in all source files.
 
-- Ported to Open Salamander by **fila73**.
+- Ported to Open Salamander framework by **fila73**.
 - Dark Mode integration based on the Salamander fork by **Ondrej Kotas (KRtkovo-eu-AI)**.
