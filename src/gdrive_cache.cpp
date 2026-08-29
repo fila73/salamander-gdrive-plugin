@@ -3,6 +3,7 @@
 
 #include "gdrive_cache.h"
 #include "gdrive_http.h"
+#include "gdrive_auth.h"
 #include "gdrive_log.h"
 #include <algorithm>
 #include <fstream>
@@ -237,21 +238,36 @@ void CacheManager::SwitchAccount(const std::string& newAccountEmail)
 
 bool CacheManager::SaveToDisk()
 {
-    if (!m_enabled || m_currentAccountEmail.empty()) return false;
+    if (!m_enabled) return false;
+
+    std::string email = m_currentAccountEmail;
+    if (email.empty())
+    {
+        email = GDriveAuth::AuthManager::GetInstance().GetTokens().accountEmail;
+        if (!email.empty())
+        {
+            m_currentAccountEmail = email;
+        }
+    }
+    if (email.empty()) email = "default";
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    std::wstring path = GetCacheFilePath(m_currentAccountEmail);
+    std::wstring path = GetCacheFilePath(email);
     if (path.empty()) return false;
 
     std::string utf8Path = GDriveHttp::HttpClient::WideToUtf8(path);
     std::ofstream os(utf8Path, std::ios::binary);
-    if (!os.is_open()) return false;
+    if (!os.is_open())
+    {
+        GDriveLog::Log("[CACHE] Failed to open cache file for writing: %s", utf8Path.c_str());
+        return false;
+    }
 
     uint32_t magic = kCacheMagic;
     uint32_t version = kCacheVersion;
     os.write((const char*)&magic, sizeof(magic));
     os.write((const char*)&version, sizeof(version));
-    WriteString(os, m_currentAccountEmail);
+    WriteString(os, email);
     WriteString(os, m_startPageToken);
     os.write((const char*)&m_lastChangeCheckTick, sizeof(m_lastChangeCheckTick));
 
@@ -298,29 +314,47 @@ bool CacheManager::SaveToDisk()
     }
 
     m_dirty = false;
-    GDriveLog::Log("[CACHE] Saved to disk for '%s': %u folders, %u sizes",
-                   m_currentAccountEmail.c_str(), folderCount, sizesCount);
+    GDriveLog::Log("[CACHE] Saved to disk for '%s': %u folders, %u sizes (path: %s)",
+                   email.c_str(), folderCount, sizesCount, utf8Path.c_str());
     return true;
 }
 
 bool CacheManager::LoadFromDisk()
 {
-    if (!m_enabled || m_currentAccountEmail.empty()) return false;
+    if (!m_enabled) return false;
+
+    std::string email = m_currentAccountEmail;
+    if (email.empty())
+    {
+        email = GDriveAuth::AuthManager::GetInstance().GetTokens().accountEmail;
+        if (!email.empty())
+        {
+            m_currentAccountEmail = email;
+        }
+    }
+    if (email.empty()) email = "default";
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    std::wstring path = GetCacheFilePath(m_currentAccountEmail);
+    std::wstring path = GetCacheFilePath(email);
     if (path.empty()) return false;
 
     std::string utf8Path = GDriveHttp::HttpClient::WideToUtf8(path);
     std::ifstream is(utf8Path, std::ios::binary);
-    if (!is.is_open()) return false;
+    if (!is.is_open())
+    {
+        GDriveLog::Log("[CACHE] Cache file not found on disk: %s", utf8Path.c_str());
+        return false;
+    }
 
     uint32_t magic = 0, version = 0;
     is.read((char*)&magic, sizeof(magic));
     is.read((char*)&version, sizeof(version));
 
     if (magic != kCacheMagic || version != kCacheVersion)
+    {
+        GDriveLog::Log("[CACHE] Invalid cache file header (magic: %08X, ver: %u)", magic, version);
         return false;
+    }
 
     std::string account = ReadString(is);
     m_startPageToken = ReadString(is);

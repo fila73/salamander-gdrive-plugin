@@ -640,21 +640,14 @@ bool CCalcSizeProgressDialog::Run()
         HWindow = NULL;
     }
 
-    char msg[1024];
-    std::string szStr = FormatSize(m_totalBytes);
-    std::string numStr = FormatNumber(m_totalBytes);
-
     if (m_cancelled)
     {
+        char msg[1024];
+        std::string szStr = FormatSize(m_totalBytes);
+        std::string numStr = FormatNumber(m_totalBytes);
         _snprintf_s(msg, _TRUNCATE, LoadStr(IDS_CALC_CANCELLED_FMT),
                     m_itemName.c_str(), m_totalDirs, m_totalFiles, szStr.c_str(), numStr.c_str());
         SalamanderGeneral->SalMessageBox(hParent, msg, LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONEXCLAMATION);
-    }
-    else
-    {
-        _snprintf_s(msg, _TRUNCATE, LoadStr(IDS_CALC_RESULT_FMT),
-                    m_itemName.c_str(), m_totalDirs, m_totalFiles, szStr.c_str(), numStr.c_str());
-        SalamanderGeneral->SalMessageBox(hParent, msg, LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONINFORMATION);
     }
 
     return !m_cancelled;
