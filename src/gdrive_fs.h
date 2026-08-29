@@ -162,6 +162,7 @@ public:
     virtual void WINAPI ShowSecurityInfo(HWND parent) override;
 
     void CalculateFolderSize(HWND parent, int panel);
+    void OnSpacePressedOnFolder(int panel, const CFileData* f);
 
     const std::string& GetCurrentPathStr() const { return m_currentPath; }
 

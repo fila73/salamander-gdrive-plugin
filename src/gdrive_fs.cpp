@@ -2200,6 +2200,49 @@ void CPluginFS::CalculateFolderSize(HWND parent, int panel)
     }
 }
 
+void CPluginFS::OnSpacePressedOnFolder(int panel, const CFileData* f)
+{
+    if (!f || strcmp(f->Name, "..") == 0) return;
+
+    std::string folderId;
+    std::string folderName = f->Name;
+    for (const auto& it : m_cachedItems)
+    {
+        if (_stricmp(it.name.c_str(), f->Name) == 0)
+        {
+            folderId = it.id;
+            break;
+        }
+    }
+
+    if (folderId.empty())
+    {
+        if (_stricmp(folderName.c_str(), "My Drive") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_MY_DRIVE)) == 0)
+            folderId = "root";
+        else if (_stricmp(folderName.c_str(), "Shared with me") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_SHARED_WITH_ME)) == 0)
+            folderId = "shared_with_me_root";
+    }
+
+    if (folderId.empty()) return;
+
+    int64_t folderSize = 0;
+    int files = 0, dirs = 0;
+    if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, folderSize) ||
+        GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, folderSize, files, dirs))
+    {
+        CFileData* nonConstF = const_cast<CFileData*>(f);
+        nonConstF->Size.Value = folderSize;
+        nonConstF->SizeValid = 1;
+        nonConstF->Dirty = 1;
+        SalamanderGeneral->RepaintChangedItems(panel);
+    }
+    else
+    {
+        HWND hMain = SalamanderGeneral->GetMainWindowHWND();
+        CalculateFolderSize(hMain, panel);
+    }
+}
+
 //
 // CPluginInterfaceForFS
 //

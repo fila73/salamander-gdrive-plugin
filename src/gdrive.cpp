@@ -6,6 +6,8 @@
 #include "gdrive.h"
 #include "gdrive_auth.h"
 #include "dialogs.h"
+#include "gdrive_fs.h"
+#include "gdrive_cache.h"
 
 // Globals
 HINSTANCE DLLInstance = NULL;
@@ -30,6 +32,37 @@ std::string CfgClientId = "";
 std::string CfgClientSecret = "";
 
 CPluginInterface PluginInterface;
+
+//
+// Hook procedure for panel Spacebar key detection
+//
+static HHOOK s_hGetMsgHook = NULL;
+
+static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode >= 0 && wParam == PM_REMOVE)
+    {
+        MSG* pMsg = (MSG*)lParam;
+        if (pMsg && pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_SPACE)
+        {
+            if (SalamanderGeneral)
+            {
+                CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
+                if (activeFS)
+                {
+                    BOOL isDir = FALSE;
+                    const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
+                    if (f && isDir && strcmp(f->Name, "..") != 0)
+                    {
+                        CPluginFS* gdriveFS = (CPluginFS*)activeFS;
+                        gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
+                    }
+                }
+            }
+        }
+    }
+    return CallNextHookEx(s_hGetMsgHook, nCode, wParam, lParam);
+}
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
@@ -112,6 +145,11 @@ CPluginInterfaceAbstract* WINAPI SalamanderPluginEntry(CSalamanderPluginEntryAbs
 
     salamander->SetPluginHomePageURL(LoadStr(IDS_PLUGIN_HOME));
 
+    if (!s_hGetMsgHook)
+    {
+        s_hGetMsgHook = SetWindowsHookEx(WH_GETMESSAGE, GetMsgHookProc, NULL, GetCurrentThreadId());
+    }
+
     return &PluginInterface;
 }
 
@@ -121,8 +159,6 @@ CPluginInterfaceAbstract* WINAPI SalamanderPluginEntry(CSalamanderPluginEntryAbs
 // CPluginInterface implementation
 //
 
-#include "gdrive_cache.h"
-
 void WINAPI CPluginInterface::About(HWND parent)
 {
     OnAbout(parent);
@@ -130,6 +166,12 @@ void WINAPI CPluginInterface::About(HWND parent)
 
 BOOL WINAPI CPluginInterface::Release(HWND parent, BOOL force)
 {
+    if (s_hGetMsgHook)
+    {
+        UnhookWindowsHookEx(s_hGetMsgHook);
+        s_hGetMsgHook = NULL;
+    }
+
     GDriveCache::CacheManager::GetInstance().SaveToDisk();
     GDriveDarkMode::ReleaseTheme();
     ReleaseWinLib(DLLInstance);
