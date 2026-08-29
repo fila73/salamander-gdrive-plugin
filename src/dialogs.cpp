@@ -580,7 +580,7 @@ bool CCalcSizeProgressDialog::Run()
 //
 
 CTransferProgressDialog::CTransferProgressDialog(HWND hParent, bool isUpload, const std::string& fileName, int64_t totalBytes)
-    : CCommonDialog(HLanguage, IDD_TRANSFER_PROGRESS, hParent),
+    : CCommonDialog(HLanguage, IDD_TRANSFER_PROGRESS, hParent, ooStatic),
       m_isUpload(isUpload),
       m_fileName(fileName),
       m_totalBytes(totalBytes),
@@ -747,6 +747,8 @@ void CTransferProgressDialog::UpdateUI(int64_t bytesTransferred, int64_t totalBy
         snprintf(speedBuf, sizeof(speedBuf), LoadStr(IDS_TRANSFER_SPEED_FMT), speedMBs);
         SetDlgItemTextA(HWindow, IDC_TRANSFER_SPEED, speedBuf);
     }
+
+    UpdateWindow(HWindow);
 }
 
 bool CTransferProgressDialog::OnProgress(int64_t bytesTransferred, int64_t totalBytes)
@@ -755,7 +757,7 @@ bool CTransferProgressDialog::OnProgress(int64_t bytesTransferred, int64_t total
     if (m_cancelled) return false;
 
     DWORD now = GetTickCount();
-    if (now - m_lastUpdateTick >= 100 || bytesTransferred >= totalBytes)
+    if (now - m_lastUpdateTick >= 50 || bytesTransferred >= totalBytes)
     {
         m_lastUpdateTick = now;
         UpdateUI(bytesTransferred, totalBytes);
