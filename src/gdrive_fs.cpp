@@ -571,6 +571,11 @@ void CPluginFS::ReleaseObject(HWND parent)
 DWORD WINAPI CPluginFS::GetSupportedServices()
 {
     return FS_SERVICE_COPYFROMFS |
+           FS_SERVICE_COPYFROMDISKTOFS |
+           FS_SERVICE_MOVEFROMDISKTOFS |
+           FS_SERVICE_CREATEDIR |
+           FS_SERVICE_QUICKRENAME |
+           FS_SERVICE_DELETE |
            FS_SERVICE_VIEWFILE |
            FS_SERVICE_SHOWINFO |
            FS_SERVICE_GETCHANGEDRIVEORDISCONNECTITEM |
@@ -670,7 +675,63 @@ BOOL WINAPI CPluginFS::ExecuteCommandLine(HWND parent, char* command, int& selFr
 BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CFileData& file,
                                    BOOL isDir, char* newName, BOOL& cancel)
 {
-    return FALSE;
+    cancel = FALSE;
+    if (!newName || !*newName) return FALSE;
+
+    if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_RENAME_ROOT), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        return FALSE;
+    }
+
+    std::string fileId;
+    for (const auto& it : m_cachedItems)
+    {
+        if (_stricmp(it.name.c_str(), file.Name) == 0)
+        {
+            fileId = it.id;
+            break;
+        }
+    }
+
+    if (fileId.empty())
+    {
+        std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + file.Name;
+        auto it = m_pathToIdCache.find(fullPath);
+        if (it != m_pathToIdCache.end())
+        {
+            fileId = it->second;
+        }
+    }
+
+    if (fileId.empty())
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_PATH_NOT_FOUND), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+
+    std::string err;
+    if (!GDriveApi::ApiClient::GetInstance().RenameItem(fileId, newName, &err))
+    {
+        SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+
+    std::string oldSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + file.Name;
+    std::string newSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + newName;
+    m_pathToIdCache.erase(oldSubPath);
+    m_pathToIdCache[newSubPath] = fileId;
+
+    for (auto& it : m_cachedItems)
+    {
+        if (it.id == fileId)
+        {
+            it.name = newName;
+            break;
+        }
+    }
+
+    return TRUE;
 }
 
 void WINAPI CPluginFS::AcceptChangeOnPathNotification(const char* fsName, const char* path, BOOL includingSubdirs)
@@ -679,13 +740,168 @@ void WINAPI CPluginFS::AcceptChangeOnPathNotification(const char* fsName, const 
 
 BOOL WINAPI CPluginFS::CreateDir(const char* fsName, int mode, HWND parent, char* newName, BOOL& cancel)
 {
-    return FALSE;
+    cancel = FALSE;
+    if (!newName || !*newName) return FALSE;
+
+    if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_CREATE_DIR_ROOT), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        return FALSE;
+    }
+
+    if (_stricmp(m_currentPath.c_str(), "/Shared with me") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_CREATE_DIR_SHARED_WITH_ME), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        return FALSE;
+    }
+
+    if (_stricmp(m_currentPath.c_str(), "/Shared Drives") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_CREATE_DIR_SHARED_DRIVES), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        return FALSE;
+    }
+
+    if (!ResolveCurrentFolderId() || m_currentFolderId.empty())
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_PATH_NOT_FOUND), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+
+    GDriveApi::GDriveItem newItem;
+    std::string err;
+    if (!GDriveApi::ApiClient::GetInstance().CreateFolder(m_currentFolderId, newName, newItem, &err))
+    {
+        SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+
+    std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + newName;
+    m_pathToIdCache[subPath] = newItem.id;
+    m_cachedItems.push_back(newItem);
+
+    return TRUE;
 }
 
 BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int panel,
                               int selectedFiles, int selectedDirs, BOOL& cancelOrError)
 {
-    return FALSE;
+    cancelOrError = FALSE;
+
+    if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0 ||
+        _stricmp(m_currentPath.c_str(), "/Shared Drives") == 0 || _stricmp(m_currentPath.c_str(), "/Shared with me") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_DELETE_ROOT), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        cancelOrError = TRUE;
+        return FALSE;
+    }
+
+    bool shiftPressed = (GetKeyState(VK_SHIFT) < 0);
+
+    std::vector<std::pair<std::string, std::string>> itemsToDelete; // name, id
+
+    if (selectedFiles == 0 && selectedDirs == 0)
+    {
+        BOOL isDir = FALSE;
+        const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(panel, &isDir);
+        if (f && strcmp(f->Name, "..") != 0)
+        {
+            std::string id;
+            for (const auto& it : m_cachedItems)
+            {
+                if (_stricmp(it.name.c_str(), f->Name) == 0)
+                {
+                    id = it.id;
+                    break;
+                }
+            }
+            if (id.empty())
+            {
+                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + f->Name;
+                auto it = m_pathToIdCache.find(fullPath);
+                if (it != m_pathToIdCache.end()) id = it->second;
+            }
+            if (!id.empty()) itemsToDelete.emplace_back(f->Name, id);
+        }
+    }
+    else
+    {
+        int index = 0;
+        BOOL isDir = FALSE;
+        const CFileData* f = NULL;
+        while ((f = SalamanderGeneral->GetPanelSelectedItem(panel, &index, &isDir)) != NULL)
+        {
+            if (strcmp(f->Name, "..") == 0) continue;
+            std::string id;
+            for (const auto& it : m_cachedItems)
+            {
+                if (_stricmp(it.name.c_str(), f->Name) == 0)
+                {
+                    id = it.id;
+                    break;
+                }
+            }
+            if (id.empty())
+            {
+                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + f->Name;
+                auto it = m_pathToIdCache.find(fullPath);
+                if (it != m_pathToIdCache.end()) id = it->second;
+            }
+            if (!id.empty()) itemsToDelete.emplace_back(f->Name, id);
+        }
+    }
+
+    if (itemsToDelete.empty())
+    {
+        return TRUE;
+    }
+
+    char confirmMsg[512] = {0};
+    if (itemsToDelete.size() == 1)
+    {
+        snprintf(confirmMsg, sizeof(confirmMsg),
+                 shiftPressed ? LoadStr(IDS_CONFIRM_DELETE_PERM_SINGLE) : LoadStr(IDS_CONFIRM_DELETE_TRASH_SINGLE),
+                 itemsToDelete[0].first.c_str());
+    }
+    else
+    {
+        snprintf(confirmMsg, sizeof(confirmMsg),
+                 shiftPressed ? LoadStr(IDS_CONFIRM_DELETE_PERM_MULTI) : LoadStr(IDS_CONFIRM_DELETE_TRASH_MULTI),
+                 (int)itemsToDelete.size());
+    }
+
+    if (SalamanderGeneral->SalMessageBox(parent, confirmMsg, LoadStr(IDS_PLUGINNAME),
+                                         MB_YESNO | (shiftPressed ? MB_ICONWARNING : MB_ICONQUESTION)) != IDYES)
+    {
+        cancelOrError = TRUE;
+        return FALSE;
+    }
+
+    for (const auto& [name, id] : itemsToDelete)
+    {
+        std::string err;
+        bool ok = shiftPressed ? GDriveApi::ApiClient::GetInstance().DeleteItem(id, &err)
+                               : GDriveApi::ApiClient::GetInstance().TrashItem(id, &err);
+        if (!ok)
+        {
+            SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            cancelOrError = TRUE;
+            return FALSE;
+        }
+
+        std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + name;
+        m_pathToIdCache.erase(subPath);
+
+        for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+        {
+            if (it->id == id)
+            {
+                m_cachedItems.erase(it);
+                break;
+            }
+        }
+    }
+
+    return TRUE;
 }
 
 BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* fsName, HWND parent,
@@ -693,7 +909,106 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
                                               void* nextParam, int selectedFiles, int selectedDirs,
                                               char* targetPath, BOOL* cancelOrHandlePath)
 {
-    return FALSE;
+    if (cancelOrHandlePath) *cancelOrHandlePath = FALSE;
+
+    if (mode == 1)
+    {
+        // Default Salamander destination prompt
+        return FALSE;
+    }
+    if (mode == 4)
+    {
+        return FALSE;
+    }
+
+    if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_UPLOAD_ROOT), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        if (cancelOrHandlePath) *cancelOrHandlePath = TRUE;
+        return FALSE;
+    }
+
+    if (_stricmp(m_currentPath.c_str(), "/Shared with me") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_CREATE_DIR_SHARED_WITH_ME), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        if (cancelOrHandlePath) *cancelOrHandlePath = TRUE;
+        return FALSE;
+    }
+
+    if (_stricmp(m_currentPath.c_str(), "/Shared Drives") == 0)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_CREATE_DIR_SHARED_DRIVES), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        if (cancelOrHandlePath) *cancelOrHandlePath = TRUE;
+        return FALSE;
+    }
+
+    if (!ResolveCurrentFolderId() || m_currentFolderId.empty())
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_PATH_NOT_FOUND), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        if (cancelOrHandlePath) *cancelOrHandlePath = TRUE;
+        return FALSE;
+    }
+
+    std::wstring wSourcePath = GDriveHttp::HttpClient::Utf8ToWide(sourcePath ? sourcePath : "");
+    if (!wSourcePath.empty() && wSourcePath.back() != L'\\')
+        wSourcePath += L"\\";
+
+    const char* itemName = NULL;
+    int isDir = 0;
+    CQuadWord fileSize;
+    DWORD attr = 0;
+    FILETIME lastWriteTime = {0, 0};
+    int enumError = 0;
+
+    BOOL overallSuccess = TRUE;
+
+    while (next(parent, 0, &itemName, &isDir, &fileSize, &attr, &lastWriteTime, nextParam, &enumError) != NULL)
+    {
+        if (!itemName || !*itemName) continue;
+        if (strcmp(itemName, ".") == 0 || strcmp(itemName, "..") == 0)
+            continue;
+
+        std::wstring itemLocalPath = wSourcePath + GDriveHttp::HttpClient::Utf8ToWide(itemName);
+        std::string fileName = itemName;
+
+        if (isDir)
+        {
+            if (!UploadFolderRecursive(itemLocalPath, fileName, m_currentFolderId, parent))
+            {
+                overallSuccess = FALSE;
+                break;
+            }
+        }
+        else
+        {
+            if (!UploadSingleItem(itemLocalPath, fileName, m_currentFolderId, parent))
+            {
+                overallSuccess = FALSE;
+                break;
+            }
+        }
+
+        if (!copy && overallSuccess)
+        {
+            // If Move operation, delete source file or directory after successful upload
+            if (isDir)
+            {
+                SHFILEOPSTRUCTW fileOp = {0};
+                fileOp.wFunc = FO_DELETE;
+                std::wstring doubleNullTerm = itemLocalPath;
+                doubleNullTerm.push_back(L'\0');
+                fileOp.pFrom = doubleNullTerm.c_str();
+                fileOp.fFlags = FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+                SHFileOperationW(&fileOp);
+            }
+            else
+            {
+                DeleteFileW(itemLocalPath.c_str());
+            }
+        }
+    }
+
+    return overallSuccess;
 }
 
 BOOL WINAPI CPluginFS::ChangeAttributes(const char* fsName, HWND parent, int panel,
@@ -821,6 +1136,93 @@ bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, con
                 return false;
         }
     }
+    return true;
+}
+
+bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::string& fileName, const std::string& parentFolderId, HWND parent)
+{
+    GDriveApi::GDriveItem newItem;
+    std::string err;
+    bool success = GDriveApi::ApiClient::GetInstance().UploadFile(parentFolderId, localPath, fileName, "", nullptr, nullptr, newItem, &err);
+    if (!success)
+    {
+        if (!err.empty())
+        {
+            SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        }
+        return false;
+    }
+
+    std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + fileName;
+    m_pathToIdCache[subPath] = newItem.id;
+    m_cachedItems.push_back(newItem);
+
+    return true;
+}
+
+bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent)
+{
+    GDriveApi::GDriveItem newFolder;
+    std::string err;
+    if (!GDriveApi::ApiClient::GetInstance().CreateFolder(parentFolderId, dirName, newFolder, &err))
+    {
+        if (!err.empty())
+        {
+            SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+        }
+        return false;
+    }
+
+    std::string folderSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + dirName;
+    m_pathToIdCache[folderSubPath] = newFolder.id;
+
+    std::wstring searchPattern = localDirPath;
+    if (!searchPattern.empty() && searchPattern.back() != L'\\')
+        searchPattern += L"\\";
+    searchPattern += L"*";
+
+    WIN32_FIND_DATAW fd;
+    HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &fd);
+    if (hFind != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+            if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
+                continue;
+
+            std::wstring itemLocalPath = localDirPath;
+            if (!itemLocalPath.empty() && itemLocalPath.back() != L'\\')
+                itemLocalPath += L"\\";
+            itemLocalPath += fd.cFileName;
+
+            std::string itemUtf8Name = GDriveHttp::HttpClient::WideToUtf8(fd.cFileName);
+
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                if (!UploadFolderRecursive(itemLocalPath, itemUtf8Name, newFolder.id, parent))
+                {
+                    FindClose(hFind);
+                    return false;
+                }
+            }
+            else
+            {
+                GDriveApi::GDriveItem uploadedFile;
+                if (!GDriveApi::ApiClient::GetInstance().UploadFile(newFolder.id, itemLocalPath, itemUtf8Name, "", nullptr, nullptr, uploadedFile, &err))
+                {
+                    if (!err.empty())
+                    {
+                        SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+                    }
+                    FindClose(hFind);
+                    return false;
+                }
+            }
+        } while (FindNextFileW(hFind, &fd));
+
+        FindClose(hFind);
+    }
+
     return true;
 }
 

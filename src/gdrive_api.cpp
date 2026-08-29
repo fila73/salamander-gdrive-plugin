@@ -369,6 +369,136 @@ bool ApiClient::GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, 
     return true;
 }
 
+bool ApiClient::CreateFolder(const std::string& parentFolderId,
+                             const std::string& folderName,
+                             GDriveItem& itemOut,
+                             std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files?supportsAllDrives=true"
+                      "&fields=" + GDriveHttp::HttpClient::UrlEncode("id,name,mimeType,size,modifiedTime");
+
+    GDriveJson::Value bodyObj;
+    bodyObj.Set("name", folderName);
+    bodyObj.Set("mimeType", kFolderMimeType);
+
+    if (!parentFolderId.empty())
+    {
+        GDriveJson::Value parentsArr;
+        parentsArr.PushBack(parentFolderId);
+        bodyObj.Set("parents", parentsArr);
+    }
+
+    std::string bodyStr = bodyObj.Serialize();
+
+    auto resp = http.Post(url, bodyStr, "application/json; charset=UTF-8", token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to create folder: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    auto json = GDriveJson::Value::Parse(resp.body);
+    itemOut.id = json.GetString("id");
+    itemOut.name = json.GetString("name");
+    itemOut.mimeType = json.GetString("mimeType");
+    itemOut.size = json.GetInt64("size", 0);
+    itemOut.isFolder = true;
+    itemOut.modifiedTime = Iso8601ToFileTime(json.GetString("modifiedTime"));
+
+    return true;
+}
+
+bool ApiClient::RenameItem(const std::string& fileId,
+                           const std::string& newName,
+                           std::string* errorOut)
+{
+    if (fileId.empty() || fileId == "root" || fileId == "shared_drives_root" || fileId == "shared_with_me_root")
+    {
+        if (errorOut) *errorOut = "Cannot rename root folder";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+                      "?supportsAllDrives=true";
+
+    GDriveJson::Value bodyObj;
+    bodyObj.Set("name", newName);
+    std::string bodyStr = bodyObj.Serialize();
+
+    auto resp = http.Patch(url, bodyStr, "application/json; charset=UTF-8", token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to rename item: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    return true;
+}
+
+bool ApiClient::TrashItem(const std::string& fileId,
+                          std::string* errorOut)
+{
+    if (fileId.empty() || fileId == "root" || fileId == "shared_drives_root" || fileId == "shared_with_me_root")
+    {
+        if (errorOut) *errorOut = "Cannot trash root folder";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+                      "?supportsAllDrives=true";
+
+    GDriveJson::Value bodyObj;
+    bodyObj.Set("trashed", true);
+    std::string bodyStr = bodyObj.Serialize();
+
+    auto resp = http.Patch(url, bodyStr, "application/json; charset=UTF-8", token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to move item to trash: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    return true;
+}
+
+bool ApiClient::DeleteItem(const std::string& fileId,
+                           std::string* errorOut)
+{
+    if (fileId.empty() || fileId == "root" || fileId == "shared_drives_root" || fileId == "shared_with_me_root")
+    {
+        if (errorOut) *errorOut = "Cannot delete root folder";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+                      "?supportsAllDrives=true";
+
+    auto resp = http.Delete(url, token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to permanently delete item: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    return true;
+}
+
 bool ApiClient::DownloadFile(const GDriveItem& item,
                              const std::wstring& targetLocalFilePath,
                              GDriveHttp::ProgressCallback progressCb,
@@ -394,6 +524,96 @@ bool ApiClient::DownloadFile(const GDriveItem& item,
 
     bool ok = http.DownloadToFile(url, targetLocalFilePath, token, progressCb, cancelFlag, errorOut);
     return ok;
+}
+
+std::string ApiClient::DetectMimeType(const std::string& fileName)
+{
+    size_t dotPos = fileName.rfind('.');
+    if (dotPos == std::string::npos) return "application/octet-stream";
+
+    std::string ext = fileName.substr(dotPos);
+    for (auto& c : ext) c = (char)tolower((unsigned char)c);
+
+    if (ext == ".txt" || ext == ".log" || ext == ".ini" || ext == ".cfg") return "text/plain";
+    if (ext == ".html" || ext == ".htm") return "text/html";
+    if (ext == ".css") return "text/css";
+    if (ext == ".js") return "application/javascript";
+    if (ext == ".json") return "application/json";
+    if (ext == ".xml") return "application/xml";
+    if (ext == ".csv") return "text/csv";
+    if (ext == ".pdf") return "application/pdf";
+    if (ext == ".zip") return "application/zip";
+    if (ext == ".rar") return "application/vnd.rar";
+    if (ext == ".7z") return "application/x-7z-compressed";
+    if (ext == ".tar") return "application/x-tar";
+    if (ext == ".gz") return "application/gzip";
+    if (ext == ".png") return "image/png";
+    if (ext == ".jpg" || ext == ".jpeg") return "image/jpeg";
+    if (ext == ".gif") return "image/gif";
+    if (ext == ".webp") return "image/webp";
+    if (ext == ".bmp") return "image/bmp";
+    if (ext == ".svg") return "image/svg+xml";
+    if (ext == ".mp3") return "audio/mpeg";
+    if (ext == ".wav") return "audio/wav";
+    if (ext == ".ogg") return "audio/ogg";
+    if (ext == ".mp4") return "video/mp4";
+    if (ext == ".mkv") return "video/x-matroska";
+    if (ext == ".avi") return "video/x-msvideo";
+    if (ext == ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (ext == ".xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    if (ext == ".pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    if (ext == ".doc") return "application/msword";
+    if (ext == ".xls") return "application/vnd.ms-excel";
+    if (ext == ".ppt") return "application/vnd.ms-powerpoint";
+
+    return "application/octet-stream";
+}
+
+bool ApiClient::UploadFile(const std::string& parentFolderId,
+                          const std::wstring& localFilePath,
+                          const std::string& remoteFileName,
+                          const std::string& mimeType,
+                          GDriveHttp::ProgressCallback progressCb,
+                          const bool* cancelFlag,
+                          GDriveItem& itemOut,
+                          std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true"
+                      "&fields=" + GDriveHttp::HttpClient::UrlEncode("id,name,mimeType,size,modifiedTime");
+
+    GDriveJson::Value metaObj;
+    metaObj.Set("name", remoteFileName);
+    if (!parentFolderId.empty())
+    {
+        GDriveJson::Value parentsArr;
+        parentsArr.PushBack(parentFolderId);
+        metaObj.Set("parents", parentsArr);
+    }
+    std::string metaStr = metaObj.Serialize();
+
+    std::string contentType = mimeType.empty() ? DetectMimeType(remoteFileName) : mimeType;
+    std::string responseBody;
+
+    bool ok = http.UploadMultipartFile(url, localFilePath, metaStr, contentType, token,
+                                      progressCb, cancelFlag, &responseBody, errorOut);
+    if (!ok)
+    {
+        return false;
+    }
+
+    auto json = GDriveJson::Value::Parse(responseBody);
+    itemOut.id = json.GetString("id");
+    itemOut.name = json.GetString("name");
+    itemOut.mimeType = json.GetString("mimeType");
+    itemOut.size = json.GetInt64("size", 0);
+    itemOut.isFolder = (itemOut.mimeType == kFolderMimeType);
+    itemOut.modifiedTime = Iso8601ToFileTime(json.GetString("modifiedTime"));
+
+    return true;
 }
 
 } // namespace GDriveApi

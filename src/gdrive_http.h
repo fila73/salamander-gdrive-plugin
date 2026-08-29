@@ -45,6 +45,12 @@ public:
                       const std::string& bearerToken = "",
                       const std::map<std::string, std::string>& customHeaders = {});
 
+    HttpResponse Patch(const std::string& url,
+                       const std::string& body,
+                       const std::string& contentType = "application/json; charset=UTF-8",
+                       const std::string& bearerToken = "",
+                       const std::map<std::string, std::string>& customHeaders = {});
+
     HttpResponse Delete(const std::string& url,
                         const std::string& bearerToken = "",
                         const std::map<std::string, std::string>& customHeaders = {});
@@ -55,6 +61,16 @@ public:
                         ProgressCallback progressCallback = nullptr,
                         const bool* cancelFlag = nullptr,
                         std::string* errorOut = nullptr);
+
+    bool UploadMultipartFile(const std::string& url,
+                             const std::wstring& localFilePath,
+                             const std::string& metadataJson,
+                             const std::string& fileContentType,
+                             const std::string& bearerToken = "",
+                             ProgressCallback progressCallback = nullptr,
+                             const bool* cancelFlag = nullptr,
+                             std::string* responseBodyOut = nullptr,
+                             std::string* errorOut = nullptr);
 
     static std::string UrlEncode(const std::string& str);
     static std::wstring Utf8ToWide(const std::string& utf8);

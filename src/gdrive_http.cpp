@@ -108,6 +108,15 @@ HttpResponse HttpClient::Post(const std::string& url,
     return ExecuteRequest(L"POST", url, body, contentType, bearerToken, customHeaders);
 }
 
+HttpResponse HttpClient::Patch(const std::string& url,
+                               const std::string& body,
+                               const std::string& contentType,
+                               const std::string& bearerToken,
+                               const std::map<std::string, std::string>& customHeaders)
+{
+    return ExecuteRequest(L"PATCH", url, body, contentType, bearerToken, customHeaders);
+}
+
 HttpResponse HttpClient::Delete(const std::string& url,
                                 const std::string& bearerToken,
                                 const std::map<std::string, std::string>& customHeaders)
@@ -392,6 +401,213 @@ bool HttpClient::DownloadToFile(const std::string& url,
         DeleteFileW(targetLocalPath.c_str());
     }
 
+    return success;
+}
+
+bool HttpClient::UploadMultipartFile(const std::string& url,
+                                    const std::wstring& localFilePath,
+                                    const std::string& metadataJson,
+                                    const std::string& fileContentType,
+                                    const std::string& bearerToken,
+                                    ProgressCallback progressCallback,
+                                    const bool* cancelFlag,
+                                    std::string* responseBodyOut,
+                                    std::string* errorOut)
+{
+    if (!Initialize())
+    {
+        if (errorOut) *errorOut = "Failed to initialize WinHTTP";
+        return false;
+    }
+
+    // Open local file
+    HANDLE hFile = CreateFileW(localFilePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL,
+                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        if (errorOut) *errorOut = "Failed to open local file for reading";
+        return false;
+    }
+
+    LARGE_INTEGER fileSize;
+    if (!GetFileSizeEx(hFile, &fileSize))
+    {
+        CloseHandle(hFile);
+        if (errorOut) *errorOut = "Failed to get local file size";
+        return false;
+    }
+
+    std::wstring wUrl = Utf8ToWide(url);
+
+    URL_COMPONENTS urlComp{};
+    urlComp.dwStructSize = sizeof(urlComp);
+    wchar_t hostName[256] = {0};
+    wchar_t urlPath[2048] = {0};
+    urlComp.lpszHostName = hostName;
+    urlComp.dwHostNameLength = sizeof(hostName) / sizeof(hostName[0]);
+    urlComp.lpszUrlPath = urlPath;
+    urlComp.dwUrlPathLength = sizeof(urlPath) / sizeof(urlPath[0]);
+
+    if (!WinHttpCrackUrl(wUrl.c_str(), (DWORD)wUrl.length(), 0, &urlComp))
+    {
+        CloseHandle(hFile);
+        if (errorOut) *errorOut = "Invalid URL format: " + url;
+        return false;
+    }
+
+    bool isHttps = (urlComp.nScheme == INTERNET_SCHEME_HTTPS);
+    HINTERNET hConnect = WinHttpConnect(m_hSession, hostName, urlComp.nPort, 0);
+    if (!hConnect)
+    {
+        CloseHandle(hFile);
+        if (errorOut) *errorOut = "WinHttpConnect failed";
+        return false;
+    }
+
+    DWORD flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", urlPath, NULL,
+                                            WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+    if (!hRequest)
+    {
+        CloseHandle(hFile);
+        WinHttpCloseHandle(hConnect);
+        if (errorOut) *errorOut = "WinHttpOpenRequest failed";
+        return false;
+    }
+
+    // Prepare multipart headers and boundary
+    std::string boundary = "----SalGDriveUploadBoundary" + std::to_string(GetTickCount64());
+    std::string preamble = "--" + boundary + "\r\n"
+                           "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+                           metadataJson + "\r\n"
+                           "--" + boundary + "\r\n"
+                           "Content-Type: " + fileContentType + "\r\n\r\n";
+    std::string epilogue = "\r\n--" + boundary + "--\r\n";
+
+    int64_t totalLength = (int64_t)preamble.length() + fileSize.QuadPart + (int64_t)epilogue.length();
+
+    std::wstring headers;
+    if (!bearerToken.empty())
+    {
+        headers += L"Authorization: Bearer " + Utf8ToWide(bearerToken) + L"\r\n";
+    }
+    headers += L"Content-Type: multipart/related; boundary=" + Utf8ToWide(boundary) + L"\r\n";
+
+    if (!WinHttpSendRequest(hRequest, headers.c_str(), (DWORD)headers.length(),
+                            NULL, 0, (DWORD)totalLength, 0))
+    {
+        CloseHandle(hFile);
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        if (errorOut) *errorOut = "Failed to send upload request header";
+        return false;
+    }
+
+    // Write preamble
+    DWORD bytesWritten = 0;
+    if (!WinHttpWriteData(hRequest, preamble.data(), (DWORD)preamble.length(), &bytesWritten) ||
+        bytesWritten != preamble.length())
+    {
+        CloseHandle(hFile);
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        if (errorOut) *errorOut = "Failed writing multipart preamble";
+        return false;
+    }
+
+    // Stream file content
+    std::vector<char> buffer(64 * 1024);
+    int64_t bytesUploaded = 0;
+    bool success = true;
+    DWORD bytesRead = 0;
+
+    while (ReadFile(hFile, buffer.data(), (DWORD)buffer.size(), &bytesRead, NULL) && bytesRead > 0)
+    {
+        if (cancelFlag && *cancelFlag)
+        {
+            success = false;
+            if (errorOut) *errorOut = "Upload cancelled";
+            break;
+        }
+
+        DWORD written = 0;
+        if (!WinHttpWriteData(hRequest, buffer.data(), bytesRead, &written) || written != bytesRead)
+        {
+            success = false;
+            if (errorOut) *errorOut = "Failed writing file data during upload";
+            break;
+        }
+
+        bytesUploaded += bytesRead;
+        if (progressCallback)
+        {
+            if (!progressCallback(bytesUploaded, fileSize.QuadPart))
+            {
+                success = false;
+                if (errorOut) *errorOut = "Upload cancelled by user";
+                break;
+            }
+        }
+    }
+
+    CloseHandle(hFile);
+
+    if (success)
+    {
+        // Write epilogue
+        DWORD epilogueWritten = 0;
+        if (!WinHttpWriteData(hRequest, epilogue.data(), (DWORD)epilogue.length(), &epilogueWritten) ||
+            epilogueWritten != epilogue.length())
+        {
+            success = false;
+            if (errorOut) *errorOut = "Failed writing multipart epilogue";
+        }
+    }
+
+    if (success && !WinHttpReceiveResponse(hRequest, NULL))
+    {
+        success = false;
+        if (errorOut) *errorOut = "Failed to receive upload response";
+    }
+
+    if (success)
+    {
+        DWORD statusCode = 0;
+        DWORD statusCodeSize = sizeof(statusCode);
+        WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusCodeSize, WINHTTP_NO_HEADER_INDEX);
+
+        if (statusCode < 200 || statusCode >= 300)
+        {
+            success = false;
+            if (errorOut) *errorOut = "HTTP upload error: " + std::to_string(statusCode);
+        }
+
+        // Read response body
+        std::string responseBody;
+        DWORD bytesAvailable = 0;
+        while (WinHttpQueryDataAvailable(hRequest, &bytesAvailable) && bytesAvailable > 0)
+        {
+            std::vector<char> respBuffer(bytesAvailable);
+            DWORD respBytesRead = 0;
+            if (WinHttpReadData(hRequest, respBuffer.data(), bytesAvailable, &respBytesRead) && respBytesRead > 0)
+            {
+                responseBody.append(respBuffer.data(), respBytesRead);
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (responseBodyOut)
+        {
+            *responseBodyOut = std::move(responseBody);
+        }
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
     return success;
 }
 

@@ -185,6 +185,8 @@ private:
     bool ResolveCurrentFolderId();
     bool DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent);
     bool DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent);
+    bool UploadSingleItem(const std::wstring& localPath, const std::string& fileName, const std::string& parentFolderId, HWND parent);
+    bool UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent);
 };
 
 class CPluginInterfaceForFS : public CPluginInterfaceForFSAbstract

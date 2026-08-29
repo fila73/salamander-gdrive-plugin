@@ -140,6 +140,18 @@ BEGIN
     IDS_CALC_TITLE              "Velikost složky na Google Disku"
     IDS_CALC_RESULT_FMT         "Položka: %s\n\nPočet podsložek: %d\nPočet souborů: %d\n\nCelková velikost: %s (%s bajtů)"
     IDS_CALC_CANCELLED_FMT      "Výpočet byl přerušen uživatelem.\n\nPoložka: %s\n\nNalezeno podsložek: %d\nNalezeno souborů: %d\n\nZjištěná velikost: %s (%s bajtů)"
+    IDS_ERR_CANNOT_CREATE_DIR_ROOT           "V kořenovém zobrazení nelze vytvářet složky. Nejprve prosím otevřete 'Můj disk' nebo konkrétní složku."
+    IDS_ERR_CANNOT_CREATE_DIR_SHARED_WITH_ME "Ve složce 'Sdíleno se mnou' nelze vytvářet nové složky."
+    IDS_ERR_CANNOT_CREATE_DIR_SHARED_DRIVES  "V přehledu 'Sdílené disky' nelze přímo vytvářet složky. Otevřete konkrétní sdílený disk."
+    IDS_ERR_CANNOT_RENAME_ROOT               "Virtuální nebo kořenové složky nelze přejmenovat."
+    IDS_ERR_CANNOT_DELETE_ROOT               "Virtuální nebo kořenové složky nelze smazat."
+    IDS_CONFIRM_DELETE_TRASH_SINGLE          "Přesunout '%s' do Koše Google Disku?"
+    IDS_CONFIRM_DELETE_TRASH_MULTI           "Přesunout vybrané položky (%d) do Koše Google Disku?"
+    IDS_CONFIRM_DELETE_PERM_SINGLE           "Trvale smazat '%s' z Google Disku?\n\nUpozornění: Tuto operaci nelze vrátit zpět!"
+    IDS_CONFIRM_DELETE_PERM_MULTI            "Trvale smazat vybrané položky (%d) z Google Disku?\n\nUpozornění: Tuto operaci nelze vrátit zpět!"
+    IDS_UPLOAD_PROGRESS_FMT                  "Nahrávám %s (%s / %s)..."
+    IDS_STATUS_UPLOADING                     "Nahrávám na Google Disk..."
+    IDS_ERR_CANNOT_UPLOAD_ROOT               "Do kořenového zobrazení nelze přímo nahrávat soubory. Nejprve prosím otevřete 'Můj disk' nebo konkrétní složku."
 END
 
 #endif // Czech resources

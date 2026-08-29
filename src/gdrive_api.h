@@ -61,12 +61,37 @@ public:
 
     bool GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, std::string* errorOut = nullptr);
 
+    bool CreateFolder(const std::string& parentFolderId,
+                      const std::string& folderName,
+                      GDriveItem& itemOut,
+                      std::string* errorOut = nullptr);
+
+    bool RenameItem(const std::string& fileId,
+                    const std::string& newName,
+                    std::string* errorOut = nullptr);
+
+    bool TrashItem(const std::string& fileId,
+                   std::string* errorOut = nullptr);
+
+    bool DeleteItem(const std::string& fileId,
+                    std::string* errorOut = nullptr);
+
     bool DownloadFile(const GDriveItem& item,
                       const std::wstring& targetLocalPath,
                       GDriveHttp::ProgressCallback progressCallback = nullptr,
                       const bool* cancelFlag = nullptr,
                       std::string* errorOut = nullptr);
 
+    bool UploadFile(const std::string& parentFolderId,
+                    const std::wstring& localFilePath,
+                    const std::string& remoteFileName,
+                    const std::string& mimeType,
+                    GDriveHttp::ProgressCallback progressCallback,
+                    const bool* cancelFlag,
+                    GDriveItem& itemOut,
+                    std::string* errorOut = nullptr);
+
+    static std::string DetectMimeType(const std::string& fileName);
     static FILETIME Iso8601ToFileTime(const std::string& isoStr);
     static void SetupGoogleDocExport(GDriveItem& item);
 

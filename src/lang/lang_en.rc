@@ -140,6 +140,18 @@ BEGIN
     IDS_CALC_TITLE              "Google Drive Folder Size"
     IDS_CALC_RESULT_FMT         "Item: %s\n\nSubfolders: %d\nFiles: %d\n\nTotal size: %s (%s bytes)"
     IDS_CALC_CANCELLED_FMT      "Calculation was cancelled by user.\n\nItem: %s\n\nSubfolders found: %d\nFiles found: %d\n\nScanned size: %s (%s bytes)"
+    IDS_ERR_CANNOT_CREATE_DIR_ROOT           "Cannot create folder in the root directory. Please select 'My Drive' or a specific folder first."
+    IDS_ERR_CANNOT_CREATE_DIR_SHARED_WITH_ME "Cannot create new folders inside 'Shared with me'."
+    IDS_ERR_CANNOT_CREATE_DIR_SHARED_DRIVES  "Cannot create folders directly in 'Shared Drives'. Create them inside a specific shared drive."
+    IDS_ERR_CANNOT_RENAME_ROOT               "Cannot rename virtual or root folders."
+    IDS_ERR_CANNOT_DELETE_ROOT               "Cannot delete virtual or root folders."
+    IDS_CONFIRM_DELETE_TRASH_SINGLE          "Move '%s' to Google Drive Trash?"
+    IDS_CONFIRM_DELETE_TRASH_MULTI           "Move %d selected items to Google Drive Trash?"
+    IDS_CONFIRM_DELETE_PERM_SINGLE           "Permanently delete '%s' from Google Drive?\n\nWarning: This operation cannot be undone!"
+    IDS_CONFIRM_DELETE_PERM_MULTI            "Permanently delete %d selected items from Google Drive?\n\nWarning: This operation cannot be undone!"
+    IDS_UPLOAD_PROGRESS_FMT                  "Uploading %s (%s / %s)..."
+    IDS_STATUS_UPLOADING                     "Uploading to Google Drive..."
+    IDS_ERR_CANNOT_UPLOAD_ROOT               "Cannot upload files directly to the root view. Please open 'My Drive' or a specific folder first."
 END
 
 #endif // English resources
