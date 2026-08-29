@@ -183,6 +183,7 @@ private:
     std::map<std::string, std::string, CaseInsensitiveCompare> m_pathToIdCache;
     std::string m_lastErrorPath;
 
+    const GDriveApi::GDriveItem* FindItemByPanelName(const char* panelName) const;
     bool ResolveCurrentFolderId();
     bool DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
     bool DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);

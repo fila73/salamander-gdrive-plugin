@@ -209,6 +209,44 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
     return FALSE;
 }
 
+const GDriveApi::GDriveItem* CPluginFS::FindItemByPanelName(const char* panelName) const
+{
+    if (!panelName || !panelName[0] || strcmp(panelName, "..") == 0) return nullptr;
+
+    std::string fileAnsiName = panelName;
+    std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(panelName);
+
+    for (const auto& item : m_cachedItems)
+    {
+        std::string checkName = item.name;
+        if (item.isGoogleDoc && !item.exportExtension.empty())
+        {
+            if (checkName.length() < item.exportExtension.length() ||
+                checkName.compare(checkName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+            {
+                checkName += item.exportExtension;
+            }
+        }
+
+        std::string ansiCheckName = GDriveHttp::HttpClient::Utf8ToAnsi(checkName);
+        for (char& c : ansiCheckName) { if (c == '/' || c == '\\') c = '_'; }
+
+        std::string ansiItemName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
+        for (char& c : ansiItemName) { if (c == '/' || c == '\\') c = '_'; }
+
+        if (_stricmp(checkName.c_str(), fileAnsiName.c_str()) == 0 ||
+            _stricmp(checkName.c_str(), fileUtf8Name.c_str()) == 0 ||
+            _stricmp(ansiCheckName.c_str(), fileAnsiName.c_str()) == 0 ||
+            _stricmp(item.name.c_str(), fileAnsiName.c_str()) == 0 ||
+            _stricmp(item.name.c_str(), fileUtf8Name.c_str()) == 0 ||
+            _stricmp(ansiItemName.c_str(), fileAnsiName.c_str()) == 0)
+        {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
 bool CPluginFS::ResolveCurrentFolderId()
 {
     if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
@@ -1215,31 +1253,17 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
         const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(panel, &isDir);
         if (f && strcmp(f->Name, "..") != 0)
         {
-            std::string ansiName = f->Name;
-            std::string utf8Name = GDriveHttp::HttpClient::AnsiToUtf8(f->Name);
-            std::string id;
-            for (const auto& it : m_cachedItems)
+            const GDriveApi::GDriveItem* target = FindItemByPanelName(f->Name);
+            if (target)
             {
-                if (_stricmp(it.name.c_str(), ansiName.c_str()) == 0 ||
-                    _stricmp(it.name.c_str(), utf8Name.c_str()) == 0)
-                {
-                    id = it.id;
-                    break;
-                }
+                itemsToDelete.emplace_back(f->Name, target->id);
             }
-            if (id.empty())
+            else
             {
-                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
+                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + std::string(f->Name);
                 auto it = m_pathToIdCache.find(fullPath);
-                if (it != m_pathToIdCache.end()) id = it->second;
-                else
-                {
-                    fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + utf8Name;
-                    it = m_pathToIdCache.find(fullPath);
-                    if (it != m_pathToIdCache.end()) id = it->second;
-                }
+                if (it != m_pathToIdCache.end()) itemsToDelete.emplace_back(f->Name, it->second);
             }
-            if (!id.empty()) itemsToDelete.emplace_back(f->Name, id);
         }
     }
     else
@@ -1250,31 +1274,17 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
         while ((f = SalamanderGeneral->GetPanelSelectedItem(panel, &index, &isDir)) != NULL)
         {
             if (strcmp(f->Name, "..") == 0) continue;
-            std::string ansiName = f->Name;
-            std::string utf8Name = GDriveHttp::HttpClient::AnsiToUtf8(f->Name);
-            std::string id;
-            for (const auto& it : m_cachedItems)
+            const GDriveApi::GDriveItem* target = FindItemByPanelName(f->Name);
+            if (target)
             {
-                if (_stricmp(it.name.c_str(), ansiName.c_str()) == 0 ||
-                    _stricmp(it.name.c_str(), utf8Name.c_str()) == 0)
-                {
-                    id = it.id;
-                    break;
-                }
+                itemsToDelete.emplace_back(f->Name, target->id);
             }
-            if (id.empty())
+            else
             {
-                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
+                std::string fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + std::string(f->Name);
                 auto it = m_pathToIdCache.find(fullPath);
-                if (it != m_pathToIdCache.end()) id = it->second;
-                else
-                {
-                    fullPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + utf8Name;
-                    it = m_pathToIdCache.find(fullPath);
-                    if (it != m_pathToIdCache.end()) id = it->second;
-                }
+                if (it != m_pathToIdCache.end()) itemsToDelete.emplace_back(f->Name, it->second);
             }
-            if (!id.empty()) itemsToDelete.emplace_back(f->Name, id);
         }
     }
 
@@ -1523,18 +1533,7 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
     const CFileData* f = focused ? SalamanderGeneral->GetPanelFocusedItem(panel, &isDir)
                                  : SalamanderGeneral->GetPanelSelectedItem(panel, &index, &isDir);
 
-    const GDriveApi::GDriveItem* targetItem = nullptr;
-    if (f && strcmp(f->Name, "..") != 0)
-    {
-        for (const auto& it : m_cachedItems)
-        {
-            if (_stricmp(it.name.c_str(), f->Name) == 0)
-            {
-                targetItem = &it;
-                break;
-            }
-        }
-    }
+    const GDriveApi::GDriveItem* targetItem = f ? FindItemByPanelName(f->Name) : nullptr;
 
     bool isInsideTrash = (_stricmp(m_currentPath.c_str(), "/Trash") == 0);
 
@@ -1970,20 +1969,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
             break;
         }
 
-        std::string fileAnsiName = f->Name;
-        std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(f->Name);
-
-        // Find item in cache
-        const GDriveApi::GDriveItem* targetItem = nullptr;
-        for (const auto& item : m_cachedItems)
-        {
-            if (_stricmp(item.name.c_str(), fileAnsiName.c_str()) == 0 ||
-                _stricmp(item.name.c_str(), fileUtf8Name.c_str()) == 0)
-            {
-                targetItem = &item;
-                break;
-            }
-        }
+        const GDriveApi::GDriveItem* targetItem = FindItemByPanelName(f->Name);
 
         if (targetItem)
         {
@@ -2034,32 +2020,7 @@ void WINAPI CPluginFS::ViewFile(const char* fsName, HWND parent,
 {
     if (!file.Name || !salamander) return;
 
-    std::string fileAnsiName = file.Name;
-    std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(file.Name);
-
-    const GDriveApi::GDriveItem* targetItem = nullptr;
-    for (const auto& item : m_cachedItems)
-    {
-        std::string checkName = item.name;
-        if (item.isGoogleDoc && !item.exportExtension.empty())
-        {
-            if (checkName.length() < item.exportExtension.length() ||
-                checkName.compare(checkName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
-            {
-                checkName += item.exportExtension;
-            }
-        }
-
-        if (_stricmp(checkName.c_str(), fileAnsiName.c_str()) == 0 ||
-            _stricmp(checkName.c_str(), fileUtf8Name.c_str()) == 0 ||
-            _stricmp(item.name.c_str(), fileAnsiName.c_str()) == 0 ||
-            _stricmp(item.name.c_str(), fileUtf8Name.c_str()) == 0)
-        {
-            targetItem = &item;
-            break;
-        }
-    }
-
+    const GDriveApi::GDriveItem* targetItem = FindItemByPanelName(file.Name);
     if (!targetItem) return;
 
     std::string uniqueFileName = std::string(fsName ? fsName : "gdrive") + ":" + m_currentPath + "/" + targetItem->id + "_" + targetItem->name;
@@ -2139,13 +2100,10 @@ void CPluginFS::CalculateFolderSize(HWND parent, int panel)
     // Find item ID in cache or path
     std::string folderId;
     std::string folderName = f->Name;
-    for (const auto& it : m_cachedItems)
+    const GDriveApi::GDriveItem* targetItem = FindItemByPanelName(f->Name);
+    if (targetItem)
     {
-        if (_stricmp(it.name.c_str(), f->Name) == 0)
-        {
-            folderId = it.id;
-            break;
-        }
+        folderId = targetItem->id;
     }
 
     if (folderId.empty())
@@ -2206,13 +2164,10 @@ void CPluginFS::OnSpacePressedOnFolder(int panel, const CFileData* f)
 
     std::string folderId;
     std::string folderName = f->Name;
-    for (const auto& it : m_cachedItems)
+    const GDriveApi::GDriveItem* targetItem = FindItemByPanelName(f->Name);
+    if (targetItem)
     {
-        if (_stricmp(it.name.c_str(), f->Name) == 0)
-        {
-            folderId = it.id;
-            break;
-        }
+        folderId = targetItem->id;
     }
 
     if (folderId.empty())
