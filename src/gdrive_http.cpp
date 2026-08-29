@@ -515,8 +515,8 @@ bool HttpClient::UploadMultipartFile(const std::string& url,
         return false;
     }
 
-    // Stream file content
-    std::vector<char> buffer(64 * 1024);
+    // Stream file content (256 KB chunk size for optimal throughput)
+    std::vector<char> buffer(256 * 1024);
     int64_t bytesUploaded = 0;
     bool success = true;
     DWORD bytesRead = 0;

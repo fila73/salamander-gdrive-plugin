@@ -829,7 +829,30 @@ void WINAPI CPluginFS::GetDropEffect(const char* srcFSPath, const char* tgtFSPat
 
 void WINAPI CPluginFS::GetFSFreeSpace(CQuadWord* retValue)
 {
-    if (retValue) *retValue = CQuadWord(-1, -1);
+    if (!retValue) return;
+
+    static GDriveApi::AboutInfo cachedInfo;
+    static DWORD lastFetchTime = 0;
+    DWORD now = GetTickCount();
+
+    if (now - lastFetchTime > 60000 || lastFetchTime == 0)
+    {
+        if (GDriveApi::ApiClient::GetInstance().GetAbout(cachedInfo))
+        {
+            lastFetchTime = now;
+        }
+    }
+
+    if (cachedInfo.quota.limit > 0)
+    {
+        int64_t freeBytes = cachedInfo.quota.limit - cachedInfo.quota.usage;
+        if (freeBytes < 0) freeBytes = 0;
+        retValue->SetUI64((unsigned __int64)freeBytes);
+    }
+    else
+    {
+        *retValue = CQuadWord(-1, -1);
+    }
 }
 
 BOOL WINAPI CPluginFS::GetNextDirectoryLineHotPath(const char* text, int pathLen, int& offset)
