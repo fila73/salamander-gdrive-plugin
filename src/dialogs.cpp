@@ -504,6 +504,8 @@ bool CCalcSizeProgressDialog::Run()
     HWND hParent = Parent;
     if (hParent) EnableWindow(hParent, FALSE);
 
+    GDriveCache::CacheManager::GetInstance().CheckForRemoteChanges(false);
+
     std::queue<std::string> folderQueue;
     folderQueue.push(m_folderId);
 
@@ -518,13 +520,27 @@ bool CCalcSizeProgressDialog::Run()
         std::vector<GDriveApi::GDriveItem> items;
         std::string err;
         bool listOk = false;
-        if (currentId == "shared_with_me_root")
+
+        // 1. Check cache first
+        if (currentId != "shared_with_me_root" && GDriveCache::CacheManager::GetInstance().GetFolder(currentId, items))
         {
-            listOk = GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items, &err);
+            listOk = true;
         }
         else
         {
-            listOk = GDriveApi::ApiClient::GetInstance().ListFolder(currentId, m_driveId, m_isSharedDrive, items, &err);
+            if (currentId == "shared_with_me_root")
+            {
+                listOk = GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items, &err);
+            }
+            else
+            {
+                listOk = GDriveApi::ApiClient::GetInstance().ListFolder(currentId, m_driveId, m_isSharedDrive, items, &err);
+            }
+
+            if (listOk && currentId != "shared_with_me_root")
+            {
+                GDriveCache::CacheManager::GetInstance().PutFolder(currentId, items);
+            }
         }
 
         if (!listOk)
@@ -551,6 +567,8 @@ bool CCalcSizeProgressDialog::Run()
             }
         }
     }
+
+    GDriveCache::CacheManager::GetInstance().SaveToDisk();
 
     if (hParent) EnableWindow(hParent, TRUE);
     if (HWindow) DestroyWindow(HWindow);
