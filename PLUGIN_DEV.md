@@ -196,7 +196,81 @@ SetWindowPos(m_hEditFilter, NULL, x, ctrlY, ScaleDpi(170), ctrlH, SWP_NOZORDER);
 
 ---
 
-### ⚠️ 5. Zamezení zobrazení prázdného okna při chybě otevření
+### ⚠️ 5. Životní cyklus `QuickRename` a `CreateDir` v souborovém systému (FS)
+V metodách `CPluginFSInterfaceAbstract::QuickRename` a `CreateDir` se předává parametr `mode`:
+- **`mode == 1`**: Salamander se ptá, zda má plugin vlastní dialog, nebo zda má Salamander otevřít standardní editační řádek/dialog.
+  - Pokud chcete standardní inline editaci v panelu (F2) nebo standardní dialog (F7): **Vraťte `FALSE` a nastavte `cancel = FALSE`**.
+- **`mode == 2`**: Uživatel potvrdil zadané jméno (předané v `newName`). Plugin provede operaci na vzdáleném úložišti/disku.
+- **DŮLEŽITÉ – Refresh panelu**: Salamander panel automaticky neobnoví. Po úspěšné operaci je **povinné** zavolat:
+  ```cpp
+  SalamanderGeneral->RefreshPanelPath(PANEL_SOURCE);
+  SalamanderGeneral->PostRefreshPanelFS(this);
+  return TRUE;
+  ```
+
+---
+
+### ⚠️ 6. Správné chování při zrušení operace (Cancel) v `CopyOrMoveFromDiskToFS`
+Při nahrávání souborů do pluginu Salamander otevírá svůj standardní Copy dialog. Pokud uživatel během průběhu přenosu stiskne tlačítko **Storno / Cancel**:
+- Pokud plugin vrátí `FALSE`, Salamander to vyhodnotí jako chybu a **znovu otevře Copy dialog**.
+- **Správné řešení**: Nastavte `*cancelOrHandlePath = TRUE` a vraťte `TRUE`:
+  ```cpp
+  if (userCancelled)
+  {
+      if (cancelOrHandlePath) *cancelOrHandlePath = TRUE;
+      return TRUE; // Salamander zavře dialog a korektně vrátí focus do panelu
+  }
+  ```
+
+---
+
+### ⚠️ 7. Dvoufázový průchod (Pass 1 Pre-scan) a dva progress bary
+Při nahrávání nebo stahování celých složek nelze předem znát celkový objem dat bez rekurzivního průchodu:
+1. **Fáze 1 (Pre-scan)**: Rychlé lokální nebo mezipaměťové rekurzivní projití stromu -> zjištění přesného počtu souborů a celkového počtu bajtů.
+2. **Fáze 2 (Transfer)**: Spuštění přenosu s dvěma progress bary:
+   - *Horní progress bar*: Procento aktuálně přenášeného souboru.
+   - *Dolní progress bar*: Celkový průběh dávky v bajtech s výpočtem přenosové rychlosti (KB/s, MB/s) a zbývajícího času.
+
+---
+
+### ⚠️ 8. Disambiguace duplicitních názvů pro cloudová úložiště (Google Drive)
+Cloudová úložiště umožňují existenci více souborů a složek se stejným názvem ve stejném adresáři. Dvoupanelový správce souborů (Open Salamander) však vyžaduje jednoznačné cesty:
+- **Zobrazení v panelu**: Pokud složka obsahuje duplicitní názvy (např. dvě složky `Projekt`), automaticky oběma přiřaďte persistentní suffix s ID (např. `Projekt [a8F2k1]` a `Projekt [mK9xQ2]`).
+- **Mapování cest**: V `ResolveFolderIdForPath` parsujte přítomnost `[suffix]` na konci segmentu cesty a párujte položku podle `item.id.endsWith(suffix)`. Tím je zaručena 100% spolehlivá navigace i při ručním zadání cesty nebo studené mezipaměti.
+- **Položkové operace**: Metody `QuickRename`, `Delete`, `ShowProperties` musí vyhledávat podle zobrazeného jména se suffixem (`FindItemByPanelName`), aby přesně zacílily vybranou instanci.
+
+---
+
+### ⚠️ 9. Správná a dynamická integrace Dark Mode
+Pokud plugin implementuje podporu Dark Mode:
+1. **Dynamické dotazování schématu**: Nikdy neukládejte stav Dark Mode pouze jednou při spuštění. Uživatel může změnit schéma v nastavení za běhu.
+   ```cpp
+   BOOL useDark = FALSE;
+   if (SalamanderGeneral->GetConfigParameter(SALCFG_USEWINDOWSDARKMODE, &useDark, sizeof(useDark), NULL))
+   {
+       // useDark == TRUE pouze pokud je v nastavení vybráno "Windows Dark Mode"
+   }
+   ```
+2. **Záhlaví oken (DWM)**: Při otevření dialogu nastavte atribut záhlaví podle aktuálního stavu:
+   ```cpp
+   BOOL dark = IsDarkMode();
+   DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+   ```
+3. **Barvení dialogů**: V `WM_CTLCOLORDLG`, `WM_CTLCOLORSTATIC` atd. vracejte tmavé štětce pouze tehdy, když `IsDarkMode()` vrací `true`. Při světlém režimu vraťte `FALSE`, aby Windows a Salamander použily standardní systémové vykreslení.
+
+---
+
+### ⚠️ 10. Modularizace velkých FS tříd (CPluginFS)
+Třída `CPluginFSInterfaceAbstract` snadno naroste do několika tisíc řádků. Doporučený návrh modularizace:
+- `*_fs.h` – Definice třídy a sdílených datových struktur.
+- `*_fs.cpp` – Jádro, životní cyklus, inicializace a `GetFSFreeSpace`.
+- `*_fs_nav.cpp` – Navigace, cesty, `ListCurrentPath`, `ResolveFolderIdForPath`, formátování položek panelu.
+- `*_fs_transfer.cpp` – Přenosy souborů (`CopyOrMoveFromDiskToFS`, `CopyOrMoveFromFS`, upload, download, konflikty).
+- `*_fs_ops.cpp` – CRUD operace (`CreateDir`, `QuickRename`, `Delete`, kontextové menu, vlastnosti).
+
+---
+
+### ⚠️ 11. Zamezení zobrazení prázdného okna při chybě otevření
 Pokud selže otevření souboru/spojení (uzamčený soubor, výpadek sítě), nesmí prohlížeč zůstat viset na obrazovce jako prázdné šedé okno.
 
 **V těle vlákna (`CViewerThread::Body`)**:
