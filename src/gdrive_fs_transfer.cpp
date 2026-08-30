@@ -498,9 +498,23 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
     }
 
     // Check if items with this name already exist in target GDrive folder
+    std::vector<GDriveApi::GDriveItem> existingItems;
+    if (parentFolderId == m_currentFolderId && !m_cachedItems.empty())
+    {
+        existingItems = m_cachedItems;
+    }
+    else if (!GDriveCache::CacheManager::GetInstance().GetFolder(parentFolderId, existingItems))
+    {
+        std::string listErr;
+        if (GDriveApi::ApiClient::GetInstance().ListFolder(parentFolderId, "", false, existingItems, &listErr))
+        {
+            GDriveCache::CacheManager::GetInstance().PutFolder(parentFolderId, existingItems);
+        }
+    }
+
     std::vector<const GDriveApi::GDriveItem*> matchingItems;
     std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(fileName);
-    for (const auto& it : m_cachedItems)
+    for (const auto& it : existingItems)
     {
         if (!it.isFolder && (_stricmp(it.name.c_str(), fileName.c_str()) == 0 ||
                              _stricmp(it.name.c_str(), ansiFileName.c_str()) == 0))
@@ -521,7 +535,7 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
         {
             const GDriveApi::GDriveItem* refItem = matchingItems[0];
             COverwriteConflictDialog dlg(parent, true, fileName, localFileSize.QuadPart,
-                                         refItem->name, refItem->size, (int)matchingItems.size());
+                                         refItem->name, refItem->size, (int)matchingItems.size(), false);
             dlg.Execute();
             act = dlg.GetAction();
             scope = dlg.GetOverwriteScope();
@@ -571,12 +585,15 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
                 std::string trashErr;
                 GDriveApi::ApiClient::GetInstance().TrashItem(id, &trashErr);
                 GDriveCache::CacheManager::GetInstance().RemoveItem(parentFolderId, id);
-                for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+                if (parentFolderId == m_currentFolderId)
                 {
-                    if (it->id == id)
+                    for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
                     {
-                        m_cachedItems.erase(it);
-                        break;
+                        if (it->id == id)
+                        {
+                            m_cachedItems.erase(it);
+                            break;
+                        }
                     }
                 }
             }
@@ -635,7 +652,10 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
     std::string ansiSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
     m_pathToIdCache[ansiSubPath] = newItem.id;
 
-    m_cachedItems.push_back(newItem);
+    if (parentFolderId == m_currentFolderId)
+    {
+        m_cachedItems.push_back(newItem);
+    }
 
     GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(parentFolderId, newItem);
 
@@ -644,25 +664,140 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
 
 bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent, CTransferProgressDialog* pProgressDlg)
 {
-    GDriveApi::GDriveItem newFolder;
-    std::string err;
-    if (!GDriveApi::ApiClient::GetInstance().CreateFolder(parentFolderId, dirName, newFolder, &err))
-    {
-        if (!err.empty() && (!pProgressDlg || !pProgressDlg->IsCancelled()))
-        {
-            SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
-        }
+    if (pProgressDlg && pProgressDlg->IsCancelled())
         return false;
+
+    // Check if folder(s) with this name already exist under parentFolderId
+    std::vector<GDriveApi::GDriveItem> existingItems;
+    if (parentFolderId == m_currentFolderId && !m_cachedItems.empty())
+    {
+        existingItems = m_cachedItems;
+    }
+    else if (!GDriveCache::CacheManager::GetInstance().GetFolder(parentFolderId, existingItems))
+    {
+        std::string listErr;
+        if (GDriveApi::ApiClient::GetInstance().ListFolder(parentFolderId, "", false, existingItems, &listErr))
+        {
+            GDriveCache::CacheManager::GetInstance().PutFolder(parentFolderId, existingItems);
+        }
+    }
+
+    std::vector<const GDriveApi::GDriveItem*> matchingFolders;
+    std::string ansiDirName = GDriveHttp::HttpClient::Utf8ToAnsi(dirName);
+    for (const auto& it : existingItems)
+    {
+        if (it.isFolder && (_stricmp(it.name.c_str(), dirName.c_str()) == 0 ||
+                            _stricmp(it.name.c_str(), ansiDirName.c_str()) == 0))
+        {
+            matchingFolders.push_back(&it);
+        }
+    }
+
+    std::string activeFolderId;
+
+    if (!matchingFolders.empty())
+    {
+        ConflictAction act;
+        OverwriteScope scope = OverwriteScope::All;
+        if (m_batchConflictAction.has_value())
+        {
+            act = *m_batchConflictAction;
+        }
+        else
+        {
+            const GDriveApi::GDriveItem* refItem = matchingFolders[0];
+            COverwriteConflictDialog dlg(parent, true, dirName, -1,
+                                         refItem->name, -1, (int)matchingFolders.size(), true);
+            dlg.Execute();
+            act = dlg.GetAction();
+            scope = dlg.GetOverwriteScope();
+            if (dlg.IsApplyToAll())
+            {
+                m_batchConflictAction = act;
+            }
+        }
+
+        if (act == ConflictAction::Cancel)
+        {
+            if (pProgressDlg) pProgressDlg->Cancel();
+            return false;
+        }
+        if (act == ConflictAction::Skip)
+        {
+            return true; // Skip this folder and all its contents
+        }
+        if (act == ConflictAction::Overwrite)
+        {
+            // Overwrite/Merge: use existing folder, and if duplicate folders exist, trash extra duplicates according to scope
+            const GDriveApi::GDriveItem* chosenFolder = matchingFolders[0];
+            if (matchingFolders.size() > 1)
+            {
+                auto sortedFolders = matchingFolders;
+                std::sort(sortedFolders.begin(), sortedFolders.end(), [](const GDriveApi::GDriveItem* a, const GDriveApi::GDriveItem* b) {
+                    return CompareFileTime(&a->modifiedTime, &b->modifiedTime) < 0;
+                });
+
+                if (scope == OverwriteScope::Newest)
+                {
+                    chosenFolder = sortedFolders.back();
+                }
+                else if (scope == OverwriteScope::Oldest)
+                {
+                    chosenFolder = sortedFolders.front();
+                }
+
+                for (const auto* fld : matchingFolders)
+                {
+                    if (fld->id != chosenFolder->id)
+                    {
+                        std::string trashErr;
+                        GDriveApi::ApiClient::GetInstance().TrashItem(fld->id, &trashErr);
+                        GDriveCache::CacheManager::GetInstance().RemoveItem(parentFolderId, fld->id);
+                        if (parentFolderId == m_currentFolderId)
+                        {
+                            for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+                            {
+                                if (it->id == fld->id)
+                                {
+                                    m_cachedItems.erase(it);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            activeFolderId = chosenFolder->id;
+        }
+        // If ConflictAction::KeepBoth -> proceed to create a new folder
+    }
+
+    if (activeFolderId.empty())
+    {
+        GDriveApi::GDriveItem newFolder;
+        std::string err;
+        if (!GDriveApi::ApiClient::GetInstance().CreateFolder(parentFolderId, dirName, newFolder, &err))
+        {
+            if (!err.empty() && (!pProgressDlg || !pProgressDlg->IsCancelled()))
+            {
+                SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
+            }
+            return false;
+        }
+
+        activeFolderId = newFolder.id;
+        GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(parentFolderId, newFolder);
+        if (parentFolderId == m_currentFolderId)
+        {
+            m_cachedItems.push_back(newFolder);
+        }
     }
 
     std::string folderSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + dirName;
-    m_pathToIdCache[folderSubPath] = newFolder.id;
-
-    std::string ansiDirName = GDriveHttp::HttpClient::Utf8ToAnsi(dirName);
+    m_pathToIdCache[folderSubPath] = activeFolderId;
     std::string ansiFolderSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiDirName;
-    m_pathToIdCache[ansiFolderSubPath] = newFolder.id;
-
-    GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(parentFolderId, newFolder);
+    m_pathToIdCache[ansiFolderSubPath] = activeFolderId;
 
     std::wstring searchPattern = localDirPath;
     if (!searchPattern.empty() && searchPattern.back() != L'\\')
@@ -693,7 +828,7 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
 
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                if (!UploadFolderRecursive(itemLocalPath, itemUtf8Name, newFolder.id, parent, pProgressDlg))
+                if (!UploadFolderRecursive(itemLocalPath, itemUtf8Name, activeFolderId, parent, pProgressDlg))
                 {
                     FindClose(hFind);
                     return false;
@@ -701,7 +836,7 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
             }
             else
             {
-                if (!UploadSingleItem(itemLocalPath, itemUtf8Name, newFolder.id, parent, pProgressDlg))
+                if (!UploadSingleItem(itemLocalPath, itemUtf8Name, activeFolderId, parent, pProgressDlg))
                 {
                     FindClose(hFind);
                     return false;

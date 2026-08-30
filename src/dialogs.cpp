@@ -1061,7 +1061,8 @@ bool CTransferProgressDialog::OnProgress(int64_t bytesTransferred, int64_t total
 COverwriteConflictDialog::COverwriteConflictDialog(HWND hParent, bool isUpload,
                                                    const std::string& srcName, int64_t srcSize,
                                                    const std::string& dstName, int64_t dstSize,
-                                                   int duplicateCount)
+                                                   int duplicateCount,
+                                                   bool isFolder)
     : CCommonDialog(HLanguage, IDD_OVERWRITE_CONFLICT, hParent, ooStatic),
       m_isUpload(isUpload),
       m_srcName(srcName),
@@ -1069,6 +1070,7 @@ COverwriteConflictDialog::COverwriteConflictDialog(HWND hParent, bool isUpload,
       m_dstName(dstName),
       m_dstSize(dstSize),
       m_duplicateCount(duplicateCount),
+      m_isFolder(isFolder),
       m_action(ConflictAction::Cancel),
       m_overwriteScope(OverwriteScope::All),
       m_applyToAll(false)
@@ -1100,25 +1102,55 @@ INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lP
             SendMessage(hIcon, STM_SETICON, (WPARAM)hIco, 0);
         }
 
-        SetWindowTextA(HWindow, LoadStr(IDS_CONFLICT_TITLE));
-        SetDlgItemTextA(HWindow, IDC_CONFLICT_PROMPT, LoadStr(m_isUpload ? IDS_CONFLICT_PROMPT_UPLOAD : IDS_CONFLICT_PROMPT_DOWNLOAD));
-
-        char srcInfo[512];
-        std::string srcSzStr = CTransferProgressDialog::FormatSize(m_srcSize);
-        snprintf(srcInfo, sizeof(srcInfo), LoadStr(IDS_CONFLICT_SRC_FMT), m_srcName.c_str(), srcSzStr.c_str());
-        SetDlgItemTextA(HWindow, IDC_CONFLICT_SRC_INFO, srcInfo);
-
-        char dstInfo[512];
-        std::string dstSzStr = CTransferProgressDialog::FormatSize(m_dstSize);
-        if (m_duplicateCount > 1)
+        SetWindowTextA(HWindow, LoadStr(m_isFolder ? IDS_CONFLICT_TITLE_DIR : IDS_CONFLICT_TITLE));
+        if (m_isFolder)
         {
-            char dupCountBuf[256];
-            snprintf(dupCountBuf, sizeof(dupCountBuf), LoadStr(IDS_CONFLICT_DUP_COUNT_FMT), m_duplicateCount);
-            snprintf(dstInfo, sizeof(dstInfo), "%s\n%s", dupCountBuf, m_dstName.c_str());
+            SetDlgItemTextA(HWindow, IDC_CONFLICT_PROMPT, LoadStr(m_isUpload ? IDS_CONFLICT_PROMPT_UPLOAD_DIR : IDS_CONFLICT_PROMPT_DOWNLOAD_DIR));
         }
         else
         {
-            snprintf(dstInfo, sizeof(dstInfo), LoadStr(IDS_CONFLICT_DST_FMT), m_dstName.c_str(), dstSzStr.c_str());
+            SetDlgItemTextA(HWindow, IDC_CONFLICT_PROMPT, LoadStr(m_isUpload ? IDS_CONFLICT_PROMPT_UPLOAD : IDS_CONFLICT_PROMPT_DOWNLOAD));
+        }
+
+        char srcInfo[512];
+        if (m_isFolder)
+        {
+            snprintf(srcInfo, sizeof(srcInfo), LoadStr(IDS_CONFLICT_SRC_DIR_FMT), m_srcName.c_str());
+        }
+        else
+        {
+            std::string srcSzStr = CTransferProgressDialog::FormatSize(m_srcSize);
+            snprintf(srcInfo, sizeof(srcInfo), LoadStr(IDS_CONFLICT_SRC_FMT), m_srcName.c_str(), srcSzStr.c_str());
+        }
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_SRC_INFO, srcInfo);
+
+        char dstInfo[512];
+        if (m_isFolder)
+        {
+            if (m_duplicateCount > 1)
+            {
+                char dupCountBuf[256];
+                snprintf(dupCountBuf, sizeof(dupCountBuf), LoadStr(IDS_CONFLICT_DUP_COUNT_DIR_FMT), m_duplicateCount);
+                snprintf(dstInfo, sizeof(dstInfo), "%s\n%s", dupCountBuf, m_dstName.c_str());
+            }
+            else
+            {
+                snprintf(dstInfo, sizeof(dstInfo), LoadStr(IDS_CONFLICT_DST_DIR_FMT), m_dstName.c_str());
+            }
+        }
+        else
+        {
+            std::string dstSzStr = CTransferProgressDialog::FormatSize(m_dstSize);
+            if (m_duplicateCount > 1)
+            {
+                char dupCountBuf[256];
+                snprintf(dupCountBuf, sizeof(dupCountBuf), LoadStr(IDS_CONFLICT_DUP_COUNT_FMT), m_duplicateCount);
+                snprintf(dstInfo, sizeof(dstInfo), "%s\n%s", dupCountBuf, m_dstName.c_str());
+            }
+            else
+            {
+                snprintf(dstInfo, sizeof(dstInfo), LoadStr(IDS_CONFLICT_DST_FMT), m_dstName.c_str(), dstSzStr.c_str());
+            }
         }
         SetDlgItemTextA(HWindow, IDC_CONFLICT_DST_INFO, dstInfo);
 
@@ -1129,9 +1161,9 @@ INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lP
         {
             SetDlgItemTextA(HWindow, IDC_CONFLICT_DUPLICATES_LABEL, LoadStr(IDS_CONFLICT_DUP_LABEL));
             SendMessageA(hCombo, CB_RESETCONTENT, 0, 0);
-            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_CONFLICT_DUP_ALL));
-            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_CONFLICT_DUP_NEWEST));
-            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_CONFLICT_DUP_OLDEST));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(m_isFolder ? IDS_CONFLICT_DUP_ALL_DIR : IDS_CONFLICT_DUP_ALL));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(m_isFolder ? IDS_CONFLICT_DUP_NEWEST_DIR : IDS_CONFLICT_DUP_NEWEST));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(m_isFolder ? IDS_CONFLICT_DUP_OLDEST_DIR : IDS_CONFLICT_DUP_OLDEST));
             SendMessage(hCombo, CB_SETCURSEL, 0, 0);
         }
         else
@@ -1140,7 +1172,7 @@ INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lP
             if (hComboLabel) ShowWindow(hComboLabel, SW_HIDE);
         }
 
-        SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_OVERWRITE, LoadStr(IDS_CONFLICT_BTN_OVERWRITE));
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_OVERWRITE, LoadStr(m_isFolder ? IDS_CONFLICT_BTN_MERGE : IDS_CONFLICT_BTN_OVERWRITE));
         SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_KEEPBOTH, LoadStr(IDS_CONFLICT_BTN_KEEPBOTH));
         SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_SKIP, LoadStr(IDS_CONFLICT_BTN_SKIP));
         SetDlgItemTextA(HWindow, IDC_CONFLICT_APPLY_ALL, LoadStr(IDS_CONFLICT_APPLY_ALL));

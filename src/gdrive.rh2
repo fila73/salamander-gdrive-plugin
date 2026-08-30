@@ -152,5 +152,15 @@
 #define IDS_TRANSFER_TOTAL_LABEL                 2197
 #define IDS_TRANSFER_TOTAL_FILES_FMT             2198
 #define IDS_TRANSFER_TOTAL_BYTES_FMT             2199
+#define IDS_CONFLICT_TITLE_DIR                   2200
+#define IDS_CONFLICT_PROMPT_UPLOAD_DIR           2201
+#define IDS_CONFLICT_PROMPT_DOWNLOAD_DIR         2202
+#define IDS_CONFLICT_DUP_COUNT_DIR_FMT           2203
+#define IDS_CONFLICT_DUP_ALL_DIR                 2204
+#define IDS_CONFLICT_DUP_NEWEST_DIR              2205
+#define IDS_CONFLICT_DUP_OLDEST_DIR              2206
+#define IDS_CONFLICT_BTN_MERGE                   2207
+#define IDS_CONFLICT_SRC_DIR_FMT                 2208
+#define IDS_CONFLICT_DST_DIR_FMT                 2209
 
 #endif // __GDRIVE_RH2

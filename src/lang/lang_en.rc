@@ -270,10 +270,19 @@ BEGIN
     IDS_CONFLICT_DUP_ALL        "All duplicate files"
     IDS_CONFLICT_DUP_NEWEST     "Newest file only"
     IDS_CONFLICT_DUP_OLDEST     "Oldest file only"
-    IDS_CONFLICT_DUP_COUNT_FMT  "%d existing files with this name found on Google Drive."
     IDS_TRANSFER_TOTAL_LABEL    "Total progress:"
     IDS_TRANSFER_TOTAL_FILES_FMT "File %d of %d"
     IDS_TRANSFER_TOTAL_BYTES_FMT "%s of %s (%d%%)"
+    IDS_CONFLICT_TITLE_DIR       "Folder Conflict"
+    IDS_CONFLICT_PROMPT_UPLOAD_DIR "A folder with the same name already exists in the Google Drive destination folder:"
+    IDS_CONFLICT_PROMPT_DOWNLOAD_DIR "A folder with the same name already exists in the local destination directory:"
+    IDS_CONFLICT_DUP_COUNT_DIR_FMT "%d existing folders with this name found on Google Drive."
+    IDS_CONFLICT_DUP_ALL_DIR     "All duplicate folders"
+    IDS_CONFLICT_DUP_NEWEST_DIR  "Newest folder only"
+    IDS_CONFLICT_DUP_OLDEST_DIR  "Oldest folder only"
+    IDS_CONFLICT_BTN_MERGE       "&Merge"
+    IDS_CONFLICT_SRC_DIR_FMT     "Source folder: %s"
+    IDS_CONFLICT_DST_DIR_FMT     "Target folder: %s"
 END
 
 #endif // English resources

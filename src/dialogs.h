@@ -163,7 +163,8 @@ public:
     COverwriteConflictDialog(HWND hParent, bool isUpload,
                              const std::string& srcName, int64_t srcSize,
                              const std::string& dstName, int64_t dstSize,
-                             int duplicateCount = 1);
+                             int duplicateCount = 1,
+                             bool isFolder = false);
 
     ConflictAction GetAction() const { return m_action; }
     OverwriteScope GetOverwriteScope() const { return m_overwriteScope; }
@@ -179,6 +180,7 @@ private:
     std::string m_dstName;
     int64_t m_dstSize;
     int m_duplicateCount;
+    bool m_isFolder;
 
     ConflictAction m_action;
     OverwriteScope m_overwriteScope;

@@ -270,10 +270,19 @@ BEGIN
     IDS_CONFLICT_DUP_ALL        "Všechny duplikáty"
     IDS_CONFLICT_DUP_NEWEST     "Pouze nejnovější soubor"
     IDS_CONFLICT_DUP_OLDEST     "Pouze nejstarší soubor"
-    IDS_CONFLICT_DUP_COUNT_FMT  "Na Google Disku nalezeno %d existujících souborů s tímto názvem."
     IDS_TRANSFER_TOTAL_LABEL    "Celkový průběh:"
     IDS_TRANSFER_TOTAL_FILES_FMT "Soubor %d z %d"
     IDS_TRANSFER_TOTAL_BYTES_FMT "%s z %s (%d%%)"
+    IDS_CONFLICT_TITLE_DIR       "Konflikt složek"
+    IDS_CONFLICT_PROMPT_UPLOAD_DIR "Složka se stejným názvem již v cílové složce na Google Disku existuje:"
+    IDS_CONFLICT_PROMPT_DOWNLOAD_DIR "Složka se stejným názvem již v cílovém lokálním adresáři existuje:"
+    IDS_CONFLICT_DUP_COUNT_DIR_FMT "Na Google Disku nalezeno %d existujících složek s tímto názvem."
+    IDS_CONFLICT_DUP_ALL_DIR     "Všechny duplicitní složky"
+    IDS_CONFLICT_DUP_NEWEST_DIR  "Pouze nejnovější složka"
+    IDS_CONFLICT_DUP_OLDEST_DIR  "Pouze nejstarší složka"
+    IDS_CONFLICT_BTN_MERGE       "&Sloučit"
+    IDS_CONFLICT_SRC_DIR_FMT     "Zdrojová složka: %s"
+    IDS_CONFLICT_DST_DIR_FMT     "Cílová složka: %s"
 END
 
 #endif // Czech resources
