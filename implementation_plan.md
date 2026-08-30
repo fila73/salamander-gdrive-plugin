@@ -50,6 +50,21 @@ Tento dokument shrnuje stav implementace jednotlivých funkcí **Google Drive AP
 - [x] **Záložka „Účty a obecné“**: Správa přihlášených účtů (Přidat, Aktivovat, Odebrat), volba zobrazení Sdílených disků, vlastní OAuth klíče.
 - [x] **Záložka „Mezipaměť a synchronizace“**: Zapnutí/vypnutí cache, nastavení TTL intervalu kontroly změn (10 s, 30 s, 1 min, 5 min, ručně), tlačítko pro vymazání cache.
 
+### 1.6 Duplicity, řešení kolizí a modularizace (v0.3)
+- [x] **Předběžný průchod (Pass 1 Pre-scan)**:
+  - Předběžná kalkulace celkového počtu souborů a velikosti v bajtech před zahájením přenosu (pro upload i download).
+  - Dva progress bary (jeden pro aktuální soubor a druhý pro celou dávku přenosu včetně rychlosti).
+- [x] **Disambiguace duplicitních názvů položek**:
+  - Detekce stejnojmenných souborů a složek v rámci jedné úrovně.
+  - Přiřazení suffixu s posledními 6 znaky Google Drive ID (`[suffix]`) do zobrazení v panelu.
+  - Deterministické mapování cest i přímé vyhledávání podle ID v `ResolveFolderIdForPath` a `FindItemByPanelName`.
+- [x] **Detekce kolizí existujících složek při uploadu**:
+  - Interaktivní dialog při existenci stejnojmenné složky na Google Disku (Sloučit/Přepsat, Ponechat oba, Přeskočit, Použít pro všechny zbývající).
+- [x] **Okamžitá aktualizace panelu po přejmenování a vytvoření složky**:
+  - Správné ošetření `mode == 1` v `QuickRename` a `CreateDir` a volání `PostRefreshPanelFS` i `RefreshPanelPath`.
+- [x] **Modularizace CPluginFS (CR-08)**:
+  - Rozdělení monolitického `gdrive_fs.cpp` na `gdrive_fs_nav.cpp`, `gdrive_fs_transfer.cpp`, `gdrive_fs_ops.cpp` a `gdrive_fs.cpp`.
+
 ---
 
 ## 🟡 2. Budoucí rozšíření (Roadmapa)

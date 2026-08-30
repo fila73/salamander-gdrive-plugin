@@ -21,15 +21,19 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
 - **Tichá obnova (Silent Refresh)**: Přístupové tokeny se na pozadí automaticky obnovují bez otevírání prohlížeče.
 
 ### ✏️ Zápisové a souborové operace
-- 📁 **F7 – Vytvoření složky (`CreateDir`)**: Vytváření nových složek v *Můj disk*, *Sdílených discích* i podsložkách.
-- ✏️ **Shift+F6 – Rychlé přejmenování (`QuickRename`)**: Okamžité přejmenování souborů a složek přímo v panelu.
+- 📁 **F7 – Vytvoření složky (`CreateDir`)**: Vytváření nových složek v *Můj disk*, *Sdílených discích* i podsložkách s okamžitou aktualizací panelu.
+- ✏️ **Shift+F6 – Rychlé přejmenování (`QuickRename`)**: Okamžité přejmenování souborů a složek přímo v panelu s automatickým refreshem a zaostřením.
 - 🗑️ **F8 – Mazání a přesun do Koše (`Delete`)**:
   - Standardní stisk `F8`: Přesun položky do Koše Google Disku.
   - Stisk `Shift+F8`: Trvalé smazání z Google Disku.
 - 📤 **F5 – Nahrávání na Google Disk (`CopyOrMoveFromDiskToFS`)**:
   - Streamovaný multipart upload (256 KB buffer) s podporou jednotlivých souborů i rekurzivních stromů složek.
+  - **Předběžný průchod (Pass 1) & dva progress bary**: Předem spočítá přesný počet i objem dat v bajtech a zobrazuje jak průběh aktuálního souboru, tak celkový přenos včetně rychlosti.
+  - **Detekce kolizí existujících složek i souborů**: Interaktivní dialog s možnostmi *Sloučit / Přepsat*, *Ponechat oba*, *Přeskočit* a *Použít pro všechny zbývající*.
 - 📥 **F5 – Stahování na lokální disk**:
-  - Rychlé stahování se stavovým dialogem průběhu.
+  - Rychlé stahování se stavovým dialogem průběhu a rekurzivní předkalkulací velikosti složek.
+- 🔀 **Disambiguace duplicitních názvů**:
+  - Automatická detekce stejnojmenných položek v jedné složce a přidání jednoznačného suffixu s posledními 6 znaky Google Drive ID (`Složka [mK9xQ2]`, `Dokument [mK9xQ2].pdf`) pro 100% spolehlivou navigaci i položkové operace.
 - 👁️ **F3 – Interní prohlížeč**:
   - Okamžitý náhled vzdálených souborů s automatickou mezipamětí.
 - 📊 **Ukazatel volného místa na disku**:
@@ -57,7 +61,7 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
 
 ## 🚀 Instalace
 
-1. Stáhněte nejnovější archiv `salamander-gdrive-plugin-v1.0.zip` ze sekce GitHub Releases.
+1. Stáhněte nejnovější archiv `salamander-gdrive-plugin-v0.3.zip` ze sekce [GitHub Releases](https://github.com/fila73/salamander-gdrive-plugin/releases).
 2. Rozbalte soubory do adresáře `plugins\gdrive` v instalaci Open Salamandera:
    ```
    Open Salamander/

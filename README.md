@@ -21,15 +21,19 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
 - **Silent Background Refresh**: Access tokens renew automatically without browser popups.
 
 ### ✏️ Complete File Management & Write Operations
-- 📁 **F7 – Create Folder (`CreateDir`)**: Create new folders in *My Drive*, *Shared Drives*, and subfolders.
-- ✏️ **Shift+F6 – Quick Rename (`QuickRename`)**: Rename files and folders directly in the panel.
+- 📁 **F7 – Create Folder (`CreateDir`)**: Create new folders in *My Drive*, *Shared Drives*, and subfolders with automatic panel refresh.
+- ✏️ **Shift+F6 – Quick Rename (`QuickRename`)**: Rename files and folders directly in the panel with immediate refresh and focus.
 - 🗑️ **F8 – Trash & Permanent Delete (`Delete`)**:
   - Standard `F8`: Move item to Google Drive Trash.
   - `Shift+F8`: Permanently delete item.
 - 📤 **F5 – Upload Files & Folders (`CopyOrMoveFromDiskToFS`)**:
   - High-throughput streaming multipart upload (256 KB buffer) supporting single files and recursive directory structures.
+  - **Pass 1 Pre-scan & Dual Progress Bars**: Pre-calculates exact item count and byte totals to display both current file and total batch progress.
+  - **Directory & File Collision Resolution**: Interactive prompt when folders or files already exist (Merge / Overwrite, Keep Both, Skip, Apply to all).
 - 📥 **F5 – Download to Local Disk**:
-  - Fast download with live progress dialog.
+  - Fast download with live progress dialog and recursive folder pre-calculation.
+- 🔀 **Duplicate Name Disambiguation**:
+  - Automatically identifies duplicate file/folder names in the same directory and appends a deterministic suffix with the last 6 characters of the Google Drive ID (e.g. `Folder [mK9xQ2]`, `Report [mK9xQ2].pdf`) for 100% reliable navigation and operations.
 - 👁️ **F3 – Internal Viewer**:
   - Instant preview of remote files with automatic temp caching.
 - 📊 **Drive Quota & Free Space Indicator**:
@@ -57,7 +61,7 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
 
 ## 🚀 Installation
 
-1. Download the latest release `salamander-gdrive-plugin-v1.0.zip` from GitHub Releases.
+1. Download the latest release `salamander-gdrive-plugin-v0.3.zip` from [GitHub Releases](https://github.com/fila73/salamander-gdrive-plugin/releases).
 2. Extract the files into the `plugins\gdrive` directory of your Open Salamander installation:
    ```
    Open Salamander/
