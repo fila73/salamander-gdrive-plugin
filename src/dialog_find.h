@@ -21,7 +21,6 @@ public:
     ~CGDriveFindDialog();
 
     static void Launch(HWND hParent, int panel, const std::string& currentPath, const std::string& currentFolderId);
-    void ExecuteModeless();
 
 private:
     static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);

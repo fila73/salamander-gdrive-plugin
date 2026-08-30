@@ -42,47 +42,37 @@ CGDriveFindDialog::~CGDriveFindDialog()
 
 void CGDriveFindDialog::Launch(HWND hParent, int panel, const std::string& currentPath, const std::string& currentFolderId)
 {
+    GDriveLog::Log("[FIND] CGDriveFindDialog::Launch: panel=%d, currentPath='%s', currentFolderId='%s'",
+                   panel, currentPath.c_str(), currentFolderId.c_str());
+
     if (s_activeFindDialog && s_activeFindDialog->m_hDlg && IsWindow(s_activeFindDialog->m_hDlg))
     {
         SetForegroundWindow(s_activeFindDialog->m_hDlg);
         return;
     }
 
-    std::thread t([hParent, panel, currentPath, currentFolderId]() {
-        CGDriveFindDialog* dlg = new CGDriveFindDialog(hParent, panel, currentPath, currentFolderId);
-        dlg->ExecuteModeless();
-        delete dlg;
-    });
-    t.detach();
-}
+    if (s_activeFindDialog)
+    {
+        delete s_activeFindDialog;
+        s_activeFindDialog = nullptr;
+    }
 
-void CGDriveFindDialog::ExecuteModeless()
-{
-    s_activeFindDialog = this;
+    s_activeFindDialog = new CGDriveFindDialog(hParent, panel, currentPath, currentFolderId);
     HWND hWnd = CreateDialogParam(HLanguage ? HLanguage : DLLInstance,
                                   MAKEINTRESOURCE(IDD_FIND),
-                                  NULL,
+                                  hParent,
                                   DialogProc,
-                                  (LPARAM)this);
+                                  (LPARAM)s_activeFindDialog);
     if (!hWnd)
     {
+        GDriveLog::Log("[FIND] CreateDialogParam failed, GetLastError=%lu", GetLastError());
+        delete s_activeFindDialog;
         s_activeFindDialog = nullptr;
         return;
     }
 
     ShowWindow(hWnd, SW_SHOW);
     SetForegroundWindow(hWnd);
-
-    MSG msg;
-    while (IsWindow(hWnd) && GetMessage(&msg, NULL, 0, 0))
-    {
-        if (!IsDialogMessage(hWnd, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
-    s_activeFindDialog = nullptr;
 }
 
 INT_PTR CALLBACK CGDriveFindDialog::DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -263,6 +253,15 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
 
     case WM_DESTROY:
         OnDestroy(hDlg);
+        return TRUE;
+
+    case WM_NCDESTROY:
+        SetWindowLongPtr(hDlg, DWLP_USER, 0);
+        if (s_activeFindDialog == this)
+        {
+            s_activeFindDialog = nullptr;
+        }
+        delete this;
         return TRUE;
     }
 

@@ -9,6 +9,7 @@
 #include <map>
 #include <cstdint>
 #include <windows.h>
+#include <atomic>
 #include "gdrive_http.h"
 
 namespace GDriveApi

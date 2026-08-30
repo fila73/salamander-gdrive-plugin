@@ -44,13 +44,13 @@ all: gdrive.spl english.slg czech.slg
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-src/gdrive.res: src/gdrive.rc
+src/gdrive.res: src/gdrive.rc src/gdrive.rh2
 	cd src && $(RC) -O coff -I. -Ilang -I$(CURDIR)/$(SHARED_DIR) -I$(CURDIR)/$(SALAMAND_DIR) -i gdrive.rc -o gdrive.res
 
-src/lang/lang_en.res: src/lang/lang_en.rc
+src/lang/lang_en.res: src/lang/lang_en.rc src/gdrive.rh2 src/lang/lang.rh
 	cd src/lang && $(RC) -O coff -I. -I.. -I$(CURDIR)/$(SHARED_DIR) -I$(CURDIR)/$(SALAMAND_DIR) -i lang_en.rc -o lang_en.res
 
-src/lang/lang_cs.res: src/lang/lang_cs.rc
+src/lang/lang_cs.res: src/lang/lang_cs.rc src/gdrive.rh2 src/lang/lang.rh
 	cd src/lang && $(RC) -O coff -I. -I.. -I$(CURDIR)/$(SHARED_DIR) -I$(CURDIR)/$(SALAMAND_DIR) -i lang_cs.rc -o lang_cs.res
 
 gdrive.spl: $(ALL_OBJS) src/gdrive.def
