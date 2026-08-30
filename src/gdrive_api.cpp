@@ -335,14 +335,12 @@ bool ApiClient::SearchFiles(const SearchOptions& opts,
     }
 
     // Folder scope (if not searching subdirs)
-    if (!opts.folderScopeId.empty() && opts.folderScopeId != "root" && opts.folderScopeId != "shared_drives_root" &&
+    if (!opts.searchSubdirs && !opts.folderScopeId.empty() &&
+        opts.folderScopeId != "shared_drives_root" &&
         opts.folderScopeId != "shared_with_me_root" && opts.folderScopeId != "starred_root" &&
         opts.folderScopeId != "recent_root" && opts.folderScopeId != "trash_root")
     {
-        if (!opts.searchSubdirs)
-        {
-            queryParts.push_back("'" + EscapeDriveQueryString(opts.folderScopeId) + "' in parents");
-        }
+        queryParts.push_back("'" + EscapeDriveQueryString(opts.folderScopeId) + "' in parents");
     }
 
     std::string q;

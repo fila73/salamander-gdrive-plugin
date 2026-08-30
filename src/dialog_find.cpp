@@ -812,7 +812,7 @@ void CGDriveFindDialog::StartSearch()
     m_currentSearchOpts.queryNamed = namedBuf;
 
     bool searchWholeDrive = (SendMessage(m_hSubdir, BM_GETCHECK, 0, 0) == BST_CHECKED);
-    m_currentSearchOpts.searchSubdirs = true;
+    m_currentSearchOpts.searchSubdirs = searchWholeDrive;
     m_currentSearchOpts.searchContent = (SendMessage(m_hGrep, BM_GETCHECK, 0, 0) == BST_CHECKED);
 
     char containingBuf[256] = {0};
@@ -873,7 +873,11 @@ void CGDriveFindDialog::StartSearch()
             std::replace(winPath.begin(), winPath.end(), '/', '\\');
             m_currentSearchOpts.targetFolderPath = winPath;
 
-            if (!m_initialFolderId.empty() && _stricmp(path.c_str(), m_initialPath.c_str()) == 0)
+            if (path == "/My Drive")
+            {
+                m_currentSearchOpts.folderScopeId = "root";
+            }
+            else if (!m_initialFolderId.empty() && _stricmp(path.c_str(), m_initialPath.c_str()) == 0)
             {
                 m_currentSearchOpts.folderScopeId = m_initialFolderId;
             }
@@ -1185,8 +1189,6 @@ void CGDriveFindDialog::FocusSelectedItem()
 
     std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
     InterfaceForMenuExt.PostFocusTarget(m_panel, relPath, ansiName);
-
-    DestroyWindow(m_hDlg);
 }
 
 void CGDriveFindDialog::ViewSelectedItem()
