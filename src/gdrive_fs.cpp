@@ -1675,6 +1675,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         if (hFind != INVALID_HANDLE_VALUE)
         {
             fileName = GDriveHttp::HttpClient::WideToUtf8(fd.cFileName);
+            itemLocalPath = wSourcePath + fd.cFileName;
             FindClose(hFind);
         }
         else
@@ -1992,8 +1993,8 @@ bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std:
                 CloseHandle(hLocal);
             }
 
-            std::string ansiLocalPath = GDriveHttp::HttpClient::WideToAnsi(localPath);
-            COverwriteConflictDialog dlg(parent, false, fileName, item.size, ansiLocalPath, localSize);
+            std::string localDisplayName = GDriveHttp::HttpClient::WideToUtf8(wFileName);
+            COverwriteConflictDialog dlg(parent, false, fileName, item.size, localDisplayName, localSize);
             dlg.Execute();
             act = dlg.GetAction();
             if (dlg.IsApplyToAll())
@@ -2129,8 +2130,7 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
         else
         {
             const GDriveApi::GDriveItem* refItem = matchingItems[0];
-            std::string ansiLocalPath = GDriveHttp::HttpClient::WideToAnsi(localPath);
-            COverwriteConflictDialog dlg(parent, true, ansiLocalPath, localFileSize.QuadPart,
+            COverwriteConflictDialog dlg(parent, true, fileName, localFileSize.QuadPart,
                                          refItem->name, refItem->size, (int)matchingItems.size());
             dlg.Execute();
             act = dlg.GetAction();
