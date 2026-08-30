@@ -661,7 +661,7 @@ std::wstring HttpClient::SanitizeFileNameForLocalFsW(const std::wstring& name, w
         wchar_t c = result[i];
         if (c == L'\\' || c == L'/' || c == L':' || c == L'*' ||
             c == L'?' || c == L'"' || c == L'<' || c == L'>' ||
-            c == L'|' || (c >= 0 && c < 32))
+            c == L'|' || c < 32)
         {
             result[i] = replacementChar;
         }

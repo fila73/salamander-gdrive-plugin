@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2026 Open Salamander Google Drive Plugin Authors
+// SPDX-FileCopyrightText: 2026 fila73
+// SPDX-FileContributor: Inspired by Red Salamander
+// SPDX-License-Identifier: GPL-2.0-or-later
 
-#ifndef __GDRIVE_CACHE_H
-#define __GDRIVE_CACHE_H
+#pragma once
 
 #include "gdrive_api.h"
 #include <string>
@@ -99,4 +99,3 @@ private:
 
 } // namespace GDriveCache
 
-#endif // __GDRIVE_CACHE_H

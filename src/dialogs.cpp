@@ -8,6 +8,7 @@
 #include "gdrive_auth.h"
 #include "gdrive.h"
 #include "gdrive_api.h"
+#include "gdrive_cache.h"
 #include "gdrive_log.h"
 
 CCommonDialog::CCommonDialog(HINSTANCE hInstance, int resID, HWND hParent, CObjectOrigin origin)
@@ -63,8 +64,6 @@ INT_PTR CCommonPropSheetPage::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam
     }
     return CPropSheetPage::DialogProc(uMsg, wParam, lParam);
 }
-
-#include "gdrive_cache.h"
 
 CConfigPageGeneral::CConfigPageGeneral()
     : CCommonPropSheetPage(LoadStr(IDS_CFG_PAGE_GENERAL), HLanguage, IDD_CFGPAGEGENERAL, IDD_CFGPAGEGENERAL, PSP_HASHELP, NULL)

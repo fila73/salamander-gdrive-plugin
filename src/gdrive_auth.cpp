@@ -16,10 +16,45 @@ static const wchar_t* kRegSubKey = L"Software\\Altap\\Salamander\\Plugins\\gdriv
 static const wchar_t* kRegAccountsSubKey = L"Software\\Altap\\Salamander\\Plugins\\gdrive\\Accounts";
 static const wchar_t* kRegValActiveAccount = L"ActiveAccount";
 static const wchar_t* kRegValRefreshToken = L"EncryptedRefreshToken";
+static const wchar_t* kRegValEncryptedClientSecret = L"EncryptedClientSecret";
 static const wchar_t* kRegValClientId = L"OAuthClientId";
 static const wchar_t* kRegValClientSecret = L"OAuthClientSecret";
 static const wchar_t* kRegValAccountEmail = L"AccountEmail";
 static const wchar_t* kRegValAccountName = L"AccountName";
+
+static bool DpapiEncrypt(const std::string& plainText, const wchar_t* desc, std::vector<BYTE>& outBytes)
+{
+    if (plainText.empty()) return false;
+    DATA_BLOB inBlob{};
+    inBlob.pbData = (BYTE*)plainText.data();
+    inBlob.cbData = (DWORD)plainText.length();
+
+    DATA_BLOB outBlob{};
+    if (!CryptProtectData(&inBlob, desc, NULL, NULL, NULL, 0, &outBlob))
+    {
+        return false;
+    }
+    outBytes.assign(outBlob.pbData, outBlob.pbData + outBlob.cbData);
+    LocalFree(outBlob.pbData);
+    return true;
+}
+
+static bool DpapiDecrypt(const BYTE* pData, DWORD cbData, std::string& outPlainText)
+{
+    if (!pData || cbData == 0) return false;
+    DATA_BLOB inBlob{};
+    inBlob.pbData = const_cast<BYTE*>(pData);
+    inBlob.cbData = cbData;
+
+    DATA_BLOB outBlob{};
+    if (!CryptUnprotectData(&inBlob, NULL, NULL, NULL, NULL, 0, &outBlob))
+    {
+        return false;
+    }
+    outPlainText.assign((const char*)outBlob.pbData, outBlob.cbData);
+    LocalFree(outBlob.pbData);
+    return true;
+}
 
 static std::wstring MakeSafeAccountKey(const std::string& email)
 {
@@ -102,24 +137,68 @@ std::string AuthManager::GetAccountDisplay() const
 
 std::string AuthManager::GetValidAccessToken(std::string* errorOut)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::string existingToken;
+    std::string refreshToken;
+    std::string clientId;
+    std::string clientSecret;
 
     auto now = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
 
-    // If access token is still valid with > 60s margin, return it
-    if (!m_tokens.accessToken.empty() && m_tokens.expiresAt > (now + 60))
     {
-        return m_tokens.accessToken;
-    }
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    // Need refresh
-    if (!m_tokens.refreshToken.empty())
-    {
-        if (RefreshAccessTokenInternal(errorOut))
+        // If access token is still valid with > 60s margin, return it
+        if (!m_tokens.accessToken.empty() && m_tokens.expiresAt > (now + 60))
         {
             return m_tokens.accessToken;
         }
+
+        refreshToken = m_tokens.refreshToken;
+        clientId = m_clientId;
+        clientSecret = m_clientSecret;
+    }
+
+    // Need refresh (network request performed WITHOUT holding mutex)
+    if (!refreshToken.empty())
+    {
+        GDriveHttp::HttpClient http;
+        std::string postBody = "client_id=" + GDriveHttp::HttpClient::UrlEncode(clientId);
+        if (!clientSecret.empty())
+        {
+            postBody += "&client_secret=" + GDriveHttp::HttpClient::UrlEncode(clientSecret);
+        }
+        postBody += "&refresh_token=" + GDriveHttp::HttpClient::UrlEncode(refreshToken) +
+                    "&grant_type=refresh_token";
+
+        auto resp = http.Post(kTokenEndpoint, postBody, "application/x-www-form-urlencoded");
+        if (!resp.success)
+        {
+            if (errorOut) *errorOut = "Token refresh HTTP request failed: " + resp.errorMessage;
+            return "";
+        }
+
+        auto json = GDriveJson::Value::Parse(resp.body);
+        if (!json.IsObject() || !json.Has("access_token"))
+        {
+            std::string errDesc = json.GetString("error_description", json.GetString("error", "Unknown token error"));
+            if (errorOut) *errorOut = "Token refresh failed: " + errDesc;
+            return "";
+        }
+
+        std::string newAccessToken = json.GetString("access_token");
+        int expiresIn = json.GetInt("expires_in", 3600);
+
+        now = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_tokens.accessToken = newAccessToken;
+            m_tokens.expiresAt = now + expiresIn;
+        }
+
+        return newAccessToken;
     }
 
     if (errorOut && errorOut->empty())
@@ -131,44 +210,7 @@ std::string AuthManager::GetValidAccessToken(std::string* errorOut)
 
 bool AuthManager::RefreshAccessTokenInternal(std::string* errorOut)
 {
-    if (m_tokens.refreshToken.empty())
-    {
-        if (errorOut) *errorOut = "No refresh token available";
-        return false;
-    }
-
-    GDriveHttp::HttpClient http;
-    std::string postBody = "client_id=" + GDriveHttp::HttpClient::UrlEncode(m_clientId);
-    if (!m_clientSecret.empty())
-    {
-        postBody += "&client_secret=" + GDriveHttp::HttpClient::UrlEncode(m_clientSecret);
-    }
-    postBody += "&refresh_token=" + GDriveHttp::HttpClient::UrlEncode(m_tokens.refreshToken) +
-                "&grant_type=refresh_token";
-
-    auto resp = http.Post(kTokenEndpoint, postBody, "application/x-www-form-urlencoded");
-    if (!resp.success)
-    {
-        if (errorOut) *errorOut = "Token refresh HTTP request failed: " + resp.errorMessage;
-        return false;
-    }
-
-    auto json = GDriveJson::Value::Parse(resp.body);
-    if (!json.IsObject() || !json.Has("access_token"))
-    {
-        std::string errDesc = json.GetString("error_description", json.GetString("error", "Unknown token error"));
-        if (errorOut) *errorOut = "Token refresh failed: " + errDesc;
-        return false;
-    }
-
-    m_tokens.accessToken = json.GetString("access_token");
-    int expiresIn = json.GetInt("expires_in", 3600);
-
-    auto now = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    m_tokens.expiresAt = now + expiresIn;
-
-    return true;
+    return !GetValidAccessToken(errorOut).empty();
 }
 
 std::string AuthManager::Base64UrlEncode(const unsigned char* data, size_t length)
@@ -579,17 +621,19 @@ bool AuthManager::SaveTokens()
         return false;
 
     // Encrypt refresh token with Windows DPAPI
-    DATA_BLOB inBlob{};
-    inBlob.pbData = (BYTE*)m_tokens.refreshToken.data();
-    inBlob.cbData = (DWORD)m_tokens.refreshToken.length();
-
-    DATA_BLOB outBlob{};
-    if (!CryptProtectData(&inBlob, L"Google Drive Refresh Token", NULL, NULL, NULL, 0, &outBlob))
+    std::vector<BYTE> encRefresh;
+    if (!DpapiEncrypt(m_tokens.refreshToken, L"Google Drive Refresh Token", encRefresh))
     {
         return false;
     }
 
-    // 1. Save main plugin config (ClientId, ClientSecret, ActiveAccount)
+    std::vector<BYTE> encSecret;
+    if (!m_clientSecret.empty())
+    {
+        DpapiEncrypt(m_clientSecret, L"Google Drive Client Secret", encSecret);
+    }
+
+    // 1. Save main plugin config (ClientId, EncryptedClientSecret, ActiveAccount)
     HKEY hKeyMain = NULL;
     DWORD disposition = 0;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, NULL, 0, KEY_WRITE, NULL, &hKeyMain, &disposition) == ERROR_SUCCESS)
@@ -597,10 +641,10 @@ bool AuthManager::SaveTokens()
         std::wstring wClientId = GDriveHttp::HttpClient::Utf8ToWide(m_clientId);
         RegSetValueExW(hKeyMain, kRegValClientId, 0, REG_SZ, (const BYTE*)wClientId.c_str(), (DWORD)(wClientId.length() + 1) * sizeof(wchar_t));
 
-        if (!m_clientSecret.empty())
+        if (!encSecret.empty())
         {
-            std::wstring wSecret = GDriveHttp::HttpClient::Utf8ToWide(m_clientSecret);
-            RegSetValueExW(hKeyMain, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSecret.c_str(), (DWORD)(wSecret.length() + 1) * sizeof(wchar_t));
+            RegSetValueExW(hKeyMain, kRegValEncryptedClientSecret, 0, REG_BINARY, encSecret.data(), (DWORD)encSecret.size());
+            RegDeleteValueW(hKeyMain, kRegValClientSecret); // Remove legacy plaintext if present
         }
 
         if (!m_tokens.accountEmail.empty())
@@ -620,7 +664,7 @@ bool AuthManager::SaveTokens()
         HKEY hKeyAcc = NULL;
         if (RegCreateKeyExW(HKEY_CURRENT_USER, accSubKey.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hKeyAcc, &disposition) == ERROR_SUCCESS)
         {
-            RegSetValueExW(hKeyAcc, kRegValRefreshToken, 0, REG_BINARY, outBlob.pbData, outBlob.cbData);
+            RegSetValueExW(hKeyAcc, kRegValRefreshToken, 0, REG_BINARY, encRefresh.data(), (DWORD)encRefresh.size());
 
             std::wstring wEmail = GDriveHttp::HttpClient::Utf8ToWide(m_tokens.accountEmail);
             RegSetValueExW(hKeyAcc, kRegValAccountEmail, 0, REG_SZ, (const BYTE*)wEmail.c_str(), (DWORD)(wEmail.length() + 1) * sizeof(wchar_t));
@@ -637,10 +681,10 @@ bool AuthManager::SaveTokens()
                 RegSetValueExW(hKeyAcc, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
             }
 
-            if (!m_clientSecret.empty())
+            if (!encSecret.empty())
             {
-                std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(m_clientSecret);
-                RegSetValueExW(hKeyAcc, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+                RegSetValueExW(hKeyAcc, kRegValEncryptedClientSecret, 0, REG_BINARY, encSecret.data(), (DWORD)encSecret.size());
+                RegDeleteValueW(hKeyAcc, kRegValClientSecret);
             }
 
             RegCloseKey(hKeyAcc);
@@ -649,7 +693,6 @@ bool AuthManager::SaveTokens()
         GDriveCache::CacheManager::GetInstance().SetCurrentAccount(m_tokens.accountEmail);
     }
 
-    LocalFree(outBlob.pbData);
     return true;
 }
 
@@ -671,14 +714,30 @@ bool AuthManager::LoadSavedTokens()
             m_clientId = loadedId;
     }
 
-    // Read client secret if saved
-    wchar_t szClientSecret[256] = {0};
-    DWORD cbClientSecret = sizeof(szClientSecret);
-    if (RegQueryValueExW(hKey, kRegValClientSecret, NULL, NULL, (LPBYTE)szClientSecret, &cbClientSecret) == ERROR_SUCCESS)
+    // Read client secret (try encrypted first, then fallback to plaintext)
+    DWORD cbSecret = 0;
+    if (RegQueryValueExW(hKey, kRegValEncryptedClientSecret, NULL, NULL, NULL, &cbSecret) == ERROR_SUCCESS && cbSecret > 0)
     {
-        std::string loadedSecret = GDriveHttp::HttpClient::WideToUtf8(szClientSecret);
-        if (!loadedSecret.empty())
-            m_clientSecret = loadedSecret;
+        std::vector<BYTE> encSecret(cbSecret);
+        if (RegQueryValueExW(hKey, kRegValEncryptedClientSecret, NULL, NULL, encSecret.data(), &cbSecret) == ERROR_SUCCESS)
+        {
+            std::string decSecret;
+            if (DpapiDecrypt(encSecret.data(), cbSecret, decSecret) && !decSecret.empty())
+            {
+                m_clientSecret = decSecret;
+            }
+        }
+    }
+    else
+    {
+        wchar_t szClientSecret[256] = {0};
+        DWORD cbClientSecret = sizeof(szClientSecret);
+        if (RegQueryValueExW(hKey, kRegValClientSecret, NULL, NULL, (LPBYTE)szClientSecret, &cbClientSecret) == ERROR_SUCCESS)
+        {
+            std::string loadedSecret = GDriveHttp::HttpClient::WideToUtf8(szClientSecret);
+            if (!loadedSecret.empty())
+                m_clientSecret = loadedSecret;
+        }
     }
 
     // Check ActiveAccount
@@ -745,18 +804,13 @@ bool AuthManager::LoadSavedTokens()
     }
     RegCloseKey(hKeyAcc);
 
-    DATA_BLOB inBlob{};
-    inBlob.pbData = encData.data();
-    inBlob.cbData = cbData;
-
-    DATA_BLOB outBlob{};
-    if (!CryptUnprotectData(&inBlob, NULL, NULL, NULL, NULL, 0, &outBlob))
+    std::string decRefreshToken;
+    if (!DpapiDecrypt(encData.data(), cbData, decRefreshToken))
     {
         return false;
     }
 
-    m_tokens.refreshToken = std::string((char*)outBlob.pbData, outBlob.cbData);
-    LocalFree(outBlob.pbData);
+    m_tokens.refreshToken = decRefreshToken;
 
     if (!m_tokens.accountEmail.empty())
     {
@@ -806,10 +860,22 @@ std::vector<AccountProfile> AuthManager::GetAccounts()
                     profile.clientId = GDriveHttp::HttpClient::WideToUtf8(szVal);
                 }
 
-                cbVal = sizeof(szVal);
-                if (RegQueryValueExW(hKeyItem, kRegValClientSecret, NULL, NULL, (LPBYTE)szVal, &cbVal) == ERROR_SUCCESS)
+                DWORD cbSec = 0;
+                if (RegQueryValueExW(hKeyItem, kRegValEncryptedClientSecret, NULL, NULL, NULL, &cbSec) == ERROR_SUCCESS && cbSec > 0)
                 {
-                    profile.clientSecret = GDriveHttp::HttpClient::WideToUtf8(szVal);
+                    std::vector<BYTE> encSec(cbSec);
+                    if (RegQueryValueExW(hKeyItem, kRegValEncryptedClientSecret, NULL, NULL, encSec.data(), &cbSec) == ERROR_SUCCESS)
+                    {
+                        DpapiDecrypt(encSec.data(), cbSec, profile.clientSecret);
+                    }
+                }
+                else
+                {
+                    cbVal = sizeof(szVal);
+                    if (RegQueryValueExW(hKeyItem, kRegValClientSecret, NULL, NULL, (LPBYTE)szVal, &cbVal) == ERROR_SUCCESS)
+                    {
+                        profile.clientSecret = GDriveHttp::HttpClient::WideToUtf8(szVal);
+                    }
                 }
 
                 if (!profile.email.empty())
@@ -884,10 +950,22 @@ bool AuthManager::SwitchAccount(const std::string& email)
         newClientId = GDriveHttp::HttpClient::WideToUtf8(szBuf);
     }
 
-    cbBuf = sizeof(szBuf);
-    if (RegQueryValueExW(hKeyAcc, kRegValClientSecret, NULL, NULL, (LPBYTE)szBuf, &cbBuf) == ERROR_SUCCESS)
+    DWORD cbSec = 0;
+    if (RegQueryValueExW(hKeyAcc, kRegValEncryptedClientSecret, NULL, NULL, NULL, &cbSec) == ERROR_SUCCESS && cbSec > 0)
     {
-        newClientSecret = GDriveHttp::HttpClient::WideToUtf8(szBuf);
+        std::vector<BYTE> encSec(cbSec);
+        if (RegQueryValueExW(hKeyAcc, kRegValEncryptedClientSecret, NULL, NULL, encSec.data(), &cbSec) == ERROR_SUCCESS)
+        {
+            DpapiDecrypt(encSec.data(), cbSec, newClientSecret);
+        }
+    }
+    else
+    {
+        cbBuf = sizeof(szBuf);
+        if (RegQueryValueExW(hKeyAcc, kRegValClientSecret, NULL, NULL, (LPBYTE)szBuf, &cbBuf) == ERROR_SUCCESS)
+        {
+            newClientSecret = GDriveHttp::HttpClient::WideToUtf8(szBuf);
+        }
     }
 
     DWORD cbData = 0;
@@ -896,14 +974,7 @@ bool AuthManager::SwitchAccount(const std::string& email)
         std::vector<BYTE> encData(cbData);
         if (RegQueryValueExW(hKeyAcc, kRegValRefreshToken, NULL, NULL, encData.data(), &cbData) == ERROR_SUCCESS)
         {
-            DATA_BLOB inBlob{}, outBlob{};
-            inBlob.pbData = encData.data();
-            inBlob.cbData = cbData;
-            if (CryptUnprotectData(&inBlob, NULL, NULL, NULL, NULL, 0, &outBlob))
-            {
-                newRefreshToken = std::string((char*)outBlob.pbData, outBlob.cbData);
-                LocalFree(outBlob.pbData);
-            }
+            DpapiDecrypt(encData.data(), cbData, newRefreshToken);
         }
     }
     RegCloseKey(hKeyAcc);
@@ -949,6 +1020,12 @@ bool AuthManager::AddAccount(HWND hParent, std::string* errorOut)
 
 bool AuthManager::SaveAccountKeys(const std::string& email, const std::string& clientId, const std::string& clientSecret)
 {
+    std::vector<BYTE> encSec;
+    if (!clientSecret.empty())
+    {
+        DpapiEncrypt(clientSecret, L"Google Drive Client Secret", encSec);
+    }
+
     if (email.empty())
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -960,8 +1037,17 @@ bool AuthManager::SaveAccountKeys(const std::string& email, const std::string& c
         {
             std::wstring wCid = GDriveHttp::HttpClient::Utf8ToWide(clientId);
             RegSetValueExW(hKeyMain, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
-            std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(clientSecret);
-            RegSetValueExW(hKeyMain, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+
+            if (!encSec.empty())
+            {
+                RegSetValueExW(hKeyMain, kRegValEncryptedClientSecret, 0, REG_BINARY, encSec.data(), (DWORD)encSec.size());
+                RegDeleteValueW(hKeyMain, kRegValClientSecret);
+            }
+            else
+            {
+                RegDeleteValueW(hKeyMain, kRegValEncryptedClientSecret);
+                RegDeleteValueW(hKeyMain, kRegValClientSecret);
+            }
             RegCloseKey(hKeyMain);
         }
         return true;
@@ -975,8 +1061,17 @@ bool AuthManager::SaveAccountKeys(const std::string& email, const std::string& c
     {
         std::wstring wCid = GDriveHttp::HttpClient::Utf8ToWide(clientId);
         RegSetValueExW(hKeyAcc, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
-        std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(clientSecret);
-        RegSetValueExW(hKeyAcc, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+
+        if (!encSec.empty())
+        {
+            RegSetValueExW(hKeyAcc, kRegValEncryptedClientSecret, 0, REG_BINARY, encSec.data(), (DWORD)encSec.size());
+            RegDeleteValueW(hKeyAcc, kRegValClientSecret);
+        }
+        else
+        {
+            RegDeleteValueW(hKeyAcc, kRegValEncryptedClientSecret);
+            RegDeleteValueW(hKeyAcc, kRegValClientSecret);
+        }
         RegCloseKey(hKeyAcc);
     }
 
@@ -994,8 +1089,17 @@ bool AuthManager::SaveAccountKeys(const std::string& email, const std::string& c
     {
         std::wstring wCid = GDriveHttp::HttpClient::Utf8ToWide(clientId);
         RegSetValueExW(hKeyMain, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
-        std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(clientSecret);
-        RegSetValueExW(hKeyMain, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+
+        if (!encSec.empty())
+        {
+            RegSetValueExW(hKeyMain, kRegValEncryptedClientSecret, 0, REG_BINARY, encSec.data(), (DWORD)encSec.size());
+            RegDeleteValueW(hKeyMain, kRegValClientSecret);
+        }
+        else
+        {
+            RegDeleteValueW(hKeyMain, kRegValEncryptedClientSecret);
+            RegDeleteValueW(hKeyMain, kRegValClientSecret);
+        }
         RegCloseKey(hKeyMain);
     }
 
