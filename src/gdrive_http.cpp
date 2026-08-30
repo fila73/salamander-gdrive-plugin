@@ -142,8 +142,8 @@ HttpResponse HttpClient::ExecuteRequest(const std::wstring& verb,
 
     URL_COMPONENTS urlComp{};
     urlComp.dwStructSize = sizeof(urlComp);
-    wchar_t hostName[256] = {0};
-    wchar_t urlPath[2048] = {0};
+    wchar_t hostName[512] = {0};
+    wchar_t urlPath[4096] = {0};
     urlComp.lpszHostName = hostName;
     urlComp.dwHostNameLength = sizeof(hostName) / sizeof(hostName[0]);
     urlComp.lpszUrlPath = urlPath;
@@ -270,8 +270,8 @@ bool HttpClient::DownloadToFile(const std::string& url,
 
     URL_COMPONENTS urlComp{};
     urlComp.dwStructSize = sizeof(urlComp);
-    wchar_t hostName[256] = {0};
-    wchar_t urlPath[2048] = {0};
+    wchar_t hostName[512] = {0};
+    wchar_t urlPath[4096] = {0};
     urlComp.lpszHostName = hostName;
     urlComp.dwHostNameLength = sizeof(hostName) / sizeof(hostName[0]);
     urlComp.lpszUrlPath = urlPath;
@@ -336,7 +336,9 @@ bool HttpClient::DownloadToFile(const std::string& url,
     if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_HEADER_NAME_BY_INDEX,
                             contentLenStr, &contentLenSize, WINHTTP_NO_HEADER_INDEX))
     {
-        try { totalBytes = std::stoll(contentLenStr); } catch (...) {}
+        wchar_t* endPtr = nullptr;
+        totalBytes = std::wcstoll(contentLenStr, &endPtr, 10);
+        if (endPtr == contentLenStr) totalBytes = -1;
     }
 
     // Open local destination file
@@ -441,8 +443,8 @@ bool HttpClient::UploadMultipartFile(const std::string& url,
 
     URL_COMPONENTS urlComp{};
     urlComp.dwStructSize = sizeof(urlComp);
-    wchar_t hostName[256] = {0};
-    wchar_t urlPath[2048] = {0};
+    wchar_t hostName[512] = {0};
+    wchar_t urlPath[4096] = {0};
     urlComp.lpszHostName = hostName;
     urlComp.dwHostNameLength = sizeof(hostName) / sizeof(hostName[0]);
     urlComp.lpszUrlPath = urlPath;

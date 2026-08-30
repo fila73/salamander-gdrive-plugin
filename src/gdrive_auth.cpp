@@ -96,8 +96,6 @@ void AuthManager::Initialize(const std::string& customClientId, const std::strin
         m_clientSecret = customClientSecret;
     else
         m_clientSecret = kDefaultClientSecret;
-
-    LoadSavedTokens();
 }
 
 void AuthManager::SetClientId(const std::string& id)
