@@ -754,32 +754,91 @@ void CGDriveFindDialog::StartSearch()
 {
     if (m_isSearching) return;
 
-    // Save histories
+    // 1. Read all UI controls safely on the UI thread
+    m_currentSearchOpts = GDriveApi::SearchOptions();
+
     char namedBuf[256] = {0};
     GetWindowTextA(m_hNamed, namedBuf, sizeof(namedBuf));
-    if (namedBuf[0] != '\0')
-    {
-        PushToHistory(m_historyNamed, namedBuf);
-        SaveHistoryList(L"Named", m_historyNamed);
-    }
+    m_currentSearchOpts.queryNamed = namedBuf;
 
+    m_currentSearchOpts.searchSubdirs = (SendMessage(m_hSubdir, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    m_currentSearchOpts.searchContent = (SendMessage(m_hGrep, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+    char containingBuf[256] = {0};
+    GetWindowTextA(m_hContaining, containingBuf, sizeof(containingBuf));
+    m_currentSearchOpts.queryContent = containingBuf;
+
+    m_currentSearchOpts.caseSensitive = (SendMessage(m_hCase, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    m_currentSearchOpts.typeFilter = m_typeFilter;
+    m_currentSearchOpts.starredOnly = m_starredOnly;
+    m_currentSearchOpts.trashedOnly = m_trashedOnly;
+
+    // 2. Resolve LookIn folder scope on UI thread
     char lookInBuf[512] = {0};
     GetWindowTextA(m_hLookIn, lookInBuf, sizeof(lookInBuf));
-    if (lookInBuf[0] != '\0')
+    std::string lookInStr = lookInBuf;
+
+    std::string allDrive = LoadStr(IDS_FIND_LOOKIN_ALL_DRIVE);
+    if (lookInStr == allDrive || lookInStr == "gdrive:\\" || lookInStr == "/")
     {
-        PushToHistory(m_historyLookIn, lookInBuf);
-        SaveHistoryList(L"LookIn", m_historyLookIn);
+        // Entire Drive
+        m_currentSearchOpts.folderScopeId.clear();
+        m_currentSearchOpts.targetFolderPath.clear();
+    }
+    else if (_stricmp(lookInStr.c_str(), "gdrive:\\Shared with me") == 0 || _stricmp(lookInStr.c_str(), "\\Shared with me") == 0)
+    {
+        m_currentSearchOpts.sharedWithMeOnly = true;
+        m_currentSearchOpts.targetFolderPath = "\\Shared with me";
+    }
+    else if (_stricmp(lookInStr.c_str(), "gdrive:\\Starred") == 0 || _stricmp(lookInStr.c_str(), "\\Starred") == 0)
+    {
+        m_currentSearchOpts.starredOnly = true;
+        m_currentSearchOpts.targetFolderPath = "\\Starred";
+    }
+    else if (_stricmp(lookInStr.c_str(), "gdrive:\\Trash") == 0 || _stricmp(lookInStr.c_str(), "\\Trash") == 0)
+    {
+        m_currentSearchOpts.trashedOnly = true;
+        m_currentSearchOpts.targetFolderPath = "\\Trash";
+    }
+    else
+    {
+        std::string path = lookInStr;
+        if (path.rfind("gdrive:", 0) == 0)
+        {
+            path = path.substr(7);
+        }
+        std::replace(path.begin(), path.end(), '\\', '/');
+        if (path.empty() || path[0] != '/') path = "/" + path;
+
+        std::string winPath = path;
+        std::replace(winPath.begin(), winPath.end(), '/', '\\');
+        m_currentSearchOpts.targetFolderPath = winPath;
+
+        std::string folderId, driveId;
+        bool isShared = false;
+        if (m_pFS && m_pFS->ResolveFolderIdForPath(path, folderId, driveId, isShared))
+        {
+            m_currentSearchOpts.folderScopeId = folderId;
+            m_currentSearchOpts.driveId = driveId;
+            m_currentSearchOpts.isSharedDrive = isShared;
+        }
     }
 
-    if (SendMessage(m_hGrep, BM_GETCHECK, 0, 0) == BST_CHECKED)
+    // Save histories
+    if (!m_currentSearchOpts.queryNamed.empty())
     {
-        char containingBuf[256] = {0};
-        GetWindowTextA(m_hContaining, containingBuf, sizeof(containingBuf));
-        if (containingBuf[0] != '\0')
-        {
-            PushToHistory(m_historyContaining, containingBuf);
-            SaveHistoryList(L"Containing", m_historyContaining);
-        }
+        PushToHistory(m_historyNamed, m_currentSearchOpts.queryNamed);
+        SaveHistoryList(L"Named", m_historyNamed);
+    }
+    if (!lookInStr.empty())
+    {
+        PushToHistory(m_historyLookIn, lookInStr);
+        SaveHistoryList(L"LookIn", m_historyLookIn);
+    }
+    if (m_currentSearchOpts.searchContent && !m_currentSearchOpts.queryContent.empty())
+    {
+        PushToHistory(m_historyContaining, m_currentSearchOpts.queryContent);
+        SaveHistoryList(L"Containing", m_historyContaining);
     }
 
     m_isSearching = true;
@@ -888,68 +947,31 @@ static std::string ResolveParentPath(const std::string& folderId,
 
 void CGDriveFindDialog::SearchWorker()
 {
-    GDriveApi::SearchOptions opts;
-
-    char namedBuf[256] = {0};
-    GetWindowTextA(m_hNamed, namedBuf, sizeof(namedBuf));
-    opts.queryNamed = namedBuf;
-
-    opts.searchSubdirs = (SendMessage(m_hSubdir, BM_GETCHECK, 0, 0) == BST_CHECKED);
-    opts.searchContent = (SendMessage(m_hGrep, BM_GETCHECK, 0, 0) == BST_CHECKED);
-
-    char containingBuf[256] = {0};
-    GetWindowTextA(m_hContaining, containingBuf, sizeof(containingBuf));
-    opts.queryContent = containingBuf;
-
-    opts.caseSensitive = (SendMessage(m_hCase, BM_GETCHECK, 0, 0) == BST_CHECKED);
-    opts.typeFilter = m_typeFilter;
-    opts.starredOnly = m_starredOnly;
-    opts.trashedOnly = m_trashedOnly;
-
-    // Resolve folder scope
-    int lookInSel = (int)SendMessage(m_hLookIn, CB_GETCURSEL, 0, 0);
-    if (lookInSel > 0)
-    {
-        char lookInText[512] = {0};
-        GetWindowTextA(m_hLookIn, lookInText, sizeof(lookInText));
-        std::string path = lookInText;
-        if (path.rfind("gdrive:", 0) == 0)
-        {
-            path = path.substr(7);
-            std::replace(path.begin(), path.end(), '\\', '/');
-        }
-
-        std::string folderId, driveId;
-        bool isShared = false;
-        if (m_pFS && m_pFS->ResolveFolderIdForPath(path, folderId, driveId, isShared))
-        {
-            opts.folderScopeId = folderId;
-            opts.driveId = driveId;
-            opts.isSharedDrive = isShared;
-        }
-    }
-
-    std::vector<GDriveApi::GDriveItem> results;
+    std::vector<GDriveApi::GDriveItem> rawResults;
     std::string err;
-    volatile bool cancelBool = false;
 
-    // Search in thread
-    bool ok = GDriveApi::ApiClient::GetInstance().SearchFiles(opts, results, &cancelBool, &err);
+    // Search in thread with atomic cancel flag
+    bool ok = GDriveApi::ApiClient::GetInstance().SearchFiles(m_currentSearchOpts, rawResults, &m_cancelRequested, &err);
+
+    if (m_cancelRequested)
+    {
+        return;
+    }
 
     // Resolve parent folder paths for all items
     std::map<std::string, std::string> folderPathMap;
     folderPathMap[""] = "\\My Drive";
     folderPathMap["root"] = "\\My Drive";
 
-    if (!m_initialPath.empty() && !opts.folderScopeId.empty())
+    if (!m_currentSearchOpts.targetFolderPath.empty() && !m_currentSearchOpts.folderScopeId.empty())
     {
-        std::string winInitial = m_initialPath;
-        std::replace(winInitial.begin(), winInitial.end(), '/', '\\');
-        if (winInitial.empty() || winInitial[0] != '\\') winInitial = "\\" + winInitial;
-        folderPathMap[opts.folderScopeId] = winInitial;
+        folderPathMap[m_currentSearchOpts.folderScopeId] = m_currentSearchOpts.targetFolderPath;
     }
 
-    for (auto& item : results)
+    std::vector<GDriveApi::GDriveItem> filteredResults;
+    filteredResults.reserve(rawResults.size());
+
+    for (auto& item : rawResults)
     {
         if (m_cancelRequested) break;
 
@@ -961,14 +983,38 @@ void CGDriveFindDialog::SearchWorker()
         {
             item.parentPath = ResolveParentPath(item.parentId, folderPathMap, m_cancelRequested);
         }
+
+        // Subtree path filtering: if a target folder is specified (e.g. \My Drive\Knihy) and searchSubdirs is true
+        if (!m_currentSearchOpts.targetFolderPath.empty() &&
+            m_currentSearchOpts.targetFolderPath != "\\" &&
+            m_currentSearchOpts.targetFolderPath != "\\My Drive" &&
+            m_currentSearchOpts.targetFolderPath != "\\Shared with me" &&
+            m_currentSearchOpts.targetFolderPath != "\\Starred" &&
+            m_currentSearchOpts.targetFolderPath != "\\Trash" &&
+            m_currentSearchOpts.searchSubdirs)
+        {
+            const std::string& tgt = m_currentSearchOpts.targetFolderPath;
+            if (_stricmp(item.parentPath.c_str(), tgt.c_str()) == 0 ||
+                (item.parentPath.length() > tgt.length() &&
+                 item.parentPath[tgt.length()] == '\\' &&
+                 _strnicmp(item.parentPath.c_str(), tgt.c_str(), tgt.length()) == 0))
+            {
+                filteredResults.push_back(item);
+            }
+        }
+        else
+        {
+            filteredResults.push_back(item);
+        }
     }
 
+    if (!m_cancelRequested)
     {
         std::lock_guard<std::mutex> lock(m_resultsMutex);
-        m_results = results;
+        m_results = filteredResults;
     }
 
-    if (m_hDlg && IsWindow(m_hDlg))
+    if (!m_cancelRequested && m_hDlg && IsWindow(m_hDlg))
     {
         PostMessage(m_hDlg, WM_USER_SEARCH_FINISHED, 0, 0);
     }

@@ -259,7 +259,7 @@ static std::string EscapeDriveQueryString(const std::string& str)
 
 bool ApiClient::SearchFiles(const SearchOptions& opts,
                            std::vector<GDriveItem>& resultsOut,
-                           volatile bool* cancelFlag,
+                           const std::atomic<bool>* cancelFlag,
                            std::string* errorOut)
 {
     std::string token = GetToken(errorOut);
@@ -282,6 +282,11 @@ bool ApiClient::SearchFiles(const SearchOptions& opts,
     if (opts.starredOnly)
     {
         queryParts.push_back("starred = true");
+    }
+
+    if (opts.sharedWithMeOnly)
+    {
+        queryParts.push_back("sharedWithMe = true");
     }
 
     // Name query
@@ -349,7 +354,7 @@ bool ApiClient::SearchFiles(const SearchOptions& opts,
 
     while (true)
     {
-        if (cancelFlag && *cancelFlag)
+        if (cancelFlag && cancelFlag->load())
         {
             break;
         }
@@ -360,6 +365,11 @@ bool ApiClient::SearchFiles(const SearchOptions& opts,
                           "&pageSize=100" +
                           "&supportsAllDrives=true" +
                           "&includeItemsFromAllDrives=true";
+
+        if (!pageToken.empty())
+        {
+            url += "&pageToken=" + GDriveHttp::HttpClient::UrlEncode(pageToken);
+        }
 
         if (opts.isSharedDrive && !opts.driveId.empty())
         {
@@ -379,7 +389,7 @@ bool ApiClient::SearchFiles(const SearchOptions& opts,
             const auto& filesArr = json.GetArray("files");
             for (size_t i = 0; i < filesArr.Size(); ++i)
             {
-                if (cancelFlag && *cancelFlag) break;
+                if (cancelFlag && cancelFlag->load()) break;
                 GDriveItem item;
                 ParseItemFromJson(filesArr[i], item, opts.isSharedDrive, opts.driveId);
                 resultsOut.push_back(item);
@@ -387,7 +397,7 @@ bool ApiClient::SearchFiles(const SearchOptions& opts,
         }
 
         pageToken = json.GetString("nextPageToken");
-        if (pageToken.empty() || (cancelFlag && *cancelFlag))
+        if (pageToken.empty() || (cancelFlag && cancelFlag->load()))
             break;
     }
 

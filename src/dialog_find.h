@@ -81,6 +81,7 @@ private:
     std::atomic<bool> m_isSearching{false};
     std::atomic<bool> m_cancelRequested{false};
     uint64_t m_searchStartTick = 0;
+    GDriveApi::SearchOptions m_currentSearchOpts;
 
     int m_sortColumn = 0;
     bool m_sortAscending = true;

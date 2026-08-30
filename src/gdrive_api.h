@@ -51,7 +51,9 @@ struct SearchOptions
     std::string folderScopeId;  // Scope folder ID (empty = entire drive)
     std::string driveId;        // Shared drive ID if searching within a specific shared drive
     bool isSharedDrive = false;
-    int typeFilter = 0;         // 0: All, 1: Docs/Sheets/Slides, 2: PDF, 3: Images, 4: Folders
+    bool sharedWithMeOnly = false;
+    std::string targetFolderPath; // Normalized target path e.g. "\My Drive\Knihy"
+    int typeFilter = 0;         // 0: All, 1: Docs, 2: Sheets, 3: Slides, 4: PDF, 5: Images, 6: Folders
     bool starredOnly = false;
     bool trashedOnly = false;
 };
@@ -79,7 +81,7 @@ public:
 
     bool SearchFiles(const SearchOptions& opts,
                      std::vector<GDriveItem>& resultsOut,
-                     volatile bool* cancelFlag = nullptr,
+                     const std::atomic<bool>* cancelFlag = nullptr,
                      std::string* errorOut = nullptr);
 
     bool GetAbout(AboutInfo& info, std::string* errorOut = nullptr);
