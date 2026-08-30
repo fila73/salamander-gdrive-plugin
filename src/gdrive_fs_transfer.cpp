@@ -33,6 +33,58 @@ static std::wstring MakeUniqueLocalPath(const std::wstring& targetDir, const std
     }
 }
 
+static void PrecalculateLocalItems(const std::wstring& localPath, bool isDir, int& totalCount, int64_t& totalBytes)
+{
+    if (!isDir)
+    {
+        totalCount++;
+        HANDLE hF = CreateFileW(localPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (hF != INVALID_HANDLE_VALUE)
+        {
+            LARGE_INTEGER li;
+            if (GetFileSizeEx(hF, &li))
+            {
+                totalBytes += li.QuadPart;
+            }
+            CloseHandle(hF);
+        }
+        return;
+    }
+
+    std::wstring searchPattern = localPath;
+    if (!searchPattern.empty() && searchPattern.back() != L'\\') searchPattern += L"\\";
+    searchPattern += L"*";
+
+    WIN32_FIND_DATAW fd;
+    HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &fd);
+    if (hFind != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+            if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
+                continue;
+
+            std::wstring subPath = localPath;
+            if (!subPath.empty() && subPath.back() != L'\\') subPath += L"\\";
+            subPath += fd.cFileName;
+
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                PrecalculateLocalItems(subPath, true, totalCount, totalBytes);
+            }
+            else
+            {
+                totalCount++;
+                LARGE_INTEGER li;
+                li.LowPart = fd.nFileSizeLow;
+                li.HighPart = fd.nFileSizeHigh;
+                totalBytes += li.QuadPart;
+            }
+        } while (FindNextFileW(hFind, &fd));
+        FindClose(hFind);
+    }
+}
+
 BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* fsName, HWND parent,
                                               const char* sourcePath, SalEnumSelection2 next,
                                               void* nextParam, int selectedFiles, int selectedDirs,
@@ -143,13 +195,38 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
     FILETIME lastWriteTime = {0, 0};
     int enumError = 0;
 
+    // Pass 1: Pre-calculate total files and total bytes from local filesystem
+    int totalItems = 0;
+    int64_t totalBatchBytes = 0;
+
+    while (next(parent, 0, &itemName, &isDir, &fileSize, &attr, &lastWriteTime, nextParam, &enumError) != NULL)
+    {
+        if (!itemName || !*itemName) continue;
+        if (strcmp(itemName, ".") == 0 || strcmp(itemName, "..") == 0)
+            continue;
+
+        std::wstring itemLocalPath = wSourcePath + GDriveHttp::HttpClient::AnsiToWide(itemName);
+        WIN32_FIND_DATAW fd;
+        HANDLE hFind = FindFirstFileW(itemLocalPath.c_str(), &fd);
+        if (hFind != INVALID_HANDLE_VALUE)
+        {
+            itemLocalPath = wSourcePath + fd.cFileName;
+            FindClose(hFind);
+        }
+
+        PrecalculateLocalItems(itemLocalPath, isDir != 0, totalItems, totalBatchBytes);
+    }
+
+    // Reset enumerator to beginning for pass 2
+    next(parent, -1, NULL, NULL, NULL, NULL, NULL, nextParam, NULL);
+
     BOOL overallSuccess = TRUE;
 
     CTransferProgressDialog progressDlg(parent, true, "", 0);
-    int totalItems = selectedFiles + selectedDirs;
-    progressDlg.SetTotalBatch(totalItems > 0 ? totalItems : 1, 0);
+    progressDlg.SetTotalBatch(totalItems > 0 ? totalItems : 1, totalBatchBytes);
     bool progressStarted = false;
 
+    // Pass 2: Perform the actual upload
     while (next(parent, 0, &itemName, &isDir, &fileSize, &attr, &lastWriteTime, nextParam, &enumError) != NULL)
     {
         if (!itemName || !*itemName) continue;
@@ -241,7 +318,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         if (cancelOrHandlePath) *cancelOrHandlePath = TRUE;
     }
 
-    return overallSuccess;
+    return TRUE;
 }
 
 bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent, CTransferProgressDialog* pProgressDlg)
@@ -596,29 +673,6 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
     HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &fd);
     if (hFind != INVALID_HANDLE_VALUE)
     {
-        if (pProgressDlg)
-        {
-            int localCount = 0;
-            int64_t localBytes = 0;
-            do
-            {
-                if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
-                    continue;
-                localCount++;
-                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-                {
-                    LARGE_INTEGER li;
-                    li.LowPart = fd.nFileSizeLow;
-                    li.HighPart = fd.nFileSizeHigh;
-                    localBytes += li.QuadPart;
-                }
-            } while (FindNextFileW(hFind, &fd));
-            FindClose(hFind);
-
-            pProgressDlg->AddBatchItems(localCount > 0 ? (localCount - 1) : 0, localBytes);
-            hFind = FindFirstFileW(searchPattern.c_str(), &fd);
-        }
-
         do
         {
             if (pProgressDlg && pProgressDlg->IsCancelled())
