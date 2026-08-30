@@ -1199,6 +1199,37 @@ void CGDriveFindDialog::ViewSelectedItem()
     const auto& item = m_results[sel];
     if (item.isFolder) return;
 
+    // If it's a native Google Doc without export MIME, open web view
+    if (item.isGoogleDoc && item.exportMimeType.empty())
+    {
+        if (!item.webViewLink.empty())
+        {
+            ShellExecuteA(NULL, "open", item.webViewLink.c_str(), NULL, NULL, SW_SHOWNORMAL);
+        }
+        return;
+    }
+
+    // Download to temp and launch Salamander Viewer
+    char tempPathBuf[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, tempPathBuf))
+    {
+        std::string targetDir = std::string(tempPathBuf) + "salamander_gdrive_view\\";
+        CreateDirectoryA(targetDir.c_str(), NULL);
+        std::string targetFile = targetDir + item.id + "_" + item.name;
+        if (item.isGoogleDoc && !item.exportExtension.empty())
+        {
+            targetFile += item.exportExtension;
+        }
+
+        std::wstring wTargetFile = GDriveHttp::HttpClient::AnsiToWide(targetFile);
+        std::string err;
+        if (GDriveApi::ApiClient::GetInstance().DownloadFile(item, wTargetFile, nullptr, nullptr, &err))
+        {
+            ShellExecuteA(NULL, "open", targetFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
+            return;
+        }
+    }
+
     if (!item.webViewLink.empty())
     {
         ShellExecuteA(NULL, "open", item.webViewLink.c_str(), NULL, NULL, SW_SHOWNORMAL);
