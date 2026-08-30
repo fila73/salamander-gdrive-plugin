@@ -38,6 +38,7 @@ private:
 
     void PopulateResults(const std::vector<GDriveApi::GDriveItem>& items);
     void UpdateControlsState();
+    void UpdateAdvancedText();
     void FocusSelectedItem();
     void ViewSelectedItem();
     void OpenWebSelectedItem();
@@ -70,6 +71,10 @@ private:
     HWND m_hBtnOpenWeb = NULL;
     HWND m_hBtnCopyLink = NULL;
 
+    std::vector<std::string> m_historyNamed;
+    std::vector<std::string> m_historyLookIn;
+    std::vector<std::string> m_historyContaining;
+
     std::vector<GDriveApi::GDriveItem> m_results;
     std::mutex m_resultsMutex;
     std::thread m_searchThread;
@@ -79,7 +84,9 @@ private:
 
     int m_sortColumn = 0;
     bool m_sortAscending = true;
-    int m_typeFilter = 0; // 0: All
+    int m_typeFilter = 0; // 0: All, 1: Docs, 2: Sheets, 3: Slides, 4: PDF, 5: Images, 6: Folders
+    bool m_starredOnly = false;
+    bool m_trashedOnly = false;
 
     POINT m_minSize = {500, 360};
     bool m_initialLayoutDone = false;

@@ -232,6 +232,118 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
     return FALSE;
 }
 
+static const wchar_t* kRegFindKey = L"Software\\Altap\\Salamander\\Plugins\\gdrive\\Find";
+
+static void LoadHistoryList(const wchar_t* subKeyName, std::vector<std::string>& listOut)
+{
+    listOut.clear();
+    std::wstring fullKey = std::wstring(kRegFindKey) + L"\\" + subKeyName;
+    HKEY hKey = NULL;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, fullKey.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS)
+    {
+        for (int i = 0; i < 20; ++i)
+        {
+            wchar_t valName[32];
+            swprintf(valName, 32, L"Item_%d", i);
+            char valData[512] = {0};
+            DWORD dwSize = sizeof(valData);
+            DWORD dwType = REG_SZ;
+            if (RegQueryValueExA(hKey, GDriveHttp::HttpClient::WideToUtf8(valName).c_str(), NULL, &dwType, (LPBYTE)valData, &dwSize) == ERROR_SUCCESS)
+            {
+                if (valData[0] != '\0')
+                {
+                    listOut.push_back(valData);
+                }
+            }
+        }
+        RegCloseKey(hKey);
+    }
+}
+
+static void SaveHistoryList(const wchar_t* subKeyName, const std::vector<std::string>& list)
+{
+    std::wstring fullKey = std::wstring(kRegFindKey) + L"\\" + subKeyName;
+    HKEY hKey = NULL;
+    DWORD disp = 0;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, fullKey.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hKey, &disp) == ERROR_SUCCESS)
+    {
+        for (int i = 0; i < 25; ++i)
+        {
+            wchar_t valName[32];
+            swprintf(valName, 32, L"Item_%d", i);
+            RegDeleteValueA(hKey, GDriveHttp::HttpClient::WideToUtf8(valName).c_str());
+        }
+
+        int count = std::min((int)list.size(), 20);
+        for (int i = 0; i < count; ++i)
+        {
+            wchar_t valName[32];
+            swprintf(valName, 32, L"Item_%d", i);
+            RegSetValueExA(hKey, GDriveHttp::HttpClient::WideToUtf8(valName).c_str(), 0, REG_SZ,
+                           (const BYTE*)list[i].c_str(), (DWORD)list[i].length() + 1);
+        }
+        RegCloseKey(hKey);
+    }
+}
+
+static void PushToHistory(std::vector<std::string>& list, const std::string& item)
+{
+    if (item.empty()) return;
+    for (auto it = list.begin(); it != list.end(); )
+    {
+        if (_stricmp(it->c_str(), item.c_str()) == 0)
+        {
+            it = list.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    list.insert(list.begin(), item);
+    if (list.size() > 20)
+    {
+        list.resize(20);
+    }
+}
+
+void CGDriveFindDialog::UpdateAdvancedText()
+{
+    std::string email = GDriveAuth::AuthManager::GetInstance().GetTokens().accountEmail;
+    std::vector<std::string> parts;
+
+    if (m_typeFilter == 1) parts.push_back("Docs");
+    else if (m_typeFilter == 2) parts.push_back("Sheets");
+    else if (m_typeFilter == 3) parts.push_back("Slides");
+    else if (m_typeFilter == 4) parts.push_back("PDF");
+    else if (m_typeFilter == 5) parts.push_back("Images");
+    else if (m_typeFilter == 6) parts.push_back("Folders");
+
+    if (m_starredOnly) parts.push_back("Starred");
+    if (m_trashedOnly) parts.push_back("Trash");
+
+    std::string desc;
+    if (parts.empty())
+    {
+        desc = "All item types";
+    }
+    else
+    {
+        for (size_t i = 0; i < parts.size(); ++i)
+        {
+            if (i > 0) desc += ", ";
+            desc += parts[i];
+        }
+    }
+
+    if (!email.empty())
+    {
+        desc += " (Account: " + email + ")";
+    }
+
+    SetWindowTextA(m_hAdvancedText, desc.c_str());
+}
+
 static RECT GetChildRect(HWND hDlg, HWND hCtrl)
 {
     RECT rc = {0, 0, 0, 0};
@@ -287,15 +399,37 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
     m_rcStatus = GetChildRect(hDlg, m_hStatus);
     m_initialLayoutDone = true;
 
-    // Initial values
-    SetWindowTextA(m_hNamed, "*.*");
-    SendMessage(m_hNamed, CB_ADDSTRING, 0, (LPARAM)"*.*");
-    SendMessage(m_hNamed, CB_SETCURSEL, 0, 0);
+    // Load histories
+    LoadHistoryList(L"Named", m_historyNamed);
+    LoadHistoryList(L"LookIn", m_historyLookIn);
+    LoadHistoryList(L"Containing", m_historyContaining);
 
-    // Look in
+    // Named combo setup
+    SendMessage(m_hNamed, CB_RESETCONTENT, 0, 0);
+    if (m_historyNamed.empty())
+    {
+        m_historyNamed.push_back("*.*");
+    }
+    for (const auto& s : m_historyNamed)
+    {
+        SendMessage(m_hNamed, CB_ADDSTRING, 0, (LPARAM)s.c_str());
+    }
+    SetWindowTextA(m_hNamed, m_historyNamed[0].c_str());
+    SendMessage(m_hNamed, CB_SETEDITSEL, 0, MAKELPARAM(0, -1));
+
+    // Look in combo setup
+    SendMessage(m_hLookIn, CB_RESETCONTENT, 0, 0);
     std::string entireDrive = LoadStr(IDS_FIND_LOOKIN_ALL_DRIVE);
     SendMessage(m_hLookIn, CB_ADDSTRING, 0, (LPARAM)entireDrive.c_str());
     SendMessage(m_hLookIn, CB_ADDSTRING, 0, (LPARAM)"gdrive:\\My Drive");
+    for (const auto& s : m_historyLookIn)
+    {
+        if (s != entireDrive && s != "gdrive:\\My Drive")
+        {
+            SendMessage(m_hLookIn, CB_ADDSTRING, 0, (LPARAM)s.c_str());
+        }
+    }
+
     if (!m_initialPath.empty() && m_initialPath != "/" && m_initialPath != "/My Drive")
     {
         std::string winPath = "gdrive:" + m_initialPath;
@@ -308,6 +442,17 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
         SendMessage(m_hLookIn, CB_SETCURSEL, 0, 0);
     }
 
+    // Containing combo setup
+    SendMessage(m_hContaining, CB_RESETCONTENT, 0, 0);
+    for (const auto& s : m_historyContaining)
+    {
+        SendMessage(m_hContaining, CB_ADDSTRING, 0, (LPARAM)s.c_str());
+    }
+    if (!m_historyContaining.empty())
+    {
+        SetWindowTextA(m_hContaining, m_historyContaining[0].c_str());
+    }
+
     SendMessage(m_hSubdir, BM_SETCHECK, BST_CHECKED, 0);
     SendMessage(m_hDocsOcr, BM_SETCHECK, BST_CHECKED, 0);
 
@@ -315,11 +460,7 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
     EnableWindow(m_hDocsOcr, FALSE);
     EnableWindow(m_hCase, FALSE);
 
-    std::string email = GDriveAuth::AuthManager::GetInstance().GetTokens().accountEmail;
-    char advBuf[256];
-    snprintf(advBuf, sizeof(advBuf), LoadStr(IDS_FIND_ADVANCED_ALL), email.empty() ? "Google Drive" : email.c_str());
-    SetWindowTextA(m_hAdvancedText, advBuf);
-
+    UpdateAdvancedText();
     SetWindowTextA(m_hStatus, LoadStr(IDS_FIND_READY));
 
     // Results ListView setup
@@ -394,6 +535,108 @@ void CGDriveFindDialog::OnCommand(HWND hDlg, int id, HWND hCtrl, UINT codeNotify
     case IDC_FIND_BTN_STOP:
         StopSearch();
         break;
+
+    case IDC_FIND_LOOKIN_BROWSE:
+    {
+        RECT r;
+        GetWindowRect(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), &r);
+
+        HMENU hMenu = CreatePopupMenu();
+        std::string allDrive = LoadStr(IDS_FIND_LOOKIN_ALL_DRIVE);
+        AppendMenuA(hMenu, MF_STRING, 1001, allDrive.c_str());
+        AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenuA(hMenu, MF_STRING, 1002, "gdrive:\\My Drive");
+        AppendMenuA(hMenu, MF_STRING, 1003, "gdrive:\\Shared with me");
+        AppendMenuA(hMenu, MF_STRING, 1004, "gdrive:\\Shared Drives");
+        AppendMenuA(hMenu, MF_STRING, 1005, "gdrive:\\Starred");
+        AppendMenuA(hMenu, MF_STRING, 1006, "gdrive:\\Trash");
+
+        if (!m_historyLookIn.empty())
+        {
+            AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+            for (size_t i = 0; i < std::min<size_t>(m_historyLookIn.size(), 8); ++i)
+            {
+                AppendMenuA(hMenu, MF_STRING, 1010 + (UINT)i, m_historyLookIn[i].c_str());
+            }
+        }
+
+        int cmd = TrackPopupMenu(hMenu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                 r.right, r.top, 0, hDlg, NULL);
+        DestroyMenu(hMenu);
+
+        std::string chosen;
+        if (cmd == 1001) chosen = allDrive;
+        else if (cmd == 1002) chosen = "gdrive:\\My Drive";
+        else if (cmd == 1003) chosen = "gdrive:\\Shared with me";
+        else if (cmd == 1004) chosen = "gdrive:\\Shared Drives";
+        else if (cmd == 1005) chosen = "gdrive:\\Starred";
+        else if (cmd == 1006) chosen = "gdrive:\\Trash";
+        else if (cmd >= 1010 && cmd < 1010 + (int)m_historyLookIn.size())
+        {
+            chosen = m_historyLookIn[cmd - 1010];
+        }
+
+        if (!chosen.empty())
+        {
+            SetWindowTextA(m_hLookIn, chosen.c_str());
+            SendMessage(m_hLookIn, CB_SETEDITSEL, 0, MAKELPARAM(0, -1));
+        }
+        break;
+    }
+
+    case IDC_FIND_ADVANCED:
+    {
+        RECT r;
+        GetWindowRect(GetDlgItem(hDlg, IDC_FIND_ADVANCED), &r);
+
+        HMENU hMenu = CreatePopupMenu();
+        HMENU hTypeSub = CreatePopupMenu();
+        AppendMenuA(hTypeSub, (m_typeFilter == 0 ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2000, "All Item Types");
+        AppendMenuA(hTypeSub, (m_typeFilter == 6 ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2006, "Only Folders");
+        AppendMenuA(hTypeSub, MF_SEPARATOR, 0, NULL);
+        AppendMenuA(hTypeSub, (m_typeFilter == 1 ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2001, "Google Docs");
+        AppendMenuA(hTypeSub, (m_typeFilter == 2 ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2002, "Google Sheets");
+        AppendMenuA(hTypeSub, (m_typeFilter == 3 ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2003, "Google Slides");
+        AppendMenuA(hTypeSub, (m_typeFilter == 4 ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2004, "PDF Documents");
+        AppendMenuA(hTypeSub, (m_typeFilter == 5 ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2005, "Images");
+
+        AppendMenuA(hMenu, MF_POPUP, (UINT_PTR)hTypeSub, "Filter by Item Type");
+        AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenuA(hMenu, (m_starredOnly ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2010, "Starred items only");
+        AppendMenuA(hMenu, (m_trashedOnly ? MF_CHECKED : MF_UNCHECKED) | MF_STRING, 2011, "Trash items only");
+        AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenuA(hMenu, MF_STRING, 2020, "Reset all filters");
+
+        int cmd = TrackPopupMenu(hMenu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                 r.left, r.bottom, 0, hDlg, NULL);
+        DestroyMenu(hMenu);
+
+        if (cmd >= 2000 && cmd <= 2006)
+        {
+            m_typeFilter = cmd - 2000;
+            UpdateAdvancedText();
+        }
+        else if (cmd == 2010)
+        {
+            m_starredOnly = !m_starredOnly;
+            if (m_starredOnly) m_trashedOnly = false;
+            UpdateAdvancedText();
+        }
+        else if (cmd == 2011)
+        {
+            m_trashedOnly = !m_trashedOnly;
+            if (m_trashedOnly) m_starredOnly = false;
+            UpdateAdvancedText();
+        }
+        else if (cmd == 2020)
+        {
+            m_typeFilter = 0;
+            m_starredOnly = false;
+            m_trashedOnly = false;
+            UpdateAdvancedText();
+        }
+        break;
+    }
 
     case IDC_FIND_GREP:
     {
@@ -510,6 +753,34 @@ void CGDriveFindDialog::OnDestroy(HWND hDlg)
 void CGDriveFindDialog::StartSearch()
 {
     if (m_isSearching) return;
+
+    // Save histories
+    char namedBuf[256] = {0};
+    GetWindowTextA(m_hNamed, namedBuf, sizeof(namedBuf));
+    if (namedBuf[0] != '\0')
+    {
+        PushToHistory(m_historyNamed, namedBuf);
+        SaveHistoryList(L"Named", m_historyNamed);
+    }
+
+    char lookInBuf[512] = {0};
+    GetWindowTextA(m_hLookIn, lookInBuf, sizeof(lookInBuf));
+    if (lookInBuf[0] != '\0')
+    {
+        PushToHistory(m_historyLookIn, lookInBuf);
+        SaveHistoryList(L"LookIn", m_historyLookIn);
+    }
+
+    if (SendMessage(m_hGrep, BM_GETCHECK, 0, 0) == BST_CHECKED)
+    {
+        char containingBuf[256] = {0};
+        GetWindowTextA(m_hContaining, containingBuf, sizeof(containingBuf));
+        if (containingBuf[0] != '\0')
+        {
+            PushToHistory(m_historyContaining, containingBuf);
+            SaveHistoryList(L"Containing", m_historyContaining);
+        }
+    }
 
     m_isSearching = true;
     m_cancelRequested = false;
@@ -632,6 +903,8 @@ void CGDriveFindDialog::SearchWorker()
 
     opts.caseSensitive = (SendMessage(m_hCase, BM_GETCHECK, 0, 0) == BST_CHECKED);
     opts.typeFilter = m_typeFilter;
+    opts.starredOnly = m_starredOnly;
+    opts.trashedOnly = m_trashedOnly;
 
     // Resolve folder scope
     int lookInSel = (int)SendMessage(m_hLookIn, CB_GETCURSEL, 0, 0);
