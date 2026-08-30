@@ -271,6 +271,31 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
 
 static const wchar_t* kRegFindKey = L"Software\\Altap\\Salamander\\Plugins\\gdrive\\Find";
 
+static DWORD LoadRegDword(const wchar_t* valName, DWORD defaultVal)
+{
+    HKEY hKey = NULL;
+    DWORD val = defaultVal;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kRegFindKey, 0, KEY_READ, &hKey) == ERROR_SUCCESS)
+    {
+        DWORD dwSize = sizeof(DWORD);
+        DWORD dwType = REG_DWORD;
+        RegQueryValueExW(hKey, valName, NULL, &dwType, (LPBYTE)&val, &dwSize);
+        RegCloseKey(hKey);
+    }
+    return val;
+}
+
+static void SaveRegDword(const wchar_t* valName, DWORD val)
+{
+    HKEY hKey = NULL;
+    DWORD disp = 0;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegFindKey, 0, NULL, 0, KEY_WRITE, NULL, &hKey, &disp) == ERROR_SUCCESS)
+    {
+        RegSetValueExW(hKey, valName, 0, REG_DWORD, (const BYTE*)&val, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
 static void LoadHistoryList(const wchar_t* subKeyName, std::vector<std::string>& listOut)
 {
     listOut.clear();
@@ -467,23 +492,34 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
         }
     }
 
+    DWORD defWholeDrive = 1;
+    if (!m_initialPath.empty() && m_initialPath != "/" && m_initialPath != "/My Drive")
+    {
+        defWholeDrive = 0;
+    }
+    DWORD regWholeDrive = LoadRegDword(L"WholeDrive", defWholeDrive);
+    DWORD regSearchContent = LoadRegDword(L"SearchContent", 0);
+    DWORD regCase = LoadRegDword(L"CaseSensitive", 0);
+    DWORD regDocsOcr = LoadRegDword(L"DocsOcr", 1);
+    m_typeFilter = (int)LoadRegDword(L"TypeFilter", 0);
+    m_starredOnly = (LoadRegDword(L"StarredOnly", 0) != 0);
+    m_trashedOnly = (LoadRegDword(L"TrashedOnly", 0) != 0);
+
     if (!m_initialPath.empty() && m_initialPath != "/" && m_initialPath != "/My Drive")
     {
         std::string winPath = "gdrive:" + m_initialPath;
         std::replace(winPath.begin(), winPath.end(), '/', '\\');
         int idx = (int)SendMessage(m_hLookIn, CB_ADDSTRING, 0, (LPARAM)winPath.c_str());
         SendMessage(m_hLookIn, CB_SETCURSEL, idx, 0);
-        SendMessage(m_hSubdir, BM_SETCHECK, BST_UNCHECKED, 0);
-        EnableWindow(m_hLookIn, TRUE);
-        EnableWindow(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), TRUE);
     }
     else
     {
         SendMessage(m_hLookIn, CB_SETCURSEL, 0, 0);
-        SendMessage(m_hSubdir, BM_SETCHECK, BST_CHECKED, 0);
-        EnableWindow(m_hLookIn, FALSE);
-        EnableWindow(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), FALSE);
     }
+
+    SendMessage(m_hSubdir, BM_SETCHECK, regWholeDrive ? BST_CHECKED : BST_UNCHECKED, 0);
+    EnableWindow(m_hLookIn, !regWholeDrive);
+    EnableWindow(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), !regWholeDrive);
 
     // Containing combo setup
     SendMessage(m_hContaining, CB_RESETCONTENT, 0, 0);
@@ -496,11 +532,13 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
         SetWindowTextA(m_hContaining, m_historyContaining[0].c_str());
     }
 
-    SendMessage(m_hDocsOcr, BM_SETCHECK, BST_CHECKED, 0);
+    SendMessage(m_hGrep, BM_SETCHECK, regSearchContent ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(m_hCase, BM_SETCHECK, regCase ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(m_hDocsOcr, BM_SETCHECK, regDocsOcr ? BST_CHECKED : BST_UNCHECKED, 0);
 
-    EnableWindow(m_hContaining, FALSE);
-    EnableWindow(m_hDocsOcr, FALSE);
-    EnableWindow(m_hCase, FALSE);
+    EnableWindow(m_hContaining, regSearchContent);
+    EnableWindow(m_hDocsOcr, regSearchContent);
+    EnableWindow(m_hCase, regSearchContent);
 
     UpdateAdvancedText();
     SetWindowTextA(m_hStatus, LoadStr(IDS_FIND_READY));
@@ -882,7 +920,15 @@ void CGDriveFindDialog::StartSearch()
         }
     }
 
-    // Save histories
+    // Save histories and settings
+    SaveRegDword(L"WholeDrive", searchWholeDrive ? 1 : 0);
+    SaveRegDword(L"SearchContent", m_currentSearchOpts.searchContent ? 1 : 0);
+    SaveRegDword(L"CaseSensitive", m_currentSearchOpts.caseSensitive ? 1 : 0);
+    SaveRegDword(L"DocsOcr", (SendMessage(m_hDocsOcr, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0);
+    SaveRegDword(L"TypeFilter", (DWORD)m_typeFilter);
+    SaveRegDword(L"StarredOnly", m_starredOnly ? 1 : 0);
+    SaveRegDword(L"TrashedOnly", m_trashedOnly ? 1 : 0);
+
     if (!m_currentSearchOpts.queryNamed.empty())
     {
         PushToHistory(m_historyNamed, m_currentSearchOpts.queryNamed);
@@ -1177,14 +1223,21 @@ void CGDriveFindDialog::FocusSelectedItem()
 
     const auto& item = m_results[sel];
 
+    std::string baseDispName = CPluginFS::GetBaseDisplayName(item);
+    std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(baseDispName);
+    for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
+
     std::string relPath = item.parentPath.empty() ? "\\My Drive" : item.parentPath;
     std::replace(relPath.begin(), relPath.end(), '/', '\\');
+    while (!relPath.empty() && relPath.size() > 1 && relPath[0] == '\\' && relPath[1] == '\\')
+    {
+        relPath.erase(0, 1);
+    }
     if (relPath.empty() || relPath[0] != '\\')
     {
         relPath = "\\" + relPath;
     }
 
-    std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
     InterfaceForMenuExt.PostFocusTarget(m_panel, relPath, ansiName);
 }
 

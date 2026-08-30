@@ -119,6 +119,9 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
     std::string newPath = userPart ? userPart : "";
     std::replace(newPath.begin(), newPath.end(), '\\', '/');
 
+    while (!newPath.empty() && newPath.size() > 1 && newPath[0] == '/' && newPath[1] == '/')
+        newPath.erase(0, 1);
+
     while (newPath.size() > 1 && newPath.back() == '/')
         newPath.pop_back();
 
@@ -340,6 +343,8 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
     std::lock_guard<std::mutex> lock(s_pathToIdMutex);
     std::string normPath = path;
     std::replace(normPath.begin(), normPath.end(), '\\', '/');
+    while (!normPath.empty() && normPath.size() > 1 && normPath[0] == '/' && normPath[1] == '/')
+        normPath.erase(0, 1);
     while (normPath.size() > 1 && normPath.back() == '/') normPath.pop_back();
     if (normPath.empty() || normPath == "/")
     {
