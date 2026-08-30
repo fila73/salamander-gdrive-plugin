@@ -57,11 +57,15 @@ void Log(const char* fmt, ...)
 
     OutputDebugStringA(finalLine);
 
-    FILE* f = _wfopen(logPath.c_str(), L"a, ccs=UTF-8");
-    if (f)
+    HANDLE hFile = CreateFileW(logPath.c_str(), FILE_APPEND_DATA,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE,
+                               NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile != INVALID_HANDLE_VALUE)
     {
-        fputs(finalLine, f);
-        fclose(f);
+        DWORD bytesWritten = 0;
+        DWORD len = (DWORD)strlen(finalLine);
+        WriteFile(hFile, finalLine, len, &bytesWritten, NULL);
+        CloseHandle(hFile);
     }
 }
 
