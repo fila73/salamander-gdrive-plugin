@@ -23,11 +23,18 @@ static void CleanupBrushes()
     if (g_theme.penGrid) { DeleteObject(g_theme.penGrid); g_theme.penGrid = NULL; }
 }
 
+static bool g_lastDarkModeState = false;
+
 void InitTheme()
 {
-    CleanupBrushes();
-
     bool dark = IsDarkMode();
+    if (g_themeInitialized && g_lastDarkModeState == dark)
+    {
+        return;
+    }
+
+    CleanupBrushes();
+    g_lastDarkModeState = dark;
 
     if (dark)
     {
@@ -83,22 +90,35 @@ void ReleaseTheme()
 
 bool IsDarkMode()
 {
+    if (SalamanderGeneral != NULL)
+    {
+        BOOL useDark = FALSE;
+        if (SalamanderGeneral->GetConfigParameter(SALCFG_USEWINDOWSDARKMODE, &useDark, sizeof(useDark), NULL))
+        {
+            PluginDarkMode_SetHostPolicyAvailable(TRUE, useDark);
+            return useDark != FALSE;
+        }
+        else
+        {
+            PluginDarkMode_SetHostPolicyAvailable(TRUE, FALSE);
+            return false;
+        }
+    }
     return PluginDarkMode_ShouldUseDark() != FALSE;
 }
 
 const ThemeColors& GetTheme()
 {
-    if (!g_themeInitialized)
-        InitTheme();
+    InitTheme();
     return g_theme;
 }
 
 void ApplyWindowTheme(HWND hwnd)
 {
     if (!hwnd) return;
+    PluginDarkMode_ApplyTitleBar(hwnd);
     if (IsDarkMode())
     {
-        PluginDarkMode_ApplyTitleBar(hwnd);
         ApplyDialogControlsTheme(hwnd);
     }
 }
