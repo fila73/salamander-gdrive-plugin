@@ -103,10 +103,12 @@ char* LoadStr(int resID)
 {
     if (SalamanderGeneral != NULL && HLanguage != NULL)
         return SalamanderGeneral->LoadStr(HLanguage, resID);
-    static char buf[1024];
-    buf[0] = 0;
-    LoadStringA(HLanguage ? HLanguage : DLLInstance, resID, buf, sizeof(buf));
-    return buf;
+    static char buf[8][1024];
+    static int idx = 0;
+    idx = (idx + 1) & 7;
+    buf[idx][0] = 0;
+    LoadStringA(HLanguage ? HLanguage : DLLInstance, resID, buf[idx], sizeof(buf[idx]));
+    return buf[idx];
 }
 
 extern "C" {

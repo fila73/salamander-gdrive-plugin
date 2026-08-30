@@ -423,7 +423,7 @@ bool ApiClient::SetStarred(const std::string& fileId, bool starred, std::string*
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
                       "?supportsAllDrives=true";
 
     GDriveJson::Value bodyObj;
@@ -452,7 +452,7 @@ bool ApiClient::RestoreFromTrash(const std::string& fileId, std::string* errorOu
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
                       "?supportsAllDrives=true";
 
     GDriveJson::Value bodyObj;
@@ -676,7 +676,7 @@ bool ApiClient::GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, 
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
                       "?fields=" + GDriveHttp::HttpClient::UrlEncode("id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink") +
                       "&supportsAllDrives=true";
 
@@ -749,7 +749,7 @@ bool ApiClient::RenameItem(const std::string& fileId,
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
                       "?supportsAllDrives=true";
 
     GDriveJson::Value bodyObj;
@@ -781,7 +781,7 @@ bool ApiClient::MoveItem(const std::string& fileId,
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
                       "?supportsAllDrives=true";
 
     if (!newParents.empty())
@@ -819,7 +819,7 @@ bool ApiClient::CopyFile(const std::string& fileId,
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId + "/copy?supportsAllDrives=true";
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) + "/copy?supportsAllDrives=true";
 
     GDriveJson::Value bodyObj;
     if (!newName.empty()) bodyObj.Set("name", newName);
@@ -856,7 +856,7 @@ bool ApiClient::TrashItem(const std::string& fileId,
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
                       "?supportsAllDrives=true";
 
     GDriveJson::Value bodyObj;
@@ -886,7 +886,7 @@ bool ApiClient::DeleteItem(const std::string& fileId,
     if (token.empty()) return false;
 
     GDriveHttp::HttpClient http;
-    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
                       "?supportsAllDrives=true";
 
     auto resp = http.Delete(url, token);
@@ -913,12 +913,12 @@ bool ApiClient::DownloadFile(const GDriveItem& item,
 
     if (item.isGoogleDoc && !item.exportMimeType.empty())
     {
-        url = "https://www.googleapis.com/drive/v3/files/" + item.id +
+        url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(item.id) +
               "/export?mimeType=" + GDriveHttp::HttpClient::UrlEncode(item.exportMimeType);
     }
     else
     {
-        url = "https://www.googleapis.com/drive/v3/files/" + item.id +
+        url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(item.id) +
               "?alt=media&supportsAllDrives=true";
     }
 

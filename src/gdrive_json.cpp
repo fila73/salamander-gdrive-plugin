@@ -305,7 +305,7 @@ std::string Value::Serialize(bool pretty) const
 class Parser
 {
 public:
-    Parser(const std::string& src) : m_src(src), m_pos(0), m_len(src.size()) {}
+    explicit Parser(const std::string& src) : m_src(src), m_pos(0), m_len(src.size()), m_depth(0) {}
 
     Value Parse(std::string* errorOut)
     {
@@ -378,8 +378,18 @@ private:
         return Value::NullValue;
     }
 
+    static constexpr size_t MAX_JSON_DEPTH = 128;
+    size_t m_depth = 0;
+
     Value ParseObject()
     {
+        if (++m_depth > MAX_JSON_DEPTH)
+        {
+            m_error = true;
+            m_errorMsg = "Maximum JSON nesting depth exceeded";
+            return Value::NullValue;
+        }
+
         m_pos++; // skip '{'
         Value obj;
         obj.m_type = Type::Object;
@@ -391,12 +401,14 @@ private:
             {
                 m_error = true;
                 m_errorMsg = "Unterminated object";
+                m_depth--;
                 return Value::NullValue;
             }
 
             if (m_src[m_pos] == '}')
             {
                 m_pos++;
+                m_depth--;
                 return obj;
             }
 
@@ -404,11 +416,12 @@ private:
             {
                 m_error = true;
                 m_errorMsg = "Expected string key in object";
+                m_depth--;
                 return Value::NullValue;
             }
 
             Value keyVal = ParseString();
-            if (m_error) return Value::NullValue;
+            if (m_error) { m_depth--; return Value::NullValue; }
             std::string key = keyVal.AsString();
 
             SkipWhitespace();
@@ -416,12 +429,13 @@ private:
             {
                 m_error = true;
                 m_errorMsg = "Expected ':' after key in object";
+                m_depth--;
                 return Value::NullValue;
             }
             m_pos++; // skip ':'
 
             Value val = ParseValue();
-            if (m_error) return Value::NullValue;
+            if (m_error) { m_depth--; return Value::NullValue; }
             obj.Set(key, val);
 
             SkipWhitespace();
@@ -429,6 +443,7 @@ private:
             {
                 m_error = true;
                 m_errorMsg = "Unterminated object";
+                m_depth--;
                 return Value::NullValue;
             }
 
@@ -439,12 +454,14 @@ private:
             else if (m_src[m_pos] == '}')
             {
                 m_pos++;
+                m_depth--;
                 return obj;
             }
             else
             {
                 m_error = true;
                 m_errorMsg = "Expected ',' or '}' in object";
+                m_depth--;
                 return Value::NullValue;
             }
         }
@@ -452,6 +469,13 @@ private:
 
     Value ParseArray()
     {
+        if (++m_depth > MAX_JSON_DEPTH)
+        {
+            m_error = true;
+            m_errorMsg = "Maximum JSON nesting depth exceeded";
+            return Value::NullValue;
+        }
+
         m_pos++; // skip '['
         Value arr;
         arr.m_type = Type::Array;
@@ -463,17 +487,19 @@ private:
             {
                 m_error = true;
                 m_errorMsg = "Unterminated array";
+                m_depth--;
                 return Value::NullValue;
             }
 
             if (m_src[m_pos] == ']')
             {
                 m_pos++;
+                m_depth--;
                 return arr;
             }
 
             Value item = ParseValue();
-            if (m_error) return Value::NullValue;
+            if (m_error) { m_depth--; return Value::NullValue; }
             arr.PushBack(item);
 
             SkipWhitespace();
@@ -481,6 +507,7 @@ private:
             {
                 m_error = true;
                 m_errorMsg = "Unterminated array";
+                m_depth--;
                 return Value::NullValue;
             }
 
@@ -491,12 +518,14 @@ private:
             else if (m_src[m_pos] == ']')
             {
                 m_pos++;
+                m_depth--;
                 return arr;
             }
             else
             {
                 m_error = true;
                 m_errorMsg = "Expected ',' or ']' in array";
+                m_depth--;
                 return Value::NullValue;
             }
         }

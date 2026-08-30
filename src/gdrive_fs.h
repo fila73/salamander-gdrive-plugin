@@ -52,12 +52,12 @@ struct CTopIndexMem
                     TopIndexes[i] = TopIndexes[i + 1];
                 TopIndexesCount--;
             }
-            strcpy(Path, path);
+            lstrcpynA(Path, path, MAX_PATH);
             TopIndexes[TopIndexesCount++] = topIndex;
         }
         else
         {
-            strcpy(Path, path);
+            lstrcpynA(Path, path, MAX_PATH);
             TopIndexesCount = 1;
             TopIndexes[0] = topIndex;
         }
