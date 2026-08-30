@@ -125,6 +125,10 @@ static BOOL CALLBACK EnumChildProc(HWND hwndChild, LPARAM lParam)
         SendMessage(hwndChild, PBM_SETBARCOLOR, 0, (LPARAM)RGB(0, 120, 215));
         SendMessage(hwndChild, PBM_SETBKCOLOR, 0, (LPARAM)RGB(45, 45, 45));
     }
+    else if (_stricmp(className, "SysTabControl32") == 0)
+    {
+        SetWindowTheme(hwndChild, L"DarkMode_Explorer", NULL);
+    }
     else if (_stricmp(className, "SysListView32") == 0)
     {
         ApplyListViewTheme(hwndChild);

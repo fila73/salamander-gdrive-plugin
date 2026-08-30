@@ -356,8 +356,26 @@ class CCenteredPropertyWindow : public CWindow
 protected:
     virtual LRESULT WindowProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
     {
+        INT_PTR colorResult = 0;
+        if (GDriveDarkMode::HandleDialogColors(uMsg, wParam, lParam, &colorResult))
+        {
+            return (LRESULT)colorResult;
+        }
+
         switch (uMsg)
         {
+        case WM_ERASEBKGND:
+        {
+            if (GDriveDarkMode::IsDarkMode())
+            {
+                HDC hdc = (HDC)wParam;
+                RECT rc;
+                GetClientRect(HWindow, &rc);
+                FillRect(hdc, &rc, GDriveDarkMode::GetTheme().brushBgMain);
+                return 1;
+            }
+            break;
+        }
         case WM_WINDOWPOSCHANGING:
         {
             WINDOWPOS* pos = (WINDOWPOS*)lParam;
@@ -369,11 +387,12 @@ protected:
             }
             break;
         }
-        case WM_APP + 1000:
+        case WM_NCDESTROY:
         {
+            LRESULT res = CWindow::WindowProc(uMsg, wParam, lParam);
             DetachWindow();
             delete this;
-            return 0;
+            return res;
         }
         }
         return CWindow::WindowProc(uMsg, wParam, lParam);
@@ -384,6 +403,14 @@ static int CALLBACK CenterCallback(HWND HWindow, UINT uMsg, LPARAM lParam)
 {
     if (uMsg == PSCB_INITIALIZED)
     {
+        CCenteredPropertyWindow* wnd = new CCenteredPropertyWindow;
+        if (wnd != NULL)
+        {
+            wnd->AttachToWindow(HWindow);
+            if (wnd->HWindow == NULL)
+                delete wnd;
+        }
+
         GDriveDarkMode::ApplyWindowTheme(HWindow);
 
         HWND hOk = GetDlgItem(HWindow, IDOK);
@@ -392,16 +419,6 @@ static int CALLBACK CenterCallback(HWND HWindow, UINT uMsg, LPARAM lParam)
         if (hCancel) SetWindowTextA(hCancel, LoadStr(IDS_BUTTON_CANCEL));
         HWND hHelp = GetDlgItem(HWindow, IDHELP);
         if (hHelp) SetWindowTextA(hHelp, LoadStr(IDS_BUTTON_HELP));
-
-        CCenteredPropertyWindow* wnd = new CCenteredPropertyWindow;
-        if (wnd != NULL)
-        {
-            wnd->AttachToWindow(HWindow);
-            if (wnd->HWindow == NULL)
-                delete wnd;
-            else
-                PostMessage(wnd->HWindow, WM_APP + 1000, 0, 0);
-        }
     }
     return 0;
 }
