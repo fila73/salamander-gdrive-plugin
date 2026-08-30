@@ -227,7 +227,7 @@ void WINAPI CPluginInterfaceForFS::CloseFS(CPluginFSInterfaceAbstract* fs)
             std::lock_guard<std::mutex> lock(s_fsInstancesMutex);
             s_activeFSInstances.erase(fs);
         }
-        delete (CPluginFS*)fs;
+        delete static_cast<CPluginFS*>(fs);
     }
 }
 
@@ -254,7 +254,7 @@ void WINAPI CPluginInterfaceForFS::ExecuteOnFS(int panel, CPluginFSInterfaceAbst
                                               const char* pluginFSName, int pluginFSNameIndex,
                                               CFileData& file, int isDir)
 {
-    CPluginFS* fs = (CPluginFS*)pluginFS;
+    CPluginFS* fs = static_cast<CPluginFS*>(pluginFS);
     if (isDir)
     {
         char newPath[MAX_PATH];

@@ -29,6 +29,7 @@ struct CTopIndexMem
     CTopIndexMem()
     {
         Path[0] = 0;
+        memset(TopIndexes, 0, sizeof(TopIndexes));
         TopIndexesCount = 0;
     }
 

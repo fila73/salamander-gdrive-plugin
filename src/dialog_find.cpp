@@ -952,6 +952,7 @@ void CGDriveFindDialog::SearchWorker()
 
     // Search in thread with atomic cancel flag
     bool ok = GDriveApi::ApiClient::GetInstance().SearchFiles(m_currentSearchOpts, rawResults, &m_cancelRequested, &err);
+    (void)ok;
 
     if (m_cancelRequested)
     {

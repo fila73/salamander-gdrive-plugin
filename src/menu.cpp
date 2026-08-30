@@ -45,8 +45,9 @@ BOOL WINAPI CPluginInterfaceForMenuExt::ExecuteMenuItem(CSalamanderForOperations
         {
             int failReason = 0;
             SalamanderGeneral->ChangePanelPathToPluginFS(s_pendingFocusPanel, AssignedFSName,
-                                                         s_pendingFocusPath.c_str(), NULL, -1,
+                                                         s_pendingFocusPath.c_str(), &failReason, -1,
                                                          s_pendingFocusName.c_str());
+            (void)failReason;
             s_pendingFocusPath.clear();
             s_pendingFocusName.clear();
         }
@@ -57,14 +58,16 @@ BOOL WINAPI CPluginInterfaceForMenuExt::ExecuteMenuItem(CSalamanderForOperations
     {
         int failReason = 0;
         SalamanderGeneral->ChangePanelPathToPluginFS(PANEL_SOURCE, AssignedFSName, "\\", &failReason);
+        (void)failReason;
         return TRUE;
     }
 
     case CM_CALC_SIZE:
     {
-        CPluginFS* fs = (CPluginFS*)SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
-        if (fs)
+        CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
+        if (activeFS && CPluginFS::IsOurFS(activeFS))
         {
+            CPluginFS* fs = static_cast<CPluginFS*>(activeFS);
             fs->CalculateFolderSize(parent, PANEL_SOURCE);
         }
         return TRUE;
