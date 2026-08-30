@@ -284,6 +284,14 @@ BEGIN
     IDS_CONFLICT_BTN_MERGE       "&Merge"
     IDS_CONFLICT_SRC_DIR_FMT     "Source folder: %s"
     IDS_CONFLICT_DST_DIR_FMT     "Target folder: %s"
+    IDS_COL_OWNER                "Owner"
+    IDS_COL_OWNER_DESC           "File or folder owner"
+    IDS_COL_SHARED               "Shared"
+    IDS_COL_SHARED_DESC          "Shared status"
+    IDS_COL_STARRED              "Starred"
+    IDS_COL_STARRED_DESC         "Starred status (*)"
+    IDS_YES                      "Yes"
+    IDS_NO                       "No"
 END
 
 #endif // English resources

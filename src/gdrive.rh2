@@ -162,5 +162,13 @@
 #define IDS_CONFLICT_BTN_MERGE                   2207
 #define IDS_CONFLICT_SRC_DIR_FMT                 2208
 #define IDS_CONFLICT_DST_DIR_FMT                 2209
+#define IDS_COL_OWNER                            2210
+#define IDS_COL_OWNER_DESC                       2211
+#define IDS_COL_SHARED                           2212
+#define IDS_COL_SHARED_DESC                      2213
+#define IDS_COL_STARRED                          2214
+#define IDS_COL_STARRED_DESC                     2215
+#define IDS_YES                                  2216
+#define IDS_NO                                   2217
 
 #endif // __GDRIVE_RH2

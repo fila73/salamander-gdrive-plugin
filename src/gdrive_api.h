@@ -26,6 +26,12 @@ struct GDriveItem
     bool isSharedDrive = false;
     bool isStarred = false;
     bool isTrashed = false;
+    bool isShared = false;
+    bool isOwnedByMe = true;
+    std::string ownerName;
+    std::string ownerEmail;
+    FILETIME createdTime = {0, 0};
+    int64_t version = 0;
     std::string webViewLink;
     std::string webContentLink;
     std::string driveId;

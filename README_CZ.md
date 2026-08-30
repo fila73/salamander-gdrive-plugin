@@ -38,6 +38,11 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
   - Okamžitý náhled vzdálených souborů s automatickou mezipamětí.
 - 📊 **Ukazatel volného místa na disku**:
   - Zobrazení volné a celkové kapacity Google Disku v patičce panelu Salamandera.
+- 📋 **Vlastní sloupce v podrobném pohledu (`CSalamanderViewAbstract`)**:
+  - **`Vlastník`**: Zobrazuje jméno nebo e-mail tvůrce položky (klíčové ve Sdílených discích a složce *Sdíleno se mnou*).
+  - **`Sdíleno`**: Indikace, zda je položka sdílena s dalšími uživateli (`Ano` / `Ne`).
+  - **`Hvězdička`**: Vizuální označení `*` pro oblíbené položky.
+  - Plná podpora řazení podle sloupců a interaktivní změny šířky myší s perzistentním ukládáním.
 
 ### ⭐ Virtuální složky a kontextové menu
 - **Virtuální pohledy**:

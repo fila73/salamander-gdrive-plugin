@@ -284,6 +284,14 @@ BEGIN
     IDS_CONFLICT_BTN_MERGE       "&Sloučit"
     IDS_CONFLICT_SRC_DIR_FMT     "Zdrojová složka: %s"
     IDS_CONFLICT_DST_DIR_FMT     "Cílová složka: %s"
+    IDS_COL_OWNER                "Vlastník"
+    IDS_COL_OWNER_DESC           "Vlastník souboru nebo složky"
+    IDS_COL_SHARED               "Sdíleno"
+    IDS_COL_SHARED_DESC          "Stav sdílení"
+    IDS_COL_STARRED              "Hvězdička"
+    IDS_COL_STARRED_DESC         "Oblíbená položka (*)"
+    IDS_YES                      "Ano"
+    IDS_NO                       "Ne"
 END
 
 #endif // Czech resources

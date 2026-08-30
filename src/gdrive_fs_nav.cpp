@@ -570,9 +570,246 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
     return !folderId.empty();
 }
 
+// Column IDs for CustomData
+#define GDRIVE_COL_OWNER_ID 1
+#define GDRIVE_COL_SHARED_ID 2
+#define GDRIVE_COL_STARRED_ID 3
+
+// Column width state
+static DWORD s_ownerWidth = MAKELONG(130, 130);
+static DWORD s_ownerFixedWidth = MAKELONG(0, 0);
+
+static DWORD s_sharedWidth = MAKELONG(60, 60);
+static DWORD s_sharedFixedWidth = MAKELONG(0, 0);
+
+static DWORD s_starredWidth = MAKELONG(40, 40);
+static DWORD s_starredFixedWidth = MAKELONG(0, 0);
+
+// Global transfer variables provided by Salamander
+static const CFileData** s_transferFileData = NULL;
+static int* s_transferIsDir = NULL;
+static char* s_transferBuffer = NULL;
+static int* s_transferLen = NULL;
+static DWORD* s_transferRowData = NULL;
+static CPluginDataInterfaceAbstract** s_transferPluginDataIface = NULL;
+static DWORD* s_transferActCustomData = NULL;
+
+struct GDrivePluginFileData
+{
+    std::string owner;
+    bool isShared = false;
+    bool isStarred = false;
+};
+
+void WINAPI CGDrivePluginDataInterface::ReleasePluginData(CFileData& file, BOOL isDir)
+{
+    if (file.PluginData != 0)
+    {
+        delete reinterpret_cast<GDrivePluginFileData*>(file.PluginData);
+        file.PluginData = 0;
+    }
+}
+
+int WINAPI CGDrivePluginDataInterface::CompareFilesFromFS(const CFileData* file1, const CFileData* file2)
+{
+    if (!file1 || !file2) return 0;
+    return _stricmp(file1->Name ? file1->Name : "", file2->Name ? file2->Name : "");
+}
+
+static void WINAPI GetOwnerColumnText()
+{
+    if (s_transferFileData && *s_transferFileData && (*s_transferFileData)->PluginData)
+    {
+        auto* pData = reinterpret_cast<const GDrivePluginFileData*>((*s_transferFileData)->PluginData);
+        if (!pData->owner.empty())
+        {
+            std::string ansi = GDriveHttp::HttpClient::Utf8ToAnsi(pData->owner);
+            int len = (int)ansi.length();
+            if (len > TRANSFER_BUFFER_MAX - 1) len = TRANSFER_BUFFER_MAX - 1;
+            memcpy(s_transferBuffer, ansi.data(), len);
+            *s_transferLen = len;
+            return;
+        }
+    }
+    *s_transferLen = 0;
+}
+
+static void WINAPI GetSharedColumnText()
+{
+    if (s_transferFileData && *s_transferFileData && (*s_transferFileData)->PluginData)
+    {
+        auto* pData = reinterpret_cast<const GDrivePluginFileData*>((*s_transferFileData)->PluginData);
+        if (pData->isShared)
+        {
+            const char* str = LoadStr(IDS_YES);
+            int len = (int)strlen(str);
+            if (len > TRANSFER_BUFFER_MAX - 1) len = TRANSFER_BUFFER_MAX - 1;
+            memcpy(s_transferBuffer, str, len);
+            *s_transferLen = len;
+            return;
+        }
+        else
+        {
+            const char* str = LoadStr(IDS_NO);
+            int len = (int)strlen(str);
+            if (len > TRANSFER_BUFFER_MAX - 1) len = TRANSFER_BUFFER_MAX - 1;
+            memcpy(s_transferBuffer, str, len);
+            *s_transferLen = len;
+            return;
+        }
+    }
+    *s_transferLen = 0;
+}
+
+static void WINAPI GetStarredColumnText()
+{
+    if (s_transferFileData && *s_transferFileData && (*s_transferFileData)->PluginData)
+    {
+        auto* pData = reinterpret_cast<const GDrivePluginFileData*>((*s_transferFileData)->PluginData);
+        if (pData->isStarred)
+        {
+            const char* starStr = "*";
+            int len = (int)strlen(starStr);
+            memcpy(s_transferBuffer, starStr, len);
+            *s_transferLen = len;
+            return;
+        }
+    }
+    *s_transferLen = 0;
+}
+
+void WINAPI CGDrivePluginDataInterface::SetupView(BOOL leftPanel, CSalamanderViewAbstract* view,
+                                                  const char* archivePath, const CFileData* upperDir)
+{
+    view->GetTransferVariables(s_transferFileData, s_transferIsDir, s_transferBuffer, s_transferLen,
+                               s_transferRowData, s_transferPluginDataIface, s_transferActCustomData);
+
+    if (view->GetViewMode() == VIEW_MODE_DETAILED)
+    {
+        int count = view->GetColumnsCount();
+
+        // Add Starred column
+        CColumn colStarred;
+        memset(&colStarred, 0, sizeof(colStarred));
+        lstrcpynA(colStarred.Name, LoadStr(IDS_COL_STARRED), sizeof(colStarred.Name));
+        lstrcpynA(colStarred.Description, LoadStr(IDS_COL_STARRED_DESC), sizeof(colStarred.Description));
+        colStarred.GetText = GetStarredColumnText;
+        colStarred.CustomData = GDRIVE_COL_STARRED_ID;
+        colStarred.SupportSorting = 1;
+        colStarred.LeftAlignment = 0;
+        colStarred.ID = COLUMN_ID_CUSTOM;
+        colStarred.Width = leftPanel ? LOWORD(s_starredWidth) : HIWORD(s_starredWidth);
+        colStarred.FixedWidth = leftPanel ? LOWORD(s_starredFixedWidth) : HIWORD(s_starredFixedWidth);
+        view->InsertColumn(count++, &colStarred);
+
+        // Add Shared column
+        CColumn colShared;
+        memset(&colShared, 0, sizeof(colShared));
+        lstrcpynA(colShared.Name, LoadStr(IDS_COL_SHARED), sizeof(colShared.Name));
+        lstrcpynA(colShared.Description, LoadStr(IDS_COL_SHARED_DESC), sizeof(colShared.Description));
+        colShared.GetText = GetSharedColumnText;
+        colShared.CustomData = GDRIVE_COL_SHARED_ID;
+        colShared.SupportSorting = 1;
+        colShared.LeftAlignment = 1;
+        colShared.ID = COLUMN_ID_CUSTOM;
+        colShared.Width = leftPanel ? LOWORD(s_sharedWidth) : HIWORD(s_sharedWidth);
+        colShared.FixedWidth = leftPanel ? LOWORD(s_sharedFixedWidth) : HIWORD(s_sharedFixedWidth);
+        view->InsertColumn(count++, &colShared);
+
+        // Add Owner column
+        CColumn colOwner;
+        memset(&colOwner, 0, sizeof(colOwner));
+        lstrcpynA(colOwner.Name, LoadStr(IDS_COL_OWNER), sizeof(colOwner.Name));
+        lstrcpynA(colOwner.Description, LoadStr(IDS_COL_OWNER_DESC), sizeof(colOwner.Description));
+        colOwner.GetText = GetOwnerColumnText;
+        colOwner.CustomData = GDRIVE_COL_OWNER_ID;
+        colOwner.SupportSorting = 1;
+        colOwner.LeftAlignment = 1;
+        colOwner.ID = COLUMN_ID_CUSTOM;
+        colOwner.Width = leftPanel ? LOWORD(s_ownerWidth) : HIWORD(s_ownerWidth);
+        colOwner.FixedWidth = leftPanel ? LOWORD(s_ownerFixedWidth) : HIWORD(s_ownerFixedWidth);
+        view->InsertColumn(count++, &colOwner);
+    }
+}
+
+void WINAPI CGDrivePluginDataInterface::ColumnFixedWidthShouldChange(BOOL leftPanel, const CColumn* column, int newFixedWidth)
+{
+    if (!column) return;
+    if (leftPanel)
+    {
+        switch (column->CustomData)
+        {
+        case GDRIVE_COL_OWNER_ID:
+            s_ownerFixedWidth = MAKELONG(newFixedWidth, HIWORD(s_ownerFixedWidth));
+            break;
+        case GDRIVE_COL_SHARED_ID:
+            s_sharedFixedWidth = MAKELONG(newFixedWidth, HIWORD(s_sharedFixedWidth));
+            break;
+        case GDRIVE_COL_STARRED_ID:
+            s_starredFixedWidth = MAKELONG(newFixedWidth, HIWORD(s_starredFixedWidth));
+            break;
+        }
+    }
+    else
+    {
+        switch (column->CustomData)
+        {
+        case GDRIVE_COL_OWNER_ID:
+            s_ownerFixedWidth = MAKELONG(LOWORD(s_ownerFixedWidth), newFixedWidth);
+            break;
+        case GDRIVE_COL_SHARED_ID:
+            s_sharedFixedWidth = MAKELONG(LOWORD(s_sharedFixedWidth), newFixedWidth);
+            break;
+        case GDRIVE_COL_STARRED_ID:
+            s_starredFixedWidth = MAKELONG(LOWORD(s_starredFixedWidth), newFixedWidth);
+            break;
+        }
+    }
+    if (newFixedWidth)
+    {
+        ColumnWidthWasChanged(leftPanel, column, column->Width);
+    }
+}
+
+void WINAPI CGDrivePluginDataInterface::ColumnWidthWasChanged(BOOL leftPanel, const CColumn* column, int newWidth)
+{
+    if (!column) return;
+    if (leftPanel)
+    {
+        switch (column->CustomData)
+        {
+        case GDRIVE_COL_OWNER_ID:
+            s_ownerWidth = MAKELONG(newWidth, HIWORD(s_ownerWidth));
+            break;
+        case GDRIVE_COL_SHARED_ID:
+            s_sharedWidth = MAKELONG(newWidth, HIWORD(s_sharedWidth));
+            break;
+        case GDRIVE_COL_STARRED_ID:
+            s_starredWidth = MAKELONG(newWidth, HIWORD(s_starredWidth));
+            break;
+        }
+    }
+    else
+    {
+        switch (column->CustomData)
+        {
+        case GDRIVE_COL_OWNER_ID:
+            s_ownerWidth = MAKELONG(LOWORD(s_ownerWidth), newWidth);
+            break;
+        case GDRIVE_COL_SHARED_ID:
+            s_sharedWidth = MAKELONG(LOWORD(s_sharedWidth), newWidth);
+            break;
+        case GDRIVE_COL_STARRED_ID:
+            s_starredWidth = MAKELONG(LOWORD(s_starredWidth), newWidth);
+            break;
+        }
+    }
+}
+
 static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
                          bool isDir, int64_t size, bool sizeValid, const FILETIME* ft,
-                         CPluginDataInterfaceAbstract* pluginData)
+                         CPluginDataInterfaceAbstract* pluginData,
+                         const GDriveApi::GDriveItem* item = nullptr)
 {
     if (!name) return;
 
@@ -614,6 +851,16 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
     file.Attr = isDir ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
     file.DosName = NULL;
     file.PluginData = 0;
+
+    if (item)
+    {
+        auto* pData = new GDrivePluginFileData();
+        pData->owner = item->ownerName.empty() ? item->ownerEmail : item->ownerName;
+        pData->isShared = item->isShared;
+        pData->isStarred = item->isStarred;
+        file.PluginData = reinterpret_cast<DWORD_PTR>(pData);
+    }
+
     file.IconOverlayIndex = ICONOVERLAYINDEX_NOTUSED;
 
     if (isDir)
@@ -672,11 +919,11 @@ static void PopulateDirFromItems(CSalamanderDirectoryAbstract* dir,
         {
             int64_t folderSize = 0;
             bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
-            AddItemToDir(dir, displayName.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
+            AddItemToDir(dir, displayName.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData, &item);
         }
         else
         {
-            AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
+            AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData, &item);
         }
     }
 }
@@ -688,7 +935,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     if (!dir) return FALSE;
 
     iconsType = pitFromRegistry;
-    pluginData = NULL;
+    pluginData = &m_pluginDataInterface;
     m_cachedItems.clear();
 
     dir->SetFlags(SALDIRFLAG_IGNOREDUPDIRS);

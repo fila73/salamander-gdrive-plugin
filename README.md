@@ -38,6 +38,11 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
   - Instant preview of remote files with automatic temp caching.
 - 📊 **Drive Quota & Free Space Indicator**:
   - Displays remaining and total storage space in Salamander's panel footer.
+- 📋 **Custom Detailed Panel Columns (`CSalamanderViewAbstract`)**:
+  - **`Owner`**: Displays the file/folder creator name or email (invaluable in Shared Drives and Shared with me).
+  - **`Shared`**: Indicates whether an item is shared (`Yes` / `No`).
+  - **`Starred`**: Visual `*` indicator for favorite items.
+  - Supports column sorting and mouse width adjustments with persistent sizing.
 
 ### ⭐ Virtual Views & Context Menu
 - **Virtual Folders**:

@@ -202,6 +202,8 @@ bool ApiClient::ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string
     return true;
 }
 
+static const char* kItemFields = "id,name,mimeType,size,modifiedTime,createdTime,starred,trashed,shared,ownedByMe,owners(displayName,emailAddress),version,webViewLink,webContentLink";
+
 static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool isSharedDrive = false, const std::string& driveId = "")
 {
     item.id = f.GetString("id");
@@ -210,8 +212,21 @@ static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool
     item.size = f.GetInt64("size", 0);
     item.isFolder = (item.mimeType == kFolderMimeType);
     item.modifiedTime = ApiClient::Iso8601ToFileTime(f.GetString("modifiedTime"));
+    item.createdTime = ApiClient::Iso8601ToFileTime(f.GetString("createdTime"));
     item.isStarred = f.GetBool("starred", false);
     item.isTrashed = f.GetBool("trashed", false);
+    item.isShared = f.GetBool("shared", false);
+    item.isOwnedByMe = f.GetBool("ownedByMe", true);
+    item.version = f.GetInt64("version", 0);
+    if (f.Has("owners") && f.GetArray("owners").IsArray())
+    {
+        const auto& owners = f.GetArray("owners");
+        if (owners.Size() > 0)
+        {
+            item.ownerName = owners[0].GetString("displayName");
+            item.ownerEmail = owners[0].GetString("emailAddress");
+        }
+    }
     item.webViewLink = f.GetString("webViewLink");
     item.webContentLink = f.GetString("webContentLink");
     item.isSharedDrive = isSharedDrive;
@@ -234,7 +249,7 @@ bool ApiClient::ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string*
     {
         std::string url = "https://www.googleapis.com/drive/v3/files?"
                           "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
-                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode(std::string("nextPageToken,files(") + kItemFields + ")") +
                           "&pageSize=1000" +
                           "&supportsAllDrives=true" +
                           "&includeItemsFromAllDrives=true";
@@ -285,7 +300,7 @@ bool ApiClient::ListStarred(std::vector<GDriveItem>& itemsOut, std::string* erro
     {
         std::string url = "https://www.googleapis.com/drive/v3/files?"
                           "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
-                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode(std::string("nextPageToken,files(") + kItemFields + ")") +
                           "&pageSize=1000" +
                           "&supportsAllDrives=true" +
                           "&includeItemsFromAllDrives=true";
@@ -336,7 +351,7 @@ bool ApiClient::ListTrash(std::vector<GDriveItem>& itemsOut, std::string* errorO
     {
         std::string url = "https://www.googleapis.com/drive/v3/files?"
                           "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
-                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode(std::string("nextPageToken,files(") + kItemFields + ")") +
                           "&pageSize=1000" +
                           "&supportsAllDrives=true" +
                           "&includeItemsFromAllDrives=true";
@@ -384,7 +399,7 @@ bool ApiClient::ListRecent(std::vector<GDriveItem>& itemsOut, std::string* error
     std::string url = "https://www.googleapis.com/drive/v3/files?"
                       "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
                       "&orderBy=" + GDriveHttp::HttpClient::UrlEncode("viewedByMeTime desc,modifiedTime desc") +
-                      "&fields=" + GDriveHttp::HttpClient::UrlEncode("files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                      "&fields=" + GDriveHttp::HttpClient::UrlEncode(std::string("files(") + kItemFields + ")") +
                       "&pageSize=100" +
                       "&supportsAllDrives=true" +
                       "&includeItemsFromAllDrives=true";
@@ -628,7 +643,7 @@ bool ApiClient::ListFolder(const std::string& folderId,
     {
         std::string url = "https://www.googleapis.com/drive/v3/files?"
                           "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
-                          "&fields=" + GDriveHttp::HttpClient::UrlEncode("nextPageToken,files(id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink)") +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode(std::string("nextPageToken,files(") + kItemFields + ")") +
                           "&pageSize=1000" +
                           "&supportsAllDrives=true" +
                           "&includeItemsFromAllDrives=true";
@@ -677,7 +692,7 @@ bool ApiClient::GetFileMetadata(const std::string& fileId, GDriveItem& itemOut, 
 
     GDriveHttp::HttpClient http;
     std::string url = "https://www.googleapis.com/drive/v3/files/" + GDriveHttp::HttpClient::UrlEncode(fileId) +
-                      "?fields=" + GDriveHttp::HttpClient::UrlEncode("id,name,mimeType,size,modifiedTime,starred,trashed,webViewLink,webContentLink") +
+                      "?fields=" + GDriveHttp::HttpClient::UrlEncode(kItemFields) +
                       "&supportsAllDrives=true";
 
     auto resp = http.Get(url, token);

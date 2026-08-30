@@ -22,6 +22,7 @@ Tento dokument rekapituluje všechny realizované části pluginu **Google Disk 
 | **Konfigurace (Property Sheet)** | Záložka „Účty a obecné“ (přepínání účtů, OAuth klíče) a záložka „Mezipaměť a synchronizace“ (TTL frekvence, vymazání cache). | `src/dialogs.cpp`, `src/lang/` |
 | **Modularizace kódu (CR-08)** | Rozdělení monolitického `gdrive_fs.cpp` na navigaci (`gdrive_fs_nav.cpp`), přenosy (`gdrive_fs_transfer.cpp`), operace (`gdrive_fs_ops.cpp`) a jádro (`gdrive_fs.cpp`). | `src/gdrive_fs*.cpp` |
 | **Dynamický Dark Mode** | Striktní respektování uživatelského nastavení schématu v Salamanderu s okamžitým přepínáním. | `src/gdrivedarkmode.cpp` |
+| **Vlastní sloupce panelu** | Implementace `CPluginDataInterfaceAbstract` a `CSalamanderViewAbstract`: zobrazení sloupců **Vlastník** (`Owner`), **Sdíleno** (`Shared`) a **Hvězdička** (`Starred`), podpora řazení a nastavení šířky sloupců. | `src/gdrive_fs_nav.cpp`, `src/gdrive_fs.h`, `src/gdrive_cache.cpp` |
 
 ---
 

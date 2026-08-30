@@ -412,3 +412,26 @@ gh release create v0.1 $zipName --title "v0.1" --notes "Initial release of Googl
    plugins/gdrive/lang/czech.slg
    ```
 4. V menu Salamandera: **Plugins → Plugins Manager... → Add...** vybrat `gdrive.spl`.
+
+---
+
+## 9. Vlastní sloupce a architektura pohledů (`CSalamanderViewAbstract`)
+
+Open Salamander umožňuje souborovým a archivním pluginům plně definovat vlastní sadu sloupců v režimu *Detailed*:
+
+1. **Předání dat a interface**:
+   - V `CPluginFS::ListCurrentPath` nastavíme `pluginData = &m_pluginDataInterface;`.
+   - Pro každou položku vloženou do `CSalamanderDirectoryAbstract` (`dir->AddFile` / `dir->AddDir`) alokujeme vlastní strukturu a uložíme ukazatel do `file.PluginData`.
+   - V `CPluginDataInterfaceAbstract` nastavíme `CallReleaseForFiles() = TRUE` a `CallReleaseForDirs() = TRUE`, aby Salamander při uvolnění listingu zavolal `ReleasePluginData` pro uvolnění paměti.
+
+2. **Konfigurace sloupců v `SetupView`**:
+   - Salamander před zobrazením pohledu zavolá `CGDrivePluginDataInterface::SetupView(leftPanel, view, ...)`.
+   - Získáme přenosové proměnné přes `view->GetTransferVariables(...)`.
+   - Vložíme vlastní sloupce přes `view->InsertColumn(...)` s `ID = COLUMN_ID_CUSTOM` a ukazatelem na callback funkci `GetText`.
+   - Podporujeme interaktivní změnu šířky myší přes `ColumnFixedWidthShouldChange` a `ColumnWidthWasChanged`.
+
+3. **Bleskurychlý rendering řádků (`FColumnGetText`)**:
+   - Salamander při kreslení každého řádku zavolá funkci `GetText()`.
+   - Plugin přečte data z `(*s_transferFileData)->PluginData`, zformátuje text do `s_transferBuffer` a nastaví `*s_transferLen = len`.
+   - Žádné paměťové alokace během kreslení zaručují maximální plynulost a 60 FPS při procházení.
+

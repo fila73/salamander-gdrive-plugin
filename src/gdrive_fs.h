@@ -97,10 +97,38 @@ struct CTopIndexMem
     }
 };
 
+class CGDrivePluginDataInterface : public CPluginDataInterfaceAbstract
+{
+public:
+    virtual BOOL WINAPI CallReleaseForFiles() override { return TRUE; }
+    virtual BOOL WINAPI CallReleaseForDirs() override { return TRUE; }
+    virtual void WINAPI ReleasePluginData(CFileData& file, BOOL isDir) override;
+    virtual void WINAPI GetFileDataForUpDir(const char* archivePath, CFileData& upDir) override {}
+    virtual BOOL WINAPI GetFileDataForNewDir(const char* dirName, CFileData& dir) override { return FALSE; }
+    virtual HIMAGELIST WINAPI GetSimplePluginIcons(int iconSize) override { return NULL; }
+    virtual BOOL WINAPI HasSimplePluginIcon(CFileData& file, BOOL isDir) override { return FALSE; }
+    virtual HICON WINAPI GetPluginIcon(const CFileData* file, int iconSize, BOOL& destroyIcon) override { destroyIcon = FALSE; return NULL; }
+    virtual int WINAPI CompareFilesFromFS(const CFileData* file1, const CFileData* file2) override;
+
+    virtual void WINAPI SetupView(BOOL leftPanel, CSalamanderViewAbstract* view,
+                                  const char* archivePath, const CFileData* upperDir) override;
+    virtual void WINAPI ColumnFixedWidthShouldChange(BOOL leftPanel, const CColumn* column, int newFixedWidth) override;
+    virtual void WINAPI ColumnWidthWasChanged(BOOL leftPanel, const CColumn* column, int newWidth) override;
+
+    virtual BOOL WINAPI GetInfoLineContent(int panel, const CFileData* file, BOOL isDir, int selectedFiles,
+                                           int selectedDirs, BOOL displaySize, const CQuadWord& selectedSize,
+                                           char* buffer, DWORD* hotTexts, int& hotTextsCount) override { return FALSE; }
+    virtual BOOL WINAPI CanBeCopiedToClipboard() override { return FALSE; }
+    virtual BOOL WINAPI GetByteSize(const CFileData* file, BOOL isDir, CQuadWord* size) override { return FALSE; }
+    virtual BOOL WINAPI GetLastWriteDate(const CFileData* file, BOOL isDir, SYSTEMTIME* date) override { return FALSE; }
+    virtual BOOL WINAPI GetLastWriteTime(const CFileData* file, BOOL isDir, SYSTEMTIME* time) override { return FALSE; }
+};
+
 class CPluginFS : public CPluginFSInterfaceAbstract
 {
 public:
     CTopIndexMem TopIndexMem;
+    CGDrivePluginDataInterface m_pluginDataInterface;
 
     CPluginFS(const char* fsName);
     virtual ~CPluginFS();

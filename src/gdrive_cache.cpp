@@ -13,7 +13,7 @@ namespace GDriveCache
 {
 
 static const uint32_t kCacheMagic = 0x43444C53; // "SLDC"
-static const uint32_t kCacheVersion = 1;
+static const uint32_t kCacheVersion = 2;
 
 static void WriteString(FILE* f, const std::string& s)
 {
@@ -169,8 +169,14 @@ bool CacheManager::SaveToDisk()
                             (item.isGoogleDoc ? 2 : 0) |
                             (item.isSharedDrive ? 4 : 0) |
                             (item.isStarred ? 8 : 0) |
-                            (item.isTrashed ? 16 : 0);
+                            (item.isTrashed ? 16 : 0) |
+                            (item.isShared ? 32 : 0) |
+                            (item.isOwnedByMe ? 64 : 0);
             fwrite(&flags, sizeof(flags), 1, f);
+            WriteString(f, item.ownerName);
+            WriteString(f, item.ownerEmail);
+            fwrite(&item.createdTime, sizeof(item.createdTime), 1, f);
+            fwrite(&item.version, sizeof(item.version), 1, f);
             WriteString(f, item.webViewLink);
             WriteString(f, item.webContentLink);
             WriteString(f, item.driveId);
@@ -236,7 +242,7 @@ bool CacheManager::LoadFromDisk()
         return false;
     }
 
-    if (magic != kCacheMagic || version != kCacheVersion)
+    if (magic != kCacheMagic || (version != 1 && version != 2))
     {
         fclose(f);
         GDriveLog::Log("[CACHE] Invalid cache file header (magic: %08X, ver: %u) in %ls", magic, version, path.c_str());
@@ -283,6 +289,15 @@ bool CacheManager::LoadFromDisk()
             item.isSharedDrive = (flags & 4) != 0;
             item.isStarred = (flags & 8) != 0;
             item.isTrashed = (flags & 16) != 0;
+            item.isShared = (flags & 32) != 0;
+            item.isOwnedByMe = (flags & 64) != 0;
+            if (version >= 2)
+            {
+                item.ownerName = ReadString(f);
+                item.ownerEmail = ReadString(f);
+                fread(&item.createdTime, sizeof(item.createdTime), 1, f);
+                fread(&item.version, sizeof(item.version), 1, f);
+            }
             item.webViewLink = ReadString(f);
             item.webContentLink = ReadString(f);
             item.driveId = ReadString(f);
