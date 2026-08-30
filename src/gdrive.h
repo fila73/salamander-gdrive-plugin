@@ -44,7 +44,11 @@ public:
                                         int id, DWORD eventMask) override;
     virtual BOOL WINAPI HelpForMenuItem(HWND parent, int id) override;
     virtual void WINAPI BuildMenu(HWND parent, CSalamanderBuildMenuAbstract* salamander) override;
+
+    void PostFocusTarget(int panel, const std::string& path, const std::string& name);
 };
+
+extern CPluginInterfaceForMenuExt InterfaceForMenuExt;
 
 class CPluginInterface : public CPluginInterfaceAbstract
 {

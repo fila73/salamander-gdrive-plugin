@@ -1080,11 +1080,7 @@ void CGDriveFindDialog::FocusSelectedItem()
         relPath = "\\" + relPath;
     }
 
-    if (SalamanderGeneral)
-    {
-        int failReason = 0;
-        SalamanderGeneral->ChangePanelPathToPluginFS(m_panel, AssignedFSName, relPath.c_str(), NULL, -1, item.name.c_str());
-    }
+    InterfaceForMenuExt.PostFocusTarget(m_panel, relPath, item.name);
 
     EndDialog(m_hDlg, IDOK);
 }

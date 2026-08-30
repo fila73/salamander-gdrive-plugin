@@ -6,6 +6,21 @@
 
 CPluginInterfaceForMenuExt InterfaceForMenuExt;
 
+static std::string s_pendingFocusPath;
+static std::string s_pendingFocusName;
+static int s_pendingFocusPanel = PANEL_SOURCE;
+
+void CPluginInterfaceForMenuExt::PostFocusTarget(int panel, const std::string& path, const std::string& name)
+{
+    s_pendingFocusPanel = panel;
+    s_pendingFocusPath = path;
+    s_pendingFocusName = name;
+    if (SalamanderGeneral)
+    {
+        SalamanderGeneral->PostMenuExtCommand(CM_FIND_FOCUS_TARGET, TRUE);
+    }
+}
+
 DWORD WINAPI CPluginInterfaceForMenuExt::GetMenuItemState(int id, DWORD eventMask)
 {
     DWORD state = MENU_ITEM_STATE_ENABLED;
@@ -24,6 +39,20 @@ BOOL WINAPI CPluginInterfaceForMenuExt::ExecuteMenuItem(CSalamanderForOperations
 {
     switch (id)
     {
+    case CM_FIND_FOCUS_TARGET:
+    {
+        if (!s_pendingFocusPath.empty())
+        {
+            int failReason = 0;
+            SalamanderGeneral->ChangePanelPathToPluginFS(s_pendingFocusPanel, AssignedFSName,
+                                                         s_pendingFocusPath.c_str(), NULL, -1,
+                                                         s_pendingFocusName.c_str());
+            s_pendingFocusPath.clear();
+            s_pendingFocusName.clear();
+        }
+        return TRUE;
+    }
+
     case CM_OPEN_GDRIVE:
     {
         int failReason = 0;

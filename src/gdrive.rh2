@@ -44,6 +44,7 @@
 #define CM_REMOVE_STAR              1110
 #define CM_RESTORE_TRASH            1111
 #define CM_EMPTY_TRASH              1112
+#define CM_FIND_FOCUS_TARGET        1113
 
 // String IDs for menus & dialogs
 #define IDS_MENU_CONNECT            2001
