@@ -21,11 +21,10 @@
 
 static CGDriveFindDialog* s_activeFindDialog = nullptr;
 
-CGDriveFindDialog::CGDriveFindDialog(HWND hParent, CPluginFS* pFS, int panel,
+CGDriveFindDialog::CGDriveFindDialog(HWND hParent, int panel,
                                      const std::string& currentPath,
                                      const std::string& currentFolderId)
     : m_hParent(hParent),
-      m_pFS(pFS),
       m_panel(panel),
       m_initialPath(currentPath),
       m_initialFolderId(currentFolderId)
@@ -41,16 +40,49 @@ CGDriveFindDialog::~CGDriveFindDialog()
     }
 }
 
-bool CGDriveFindDialog::ShowModal()
+void CGDriveFindDialog::Launch(HWND hParent, int panel, const std::string& currentPath, const std::string& currentFolderId)
+{
+    if (s_activeFindDialog && s_activeFindDialog->m_hDlg && IsWindow(s_activeFindDialog->m_hDlg))
+    {
+        SetForegroundWindow(s_activeFindDialog->m_hDlg);
+        return;
+    }
+
+    std::thread t([hParent, panel, currentPath, currentFolderId]() {
+        CGDriveFindDialog* dlg = new CGDriveFindDialog(hParent, panel, currentPath, currentFolderId);
+        dlg->ExecuteModeless();
+        delete dlg;
+    });
+    t.detach();
+}
+
+void CGDriveFindDialog::ExecuteModeless()
 {
     s_activeFindDialog = this;
-    INT_PTR res = DialogBoxParam(HLanguage ? HLanguage : DLLInstance,
-                                 MAKEINTRESOURCE(IDD_FIND),
-                                 m_hParent,
-                                 DialogProc,
-                                 (LPARAM)this);
+    HWND hWnd = CreateDialogParam(HLanguage ? HLanguage : DLLInstance,
+                                  MAKEINTRESOURCE(IDD_FIND),
+                                  m_hParent,
+                                  DialogProc,
+                                  (LPARAM)this);
+    if (!hWnd)
+    {
+        s_activeFindDialog = nullptr;
+        return;
+    }
+
+    ShowWindow(hWnd, SW_SHOW);
+    SetForegroundWindow(hWnd);
+
+    MSG msg;
+    while (IsWindow(hWnd) && GetMessage(&msg, NULL, 0, 0))
+    {
+        if (!IsDialogMessage(hWnd, &msg))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
     s_activeFindDialog = nullptr;
-    return res == IDOK;
 }
 
 INT_PTR CALLBACK CGDriveFindDialog::DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -86,6 +118,11 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
     {
     case WM_INITDIALOG:
         OnInitDialog(hDlg);
+        return TRUE;
+
+    case WM_CLOSE:
+        StopSearch();
+        DestroyWindow(hDlg);
         return TRUE;
 
     case WM_COMMAND:
@@ -436,10 +473,16 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
         std::replace(winPath.begin(), winPath.end(), '/', '\\');
         int idx = (int)SendMessage(m_hLookIn, CB_ADDSTRING, 0, (LPARAM)winPath.c_str());
         SendMessage(m_hLookIn, CB_SETCURSEL, idx, 0);
+        SendMessage(m_hSubdir, BM_SETCHECK, BST_UNCHECKED, 0);
+        EnableWindow(m_hLookIn, TRUE);
+        EnableWindow(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), TRUE);
     }
     else
     {
         SendMessage(m_hLookIn, CB_SETCURSEL, 0, 0);
+        SendMessage(m_hSubdir, BM_SETCHECK, BST_CHECKED, 0);
+        EnableWindow(m_hLookIn, FALSE);
+        EnableWindow(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), FALSE);
     }
 
     // Containing combo setup
@@ -453,7 +496,6 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
         SetWindowTextA(m_hContaining, m_historyContaining[0].c_str());
     }
 
-    SendMessage(m_hSubdir, BM_SETCHECK, BST_CHECKED, 0);
     SendMessage(m_hDocsOcr, BM_SETCHECK, BST_CHECKED, 0);
 
     EnableWindow(m_hContaining, FALSE);
@@ -638,6 +680,14 @@ void CGDriveFindDialog::OnCommand(HWND hDlg, int id, HWND hCtrl, UINT codeNotify
         break;
     }
 
+    case IDC_FIND_INCLUDE_SUBDIR:
+    {
+        BOOL wholeDrive = (SendMessage(m_hSubdir, BM_GETCHECK, 0, 0) == BST_CHECKED);
+        EnableWindow(m_hLookIn, !wholeDrive);
+        EnableWindow(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), !wholeDrive);
+        break;
+    }
+
     case IDC_FIND_GREP:
     {
         BOOL grepChecked = (SendMessage(m_hGrep, BM_GETCHECK, 0, 0) == BST_CHECKED);
@@ -674,7 +724,7 @@ void CGDriveFindDialog::OnCommand(HWND hDlg, int id, HWND hCtrl, UINT codeNotify
         }
         else
         {
-            EndDialog(hDlg, IDCANCEL);
+            DestroyWindow(hDlg);
         }
         break;
     }
@@ -761,7 +811,8 @@ void CGDriveFindDialog::StartSearch()
     GetWindowTextA(m_hNamed, namedBuf, sizeof(namedBuf));
     m_currentSearchOpts.queryNamed = namedBuf;
 
-    m_currentSearchOpts.searchSubdirs = (SendMessage(m_hSubdir, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    bool searchWholeDrive = (SendMessage(m_hSubdir, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    m_currentSearchOpts.searchSubdirs = true;
     m_currentSearchOpts.searchContent = (SendMessage(m_hGrep, BM_GETCHECK, 0, 0) == BST_CHECKED);
 
     char containingBuf[256] = {0};
@@ -774,53 +825,58 @@ void CGDriveFindDialog::StartSearch()
     m_currentSearchOpts.trashedOnly = m_trashedOnly;
 
     // 2. Resolve LookIn folder scope on UI thread
-    char lookInBuf[512] = {0};
-    GetWindowTextA(m_hLookIn, lookInBuf, sizeof(lookInBuf));
-    std::string lookInStr = lookInBuf;
-
-    std::string allDrive = LoadStr(IDS_FIND_LOOKIN_ALL_DRIVE);
-    if (lookInStr == allDrive || lookInStr == "gdrive:\\" || lookInStr == "/")
+    std::string lookInStr;
+    if (searchWholeDrive)
     {
         // Entire Drive
         m_currentSearchOpts.folderScopeId.clear();
         m_currentSearchOpts.targetFolderPath.clear();
     }
-    else if (_stricmp(lookInStr.c_str(), "gdrive:\\Shared with me") == 0 || _stricmp(lookInStr.c_str(), "\\Shared with me") == 0)
-    {
-        m_currentSearchOpts.sharedWithMeOnly = true;
-        m_currentSearchOpts.targetFolderPath = "\\Shared with me";
-    }
-    else if (_stricmp(lookInStr.c_str(), "gdrive:\\Starred") == 0 || _stricmp(lookInStr.c_str(), "\\Starred") == 0)
-    {
-        m_currentSearchOpts.starredOnly = true;
-        m_currentSearchOpts.targetFolderPath = "\\Starred";
-    }
-    else if (_stricmp(lookInStr.c_str(), "gdrive:\\Trash") == 0 || _stricmp(lookInStr.c_str(), "\\Trash") == 0)
-    {
-        m_currentSearchOpts.trashedOnly = true;
-        m_currentSearchOpts.targetFolderPath = "\\Trash";
-    }
     else
     {
-        std::string path = lookInStr;
-        if (path.rfind("gdrive:", 0) == 0)
+        char lookInBuf[512] = {0};
+        GetWindowTextA(m_hLookIn, lookInBuf, sizeof(lookInBuf));
+        lookInStr = lookInBuf;
+
+        std::string allDrive = LoadStr(IDS_FIND_LOOKIN_ALL_DRIVE);
+        if (lookInStr == allDrive || lookInStr == "gdrive:\\" || lookInStr == "/")
         {
-            path = path.substr(7);
+            m_currentSearchOpts.folderScopeId.clear();
+            m_currentSearchOpts.targetFolderPath.clear();
         }
-        std::replace(path.begin(), path.end(), '\\', '/');
-        if (path.empty() || path[0] != '/') path = "/" + path;
-
-        std::string winPath = path;
-        std::replace(winPath.begin(), winPath.end(), '/', '\\');
-        m_currentSearchOpts.targetFolderPath = winPath;
-
-        std::string folderId, driveId;
-        bool isShared = false;
-        if (m_pFS && m_pFS->ResolveFolderIdForPath(path, folderId, driveId, isShared))
+        else if (_stricmp(lookInStr.c_str(), "gdrive:\\Shared with me") == 0 || _stricmp(lookInStr.c_str(), "\\Shared with me") == 0)
         {
-            m_currentSearchOpts.folderScopeId = folderId;
-            m_currentSearchOpts.driveId = driveId;
-            m_currentSearchOpts.isSharedDrive = isShared;
+            m_currentSearchOpts.sharedWithMeOnly = true;
+            m_currentSearchOpts.targetFolderPath = "\\Shared with me";
+        }
+        else if (_stricmp(lookInStr.c_str(), "gdrive:\\Starred") == 0 || _stricmp(lookInStr.c_str(), "\\Starred") == 0)
+        {
+            m_currentSearchOpts.starredOnly = true;
+            m_currentSearchOpts.targetFolderPath = "\\Starred";
+        }
+        else if (_stricmp(lookInStr.c_str(), "gdrive:\\Trash") == 0 || _stricmp(lookInStr.c_str(), "\\Trash") == 0)
+        {
+            m_currentSearchOpts.trashedOnly = true;
+            m_currentSearchOpts.targetFolderPath = "\\Trash";
+        }
+        else
+        {
+            std::string path = lookInStr;
+            if (path.rfind("gdrive:", 0) == 0)
+            {
+                path = path.substr(7);
+            }
+            std::replace(path.begin(), path.end(), '\\', '/');
+            if (path.empty() || path[0] != '/') path = "/" + path;
+
+            std::string winPath = path;
+            std::replace(winPath.begin(), winPath.end(), '/', '\\');
+            m_currentSearchOpts.targetFolderPath = winPath;
+
+            if (!m_initialFolderId.empty() && _stricmp(path.c_str(), m_initialPath.c_str()) == 0)
+            {
+                m_currentSearchOpts.folderScopeId = m_initialFolderId;
+            }
         }
     }
 
@@ -1129,7 +1185,7 @@ void CGDriveFindDialog::FocusSelectedItem()
 
     InterfaceForMenuExt.PostFocusTarget(m_panel, relPath, item.name);
 
-    EndDialog(m_hDlg, IDOK);
+    DestroyWindow(m_hDlg);
 }
 
 void CGDriveFindDialog::ViewSelectedItem()

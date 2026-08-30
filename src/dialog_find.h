@@ -17,10 +17,11 @@
 class CGDriveFindDialog
 {
 public:
-    CGDriveFindDialog(HWND hParent, CPluginFS* pFS, int panel, const std::string& currentPath, const std::string& currentFolderId);
+    CGDriveFindDialog(HWND hParent, int panel, const std::string& currentPath, const std::string& currentFolderId);
     ~CGDriveFindDialog();
 
-    bool ShowModal();
+    static void Launch(HWND hParent, int panel, const std::string& currentPath, const std::string& currentFolderId);
+    void ExecuteModeless();
 
 private:
     static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -47,7 +48,6 @@ private:
 
     HWND m_hDlg = NULL;
     HWND m_hParent = NULL;
-    CPluginFS* m_pFS = nullptr;
     int m_panel = 0;
     std::string m_initialPath;
     std::string m_initialFolderId;

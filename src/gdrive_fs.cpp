@@ -161,8 +161,7 @@ BOOL WINAPI CPluginFS::ExecuteCommandLine(HWND parent, char* command, int& selFr
 
 BOOL WINAPI CPluginFS::OpenFindDialog(const char* fsName, int panel)
 {
-    CGDriveFindDialog dlg(SalamanderGeneral->GetMainWindowHWND(), this, panel, m_currentPath, m_currentFolderId);
-    dlg.ShowModal();
+    CGDriveFindDialog::Launch(SalamanderGeneral->GetMainWindowHWND(), panel, m_currentPath, m_currentFolderId);
     return TRUE;
 }
 
