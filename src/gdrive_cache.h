@@ -67,7 +67,7 @@ public:
     // Folder size caching and calculation
     void SetFolderSize(const std::string& folderId, int64_t size);
     bool GetFolderSize(const std::string& folderId, int64_t& sizeOut);
-    bool ComputeFolderSizeFromCache(const std::string& folderId, int64_t& sizeOut, int& filesCountOut, int& dirsCountOut);
+    bool ComputeFolderSizeFromCache(const std::string& folderId, int64_t& sizeOut, int& filesCountOut, int& dirsCountOut, std::set<std::string>* pVisitedFolderIdsOut = nullptr);
 
     // Query Google Drive Changes API if the check interval has elapsed.
     // Returns true if changes were checked successfully (or if interval has not elapsed yet).

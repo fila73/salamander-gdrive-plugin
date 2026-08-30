@@ -353,20 +353,13 @@ bool CacheManager::GetFolderSize(const std::string& folderId, int64_t& sizeOut)
     return false;
 }
 
-bool CacheManager::ComputeFolderSizeFromCache(const std::string& folderId, int64_t& sizeOut, int& filesCountOut, int& dirsCountOut)
+bool CacheManager::ComputeFolderSizeFromCache(const std::string& folderId, int64_t& sizeOut, int& filesCountOut, int& dirsCountOut, std::set<std::string>* pVisitedFolderIdsOut)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     sizeOut = 0;
     filesCountOut = 0;
     dirsCountOut = 0;
-
-    auto itSize = m_folderSizes.find(folderId);
-    if (itSize != m_folderSizes.end())
-    {
-        sizeOut = itSize->second;
-        return true;
-    }
 
     auto itRoot = m_folders.find(folderId);
     if (itRoot == m_folders.end() || !itRoot->second.isValid)
@@ -428,6 +421,10 @@ bool CacheManager::ComputeFolderSizeFromCache(const std::string& folderId, int64
         dirsCountOut = totalDirs;
         m_folderSizes[folderId] = totalBytes;
         m_dirty = true;
+        if (pVisitedFolderIdsOut)
+        {
+            pVisitedFolderIdsOut->insert(visited.begin(), visited.end());
+        }
         return true;
     }
 

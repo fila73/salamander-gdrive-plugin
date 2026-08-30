@@ -2552,11 +2552,10 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
             int64_t folderSize = 0;
             int filesCount = 0;
             int dirsCount = 0;
-            if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(item->id, folderSize, filesCount, dirsCount))
+            if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(item->id, folderSize, filesCount, dirsCount, &precalculatedFolderIds))
             {
                 totalItems += filesCount;
                 totalBatchBytes += folderSize;
-                precalculatedFolderIds.insert(item->id);
             }
             else
             {
