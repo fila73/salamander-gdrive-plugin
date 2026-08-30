@@ -866,6 +866,17 @@ void CTransferProgressDialog::SetTotalBatch(int totalFiles, int64_t totalBytes)
     }
 }
 
+void CTransferProgressDialog::AddBatchItems(int count, int64_t bytes)
+{
+    m_totalBatchFiles += count;
+    if (m_totalBatchFiles < 1) m_totalBatchFiles = 1;
+    m_totalBatchBytes += bytes;
+    if (HWindow)
+    {
+        UpdateUI(m_currentFileBytesTransferred, m_currentFileTotalBytes);
+    }
+}
+
 void CTransferProgressDialog::SetCurrentFile(const std::string& fileName, int64_t totalBytes)
 {
     m_fileName = fileName;
@@ -873,6 +884,11 @@ void CTransferProgressDialog::SetCurrentFile(const std::string& fileName, int64_
     m_currentFileBytesTransferred = 0;
     m_startTick = GetTickCount();
     m_lastUpdateTick = m_startTick;
+
+    if (m_completedBatchFiles >= m_totalBatchFiles)
+    {
+        m_totalBatchFiles = m_completedBatchFiles + 1;
+    }
 
     if (HWindow)
     {
@@ -978,14 +994,13 @@ void CTransferProgressDialog::UpdateUI(int64_t bytesTransferred, int64_t totalBy
     // 2. Batch Total Progress
     int totalPercent = 0;
     int totalPos = 0;
-    int currentFileNum = std::min(m_completedBatchFiles + (bytesTransferred > 0 || m_currentFileTotalBytes > 0 ? 1 : 0),
-                                  m_totalBatchFiles > 0 ? m_totalBatchFiles : 1);
-    if (currentFileNum == 0 && m_totalBatchFiles > 0) currentFileNum = 1;
-    int totalFilesCount = (m_totalBatchFiles > 0 ? m_totalBatchFiles : 1);
+    int totalFilesCount = std::max(m_totalBatchFiles, m_completedBatchFiles + 1);
+    int currentFileNum = m_completedBatchFiles + 1;
+    if (currentFileNum > totalFilesCount) currentFileNum = totalFilesCount;
 
     int64_t totalOverallBytesTransferred = m_completedBatchBytes + bytesTransferred;
 
-    if (m_totalBatchBytes > 0)
+    if (m_totalBatchBytes > 0 && m_totalBatchBytes >= totalOverallBytesTransferred)
     {
         totalPercent = (int)((totalOverallBytesTransferred * 100) / m_totalBatchBytes);
         if (totalPercent > 100) totalPercent = 100;
@@ -1001,7 +1016,7 @@ void CTransferProgressDialog::UpdateUI(int64_t bytesTransferred, int64_t totalBy
     }
     else
     {
-        // Calculate based on files count
+        // Calculate based on files count & current file fraction
         double fileProgressRatio = (m_currentFileTotalBytes > 0) ? ((double)bytesTransferred / (double)m_currentFileTotalBytes) : 0.0;
         double overallFileProgress = ((double)m_completedBatchFiles + fileProgressRatio) / (double)totalFilesCount;
         totalPercent = (int)(overallFileProgress * 100.0);

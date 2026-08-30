@@ -2084,6 +2084,20 @@ bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, con
         return false;
     }
 
+    if (pProgressDlg)
+    {
+        int newItemsCount = 0;
+        int64_t newBytes = 0;
+        for (const auto& child : children)
+        {
+            newItemsCount++;
+            if (!child.isFolder)
+                newBytes += child.size;
+        }
+        // Replace this 1 folder slot with count of items inside it
+        pProgressDlg->AddBatchItems(newItemsCount > 0 ? (newItemsCount - 1) : 0, newBytes);
+    }
+
     for (const auto& child : children)
     {
         if (pProgressDlg && pProgressDlg->IsCancelled())
@@ -2289,6 +2303,29 @@ bool CPluginFS::UploadFolderRecursive(const std::wstring& localDirPath, const st
     HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &fd);
     if (hFind != INVALID_HANDLE_VALUE)
     {
+        if (pProgressDlg)
+        {
+            int localCount = 0;
+            int64_t localBytes = 0;
+            do
+            {
+                if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
+                    continue;
+                localCount++;
+                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+                {
+                    LARGE_INTEGER li;
+                    li.LowPart = fd.nFileSizeLow;
+                    li.HighPart = fd.nFileSizeHigh;
+                    localBytes += li.QuadPart;
+                }
+            } while (FindNextFileW(hFind, &fd));
+            FindClose(hFind);
+
+            pProgressDlg->AddBatchItems(localCount > 0 ? (localCount - 1) : 0, localBytes);
+            hFind = FindFirstFileW(searchPattern.c_str(), &fd);
+        }
+
         do
         {
             if (pProgressDlg && pProgressDlg->IsCancelled())
@@ -2496,9 +2533,32 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
 
     std::vector<std::pair<std::string, std::string>> itemsToTrash; // name, id for Move operations
 
+    int64_t totalBatchBytes = 0;
+    int totalItems = 0;
+    if (focused)
+    {
+        const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(panel, &isDir);
+        if (f)
+        {
+            totalItems = 1;
+            const GDriveApi::GDriveItem* item = FindItemByPanelName(f->Name);
+            if (item && !item->isFolder) totalBatchBytes = item->size;
+        }
+    }
+    else
+    {
+        int tempIdx = 0;
+        BOOL tempIsDir = FALSE;
+        while (const CFileData* f = SalamanderGeneral->GetPanelSelectedItem(panel, &tempIdx, &tempIsDir))
+        {
+            totalItems++;
+            const GDriveApi::GDriveItem* item = FindItemByPanelName(f->Name);
+            if (item && !item->isFolder) totalBatchBytes += item->size;
+        }
+    }
+
     CTransferProgressDialog progressDlg(parent, false, "", 0);
-    int totalItems = (focused ? 1 : (selectedFiles + selectedDirs));
-    progressDlg.SetTotalBatch(totalItems > 0 ? totalItems : 1, 0);
+    progressDlg.SetTotalBatch(totalItems > 0 ? totalItems : 1, totalBatchBytes);
     bool progressStarted = false;
 
     while (true)

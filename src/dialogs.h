@@ -110,6 +110,7 @@ public:
     bool Start();
     void Stop();
     void SetTotalBatch(int totalFiles, int64_t totalBytes = 0);
+    void AddBatchItems(int count, int64_t bytes = 0);
     void SetCurrentFile(const std::string& fileName, int64_t totalBytes);
     void OnFileCompleted(int64_t fileBytes = -1);
     void SetActionLabel(int strResId);
