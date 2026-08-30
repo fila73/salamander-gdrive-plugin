@@ -743,7 +743,12 @@ CTransferProgressDialog::CTransferProgressDialog(HWND hParent, bool isUpload, co
       m_isUpload(isUpload),
       m_actionResId(isUpload ? IDS_TRANSFER_UPLOADING : IDS_TRANSFER_DOWNLOADING),
       m_fileName(fileName),
-      m_totalBytes(totalBytes),
+      m_currentFileTotalBytes(totalBytes),
+      m_currentFileBytesTransferred(0),
+      m_totalBatchFiles(1),
+      m_totalBatchBytes(totalBytes),
+      m_completedBatchFiles(0),
+      m_completedBatchBytes(0),
       m_cancelled(false),
       m_startTick(0),
       m_lastUpdateTick(0)
@@ -814,6 +819,9 @@ bool CTransferProgressDialog::Start()
     std::string actionText = LoadStr(m_actionResId);
     SetDlgItemTextA(HWindow, IDC_TRANSFER_ACTION_LABEL, actionText.c_str());
 
+    std::string totalLabelText = LoadStr(IDS_TRANSFER_TOTAL_LABEL);
+    SetDlgItemTextA(HWindow, IDC_TRANSFER_TOTAL_LABEL, totalLabelText.c_str());
+
     std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(m_fileName);
     SetDlgItemTextA(HWindow, IDC_TRANSFER_FILENAME, ansiFileName.c_str());
 
@@ -824,17 +832,45 @@ bool CTransferProgressDialog::Start()
         SendMessage(hPb, PBM_SETPOS, 0, 0);
     }
 
+    HWND hTotalPb = GetDlgItem(HWindow, IDC_TRANSFER_TOTAL_PROGRESSBAR);
+    if (hTotalPb)
+    {
+        SendMessage(hTotalPb, PBM_SETRANGE32, 0, 1000);
+        SendMessage(hTotalPb, PBM_SETPOS, 0, 0);
+    }
+
     m_startTick = GetTickCount();
     m_lastUpdateTick = m_startTick;
 
-    UpdateUI(0, m_totalBytes);
+    UpdateUI(0, m_currentFileTotalBytes);
     return true;
+}
+
+void CTransferProgressDialog::SetTotalBatch(int totalFiles, int64_t totalBytes)
+{
+    m_totalBatchFiles = (totalFiles > 0 ? totalFiles : 1);
+    m_totalBatchBytes = totalBytes;
+    m_completedBatchFiles = 0;
+    m_completedBatchBytes = 0;
+    m_currentFileBytesTransferred = 0;
+
+    if (HWindow)
+    {
+        HWND hTotalPb = GetDlgItem(HWindow, IDC_TRANSFER_TOTAL_PROGRESSBAR);
+        if (hTotalPb)
+        {
+            SendMessage(hTotalPb, PBM_SETRANGE32, 0, 1000);
+            SendMessage(hTotalPb, PBM_SETPOS, 0, 0);
+        }
+        UpdateUI(m_currentFileBytesTransferred, m_currentFileTotalBytes);
+    }
 }
 
 void CTransferProgressDialog::SetCurrentFile(const std::string& fileName, int64_t totalBytes)
 {
     m_fileName = fileName;
-    m_totalBytes = totalBytes;
+    m_currentFileTotalBytes = totalBytes;
+    m_currentFileBytesTransferred = 0;
     m_startTick = GetTickCount();
     m_lastUpdateTick = m_startTick;
 
@@ -848,7 +884,23 @@ void CTransferProgressDialog::SetCurrentFile(const std::string& fileName, int64_
         {
             SendMessage(hPb, PBM_SETPOS, 0, 0);
         }
-        UpdateUI(0, m_totalBytes);
+        UpdateUI(0, m_currentFileTotalBytes);
+    }
+}
+
+void CTransferProgressDialog::OnFileCompleted(int64_t fileBytes)
+{
+    if (fileBytes < 0)
+    {
+        fileBytes = (m_currentFileBytesTransferred > 0 ? m_currentFileBytesTransferred : m_currentFileTotalBytes);
+    }
+    m_completedBatchBytes += fileBytes;
+    m_completedBatchFiles++;
+    m_currentFileBytesTransferred = 0;
+
+    if (HWindow)
+    {
+        UpdateUI(0, 0);
     }
 }
 
@@ -888,25 +940,29 @@ void CTransferProgressDialog::UpdateUI(int64_t bytesTransferred, int64_t totalBy
 {
     if (!HWindow) return;
 
-    int percent = 0;
-    if (totalBytes > 0)
+    m_currentFileBytesTransferred = bytesTransferred;
+    if (totalBytes > 0) m_currentFileTotalBytes = totalBytes;
+
+    // 1. Current File Progress
+    int filePercent = 0;
+    if (m_currentFileTotalBytes > 0)
     {
-        percent = (int)((bytesTransferred * 100) / totalBytes);
-        if (percent > 100) percent = 100;
+        filePercent = (int)((bytesTransferred * 100) / m_currentFileTotalBytes);
+        if (filePercent > 100) filePercent = 100;
     }
 
     HWND hPb = GetDlgItem(HWindow, IDC_TRANSFER_PROGRESSBAR);
     if (hPb)
     {
-        int pos = (int)((bytesTransferred * 1000) / (totalBytes > 0 ? totalBytes : 1));
+        int pos = (int)((bytesTransferred * 1000) / (m_currentFileTotalBytes > 0 ? m_currentFileTotalBytes : 1));
         if (pos > 1000) pos = 1000;
         SendMessage(hPb, PBM_SETPOS, pos, 0);
     }
 
     char bytesBuf[128];
     std::string trStr = FormatSize(bytesTransferred);
-    std::string totStr = FormatSize(totalBytes);
-    snprintf(bytesBuf, sizeof(bytesBuf), LoadStr(IDS_TRANSFER_BYTES_FMT), trStr.c_str(), totStr.c_str(), percent);
+    std::string totStr = FormatSize(m_currentFileTotalBytes);
+    snprintf(bytesBuf, sizeof(bytesBuf), LoadStr(IDS_TRANSFER_BYTES_FMT), trStr.c_str(), totStr.c_str(), filePercent);
     SetDlgItemTextA(HWindow, IDC_TRANSFER_BYTES, bytesBuf);
 
     DWORD now = GetTickCount();
@@ -918,6 +974,56 @@ void CTransferProgressDialog::UpdateUI(int64_t bytesTransferred, int64_t totalBy
         snprintf(speedBuf, sizeof(speedBuf), LoadStr(IDS_TRANSFER_SPEED_FMT), speedMBs);
         SetDlgItemTextA(HWindow, IDC_TRANSFER_SPEED, speedBuf);
     }
+
+    // 2. Batch Total Progress
+    int totalPercent = 0;
+    int totalPos = 0;
+    int currentFileNum = std::min(m_completedBatchFiles + (bytesTransferred > 0 || m_currentFileTotalBytes > 0 ? 1 : 0),
+                                  m_totalBatchFiles > 0 ? m_totalBatchFiles : 1);
+    if (currentFileNum == 0 && m_totalBatchFiles > 0) currentFileNum = 1;
+    int totalFilesCount = (m_totalBatchFiles > 0 ? m_totalBatchFiles : 1);
+
+    int64_t totalOverallBytesTransferred = m_completedBatchBytes + bytesTransferred;
+
+    if (m_totalBatchBytes > 0)
+    {
+        totalPercent = (int)((totalOverallBytesTransferred * 100) / m_totalBatchBytes);
+        if (totalPercent > 100) totalPercent = 100;
+        totalPos = (int)((totalOverallBytesTransferred * 1000) / m_totalBatchBytes);
+        if (totalPos > 1000) totalPos = 1000;
+
+        char totalBytesBuf[128];
+        std::string totTrStr = FormatSize(totalOverallBytesTransferred);
+        std::string totAllStr = FormatSize(m_totalBatchBytes);
+        snprintf(totalBytesBuf, sizeof(totalBytesBuf), LoadStr(IDS_TRANSFER_TOTAL_BYTES_FMT),
+                 totTrStr.c_str(), totAllStr.c_str(), totalPercent);
+        SetDlgItemTextA(HWindow, IDC_TRANSFER_TOTAL_BYTES, totalBytesBuf);
+    }
+    else
+    {
+        // Calculate based on files count
+        double fileProgressRatio = (m_currentFileTotalBytes > 0) ? ((double)bytesTransferred / (double)m_currentFileTotalBytes) : 0.0;
+        double overallFileProgress = ((double)m_completedBatchFiles + fileProgressRatio) / (double)totalFilesCount;
+        totalPercent = (int)(overallFileProgress * 100.0);
+        if (totalPercent > 100) totalPercent = 100;
+        totalPos = (int)(overallFileProgress * 1000.0);
+        if (totalPos > 1000) totalPos = 1000;
+
+        char totalBytesBuf[128];
+        std::string totTrStr = FormatSize(totalOverallBytesTransferred);
+        snprintf(totalBytesBuf, sizeof(totalBytesBuf), "%s (%d%%)", totTrStr.c_str(), totalPercent);
+        SetDlgItemTextA(HWindow, IDC_TRANSFER_TOTAL_BYTES, totalBytesBuf);
+    }
+
+    HWND hTotalPb = GetDlgItem(HWindow, IDC_TRANSFER_TOTAL_PROGRESSBAR);
+    if (hTotalPb)
+    {
+        SendMessage(hTotalPb, PBM_SETPOS, totalPos, 0);
+    }
+
+    char filesBuf[64];
+    snprintf(filesBuf, sizeof(filesBuf), LoadStr(IDS_TRANSFER_TOTAL_FILES_FMT), currentFileNum, totalFilesCount);
+    SetDlgItemTextA(HWindow, IDC_TRANSFER_TOTAL_FILES, filesBuf);
 
     UpdateWindow(HWindow);
 }

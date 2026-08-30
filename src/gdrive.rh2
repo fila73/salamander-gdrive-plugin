@@ -149,5 +149,8 @@
 #define IDS_CONFLICT_DUP_NEWEST                  2194
 #define IDS_CONFLICT_DUP_OLDEST                  2195
 #define IDS_CONFLICT_DUP_COUNT_FMT               2196
+#define IDS_TRANSFER_TOTAL_LABEL                 2197
+#define IDS_TRANSFER_TOTAL_FILES_FMT             2198
+#define IDS_TRANSFER_TOTAL_BYTES_FMT             2199
 
 #endif // __GDRIVE_RH2

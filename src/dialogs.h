@@ -104,12 +104,14 @@ private:
 class CTransferProgressDialog : public CCommonDialog
 {
 public:
-    CTransferProgressDialog(HWND hParent, bool isUpload, const std::string& fileName, int64_t totalBytes);
+    CTransferProgressDialog(HWND hParent, bool isUpload, const std::string& fileName = "", int64_t totalBytes = 0);
     ~CTransferProgressDialog();
 
     bool Start();
     void Stop();
+    void SetTotalBatch(int totalFiles, int64_t totalBytes = 0);
     void SetCurrentFile(const std::string& fileName, int64_t totalBytes);
+    void OnFileCompleted(int64_t fileBytes = -1);
     void SetActionLabel(int strResId);
 
     bool OnProgress(int64_t bytesTransferred, int64_t totalBytes);
@@ -125,7 +127,12 @@ private:
     bool m_isUpload;
     int m_actionResId;
     std::string m_fileName;
-    int64_t m_totalBytes;
+    int64_t m_currentFileTotalBytes;
+    int64_t m_currentFileBytesTransferred;
+    int m_totalBatchFiles;
+    int64_t m_totalBatchBytes;
+    int m_completedBatchFiles;
+    int64_t m_completedBatchBytes;
     bool m_cancelled;
     DWORD m_startTick;
     DWORD m_lastUpdateTick;

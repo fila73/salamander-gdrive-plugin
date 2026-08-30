@@ -1652,6 +1652,8 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
     BOOL overallSuccess = TRUE;
 
     CTransferProgressDialog progressDlg(parent, true, "", 0);
+    int totalItems = selectedFiles + selectedDirs;
+    progressDlg.SetTotalBatch(totalItems > 0 ? totalItems : 1, 0);
     bool progressStarted = false;
 
     while (next(parent, 0, &itemName, &isDir, &fileSize, &attr, &lastWriteTime, nextParam, &enumError) != NULL)
@@ -2048,6 +2050,10 @@ bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std:
     {
         localProgress->Stop();
     }
+    else if (success && activeDlg)
+    {
+        activeDlg->OnFileCompleted(item.size);
+    }
 
     if (!success && !err.empty() && (!activeDlg || !activeDlg->IsCancelled()))
     {
@@ -2223,6 +2229,10 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
     if (localProgress)
     {
         localProgress->Stop();
+    }
+    else if (success && activeDlg)
+    {
+        activeDlg->OnFileCompleted(localFileSize.QuadPart);
     }
 
     if (!success)
@@ -2487,6 +2497,8 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
     std::vector<std::pair<std::string, std::string>> itemsToTrash; // name, id for Move operations
 
     CTransferProgressDialog progressDlg(parent, false, "", 0);
+    int totalItems = (focused ? 1 : (selectedFiles + selectedDirs));
+    progressDlg.SetTotalBatch(totalItems > 0 ? totalItems : 1, 0);
     bool progressStarted = false;
 
     while (true)
