@@ -387,6 +387,16 @@ protected:
             }
             break;
         }
+        case WM_NOTIFY:
+        {
+            NMHDR* pnm = (NMHDR*)lParam;
+            if (pnm && (pnm->code == TCN_SELCHANGE || pnm->code == TCN_SELCHANGING))
+            {
+                HWND hTab = pnm->hwndFrom;
+                InvalidateRect(hTab, NULL, TRUE);
+            }
+            break;
+        }
         case WM_NCDESTROY:
         {
             LRESULT res = CWindow::WindowProc(uMsg, wParam, lParam);

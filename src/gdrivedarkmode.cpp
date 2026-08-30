@@ -103,6 +103,191 @@ void ApplyWindowTheme(HWND hwnd)
     }
 }
 
+static LRESULT CALLBACK GroupBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_PAINT)
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        if (hdc)
+        {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+
+            InitTheme();
+
+            // Background
+            FillRect(hdc, &rc, g_theme.brushBgMain);
+
+            char text[256] = {0};
+            GetWindowTextA(hwnd, text, sizeof(text));
+            HFONT hFont = (HFONT)SendMessage(hwnd, WM_GETFONT, 0, 0);
+            HFONT hOldFont = NULL;
+            if (hFont) hOldFont = (HFONT)SelectObject(hdc, hFont);
+
+            SIZE textSize = {0, 0};
+            if (text[0] != '\0')
+            {
+                GetTextExtentPoint32A(hdc, text, (int)strlen(text), &textSize);
+            }
+
+            int topOffset = (textSize.cy > 0) ? (textSize.cy / 2) : 8;
+            RECT frameRc = rc;
+            frameRc.top += topOffset;
+
+            // Draw groupbox frame
+            HPEN hPen = CreatePen(PS_SOLID, 1, RGB(70, 70, 70));
+            HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+            HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(HOLLOW_BRUSH));
+
+            RoundRect(hdc, frameRc.left, frameRc.top, frameRc.right, frameRc.bottom, 4, 4);
+
+            SelectObject(hdc, hOldBrush);
+            SelectObject(hdc, hOldPen);
+            DeleteObject(hPen);
+
+            // Draw label
+            if (text[0] != '\0')
+            {
+                int textHeight = (textSize.cy > 0 ? textSize.cy : 16);
+                RECT textBgRc = { rc.left + 8, 0, rc.left + 8 + textSize.cx + 8, textHeight };
+                FillRect(hdc, &textBgRc, g_theme.brushBgMain);
+
+                SetBkMode(hdc, TRANSPARENT);
+                SetTextColor(hdc, g_theme.textMain);
+                RECT drawRc = { rc.left + 12, 0, rc.left + 12 + textSize.cx, textHeight };
+                DrawTextA(hdc, text, -1, &drawRc, DT_LEFT | DT_SINGLELINE);
+            }
+
+            if (hOldFont) SelectObject(hdc, hOldFont);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+    }
+    else if (uMsg == WM_ERASEBKGND)
+    {
+        return 1;
+    }
+    else if (uMsg == WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(hwnd, GroupBoxSubclassProc, uIdSubclass);
+    }
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+}
+
+static LRESULT CALLBACK TabControlSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_PAINT)
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        if (hdc)
+        {
+            RECT rcClient;
+            GetClientRect(hwnd, &rcClient);
+
+            InitTheme();
+
+            // Fill entire tab strip background
+            FillRect(hdc, &rcClient, g_theme.brushBgMain);
+
+            int tabCount = TabCtrl_GetItemCount(hwnd);
+            int curSel = TabCtrl_GetCurSel(hwnd);
+
+            HFONT hFont = (HFONT)SendMessage(hwnd, WM_GETFONT, 0, 0);
+            HFONT hOldFont = NULL;
+            if (hFont) hOldFont = (HFONT)SelectObject(hdc, hFont);
+
+            HBRUSH hBrushActive = CreateSolidBrush(RGB(48, 48, 48));
+            HBRUSH hBrushInactive = CreateSolidBrush(RGB(32, 32, 32));
+            HPEN hPenBorder = CreatePen(PS_SOLID, 1, RGB(65, 65, 65));
+            HPEN hPenActiveBorder = CreatePen(PS_SOLID, 1, RGB(90, 90, 90));
+            HPEN hPenAccent = CreatePen(PS_SOLID, 2, RGB(0, 120, 215));
+
+            for (int i = 0; i < tabCount; ++i)
+            {
+                RECT rcItem;
+                if (!TabCtrl_GetItemRect(hwnd, i, &rcItem))
+                    continue;
+
+                char text[128] = {0};
+                TCITEMA tci;
+                memset(&tci, 0, sizeof(tci));
+                tci.mask = TCIF_TEXT;
+                tci.pszText = text;
+                tci.cchTextMax = sizeof(text);
+                TabCtrl_GetItem(hwnd, i, &tci);
+
+                bool isSelected = (i == curSel);
+
+                if (isSelected)
+                {
+                    // Draw active tab background
+                    FillRect(hdc, &rcItem, hBrushActive);
+
+                    // Draw active tab border
+                    HPEN hOldPen = (HPEN)SelectObject(hdc, hPenActiveBorder);
+                    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(HOLLOW_BRUSH));
+                    Rectangle(hdc, rcItem.left, rcItem.top, rcItem.right, rcItem.bottom + 1);
+                    SelectObject(hdc, hOldBrush);
+
+                    // Top blue accent line
+                    SelectObject(hdc, hPenAccent);
+                    MoveToEx(hdc, rcItem.left + 1, rcItem.top + 1, NULL);
+                    LineTo(hdc, rcItem.right - 1, rcItem.top + 1);
+                    SelectObject(hdc, hOldPen);
+
+                    SetBkMode(hdc, TRANSPARENT);
+                    SetTextColor(hdc, RGB(255, 255, 255));
+                    DrawTextA(hdc, text, -1, &rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                }
+                else
+                {
+                    // Inactive tab
+                    FillRect(hdc, &rcItem, hBrushInactive);
+
+                    HPEN hOldPen = (HPEN)SelectObject(hdc, hPenBorder);
+                    HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(HOLLOW_BRUSH));
+                    Rectangle(hdc, rcItem.left, rcItem.top, rcItem.right, rcItem.bottom);
+                    SelectObject(hdc, hOldBrush);
+                    SelectObject(hdc, hOldPen);
+
+                    SetBkMode(hdc, TRANSPARENT);
+                    SetTextColor(hdc, RGB(180, 180, 180));
+                    DrawTextA(hdc, text, -1, &rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                }
+            }
+
+            DeleteObject(hBrushActive);
+            DeleteObject(hBrushInactive);
+            DeleteObject(hPenBorder);
+            DeleteObject(hPenActiveBorder);
+            DeleteObject(hPenAccent);
+
+            if (hOldFont) SelectObject(hdc, hOldFont);
+
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+    }
+    else if (uMsg == WM_ERASEBKGND)
+    {
+        return 1;
+    }
+    else if (uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP || uMsg == WM_RBUTTONDOWN)
+    {
+        LRESULT res = DefSubclassProc(hwnd, uMsg, wParam, lParam);
+        InvalidateRect(hwnd, NULL, TRUE);
+        UpdateWindow(hwnd);
+        return res;
+    }
+    else if (uMsg == WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(hwnd, TabControlSubclassProc, uIdSubclass);
+    }
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+}
+
 static BOOL CALLBACK EnumChildProc(HWND hwndChild, LPARAM lParam)
 {
     char className[64] = {0};
@@ -118,7 +303,15 @@ static BOOL CALLBACK EnumChildProc(HWND hwndChild, LPARAM lParam)
     }
     else if (_stricmp(className, "Button") == 0)
     {
-        SetWindowTheme(hwndChild, L"DarkMode_Explorer", NULL);
+        LONG style = GetWindowLong(hwndChild, GWL_STYLE);
+        if ((style & BS_TYPEMASK) == BS_GROUPBOX)
+        {
+            SetWindowSubclass(hwndChild, GroupBoxSubclassProc, 1, 0);
+        }
+        else
+        {
+            SetWindowTheme(hwndChild, L"DarkMode_Explorer", NULL);
+        }
     }
     else if (_stricmp(className, "msctls_progress32") == 0)
     {
@@ -127,7 +320,7 @@ static BOOL CALLBACK EnumChildProc(HWND hwndChild, LPARAM lParam)
     }
     else if (_stricmp(className, "SysTabControl32") == 0)
     {
-        SetWindowTheme(hwndChild, L"DarkMode_Explorer", NULL);
+        SetWindowSubclass(hwndChild, TabControlSubclassProc, 1, 0);
     }
     else if (_stricmp(className, "SysListView32") == 0)
     {
