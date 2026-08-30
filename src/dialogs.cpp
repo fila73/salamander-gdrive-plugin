@@ -937,3 +937,78 @@ bool CTransferProgressDialog::OnProgress(int64_t bytesTransferred, int64_t total
 
     return !m_cancelled;
 }
+
+COverwriteConflictDialog::COverwriteConflictDialog(HWND hParent, bool isUpload,
+                                                   const std::string& srcName, int64_t srcSize,
+                                                   const std::string& dstName, int64_t dstSize)
+    : CCommonDialog(DLLInstance, IDD_OVERWRITE_CONFLICT, hParent),
+      m_isUpload(isUpload),
+      m_srcName(srcName),
+      m_srcSize(srcSize),
+      m_dstName(dstName),
+      m_dstSize(dstSize),
+      m_action(ConflictAction::Cancel),
+      m_applyToAll(false)
+{
+}
+
+INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    switch (uMsg)
+    {
+    case WM_INITDIALOG:
+    {
+        HWND hIcon = GetDlgItem(HWindow, IDC_CONFLICT_ICON);
+        if (hIcon)
+        {
+            HICON hIco = LoadIcon(NULL, IDI_QUESTION);
+            SendMessage(hIcon, STM_SETICON, (WPARAM)hIco, 0);
+        }
+
+        SetWindowTextA(HWindow, LoadStr(IDS_CONFLICT_TITLE));
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_PROMPT, LoadStr(m_isUpload ? IDS_CONFLICT_PROMPT_UPLOAD : IDS_CONFLICT_PROMPT_DOWNLOAD));
+
+        char srcInfo[512];
+        std::string srcSzStr = CTransferProgressDialog::FormatSize(m_srcSize);
+        snprintf(srcInfo, sizeof(srcInfo), LoadStr(IDS_CONFLICT_SRC_FMT), m_srcName.c_str(), srcSzStr.c_str());
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_SRC_INFO, srcInfo);
+
+        char dstInfo[512];
+        std::string dstSzStr = CTransferProgressDialog::FormatSize(m_dstSize);
+        snprintf(dstInfo, sizeof(dstInfo), LoadStr(IDS_CONFLICT_DST_FMT), m_dstName.c_str(), dstSzStr.c_str());
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_DST_INFO, dstInfo);
+
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_OVERWRITE, LoadStr(IDS_CONFLICT_BTN_OVERWRITE));
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_KEEPBOTH, LoadStr(IDS_CONFLICT_BTN_KEEPBOTH));
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_SKIP, LoadStr(IDS_CONFLICT_BTN_SKIP));
+        SetDlgItemTextA(HWindow, IDC_CONFLICT_APPLY_ALL, LoadStr(IDS_CONFLICT_APPLY_ALL));
+        SetDlgItemTextA(HWindow, IDCANCEL, LoadStr(IDS_BUTTON_CANCEL));
+
+        return TRUE;
+    }
+
+    case WM_COMMAND:
+    {
+        WORD id = LOWORD(wParam);
+        if (id == IDC_CONFLICT_BTN_OVERWRITE || id == IDC_CONFLICT_BTN_KEEPBOTH ||
+            id == IDC_CONFLICT_BTN_SKIP || id == IDCANCEL)
+        {
+            m_applyToAll = (IsDlgButtonChecked(HWindow, IDC_CONFLICT_APPLY_ALL) == BST_CHECKED);
+
+            if (id == IDC_CONFLICT_BTN_OVERWRITE)
+                m_action = ConflictAction::Overwrite;
+            else if (id == IDC_CONFLICT_BTN_KEEPBOTH)
+                m_action = ConflictAction::KeepBoth;
+            else if (id == IDC_CONFLICT_BTN_SKIP)
+                m_action = ConflictAction::Skip;
+            else
+                m_action = ConflictAction::Cancel;
+
+            EndDialog(HWindow, (INT_PTR)id);
+            return TRUE;
+        }
+        break;
+    }
+    }
+    return FALSE;
+}

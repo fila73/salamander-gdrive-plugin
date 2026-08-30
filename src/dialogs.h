@@ -134,5 +134,37 @@ private:
     void UpdateUI(int64_t bytesTransferred, int64_t totalBytes);
 };
 
+enum class ConflictAction
+{
+    Overwrite,
+    KeepBoth,
+    Skip,
+    Cancel
+};
+
+class COverwriteConflictDialog : public CCommonDialog
+{
+public:
+    COverwriteConflictDialog(HWND hParent, bool isUpload,
+                             const std::string& srcName, int64_t srcSize,
+                             const std::string& dstName, int64_t dstSize);
+
+    ConflictAction GetAction() const { return m_action; }
+    bool IsApplyToAll() const { return m_applyToAll; }
+
+protected:
+    virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+
+private:
+    bool m_isUpload;
+    std::string m_srcName;
+    int64_t m_srcSize;
+    std::string m_dstName;
+    int64_t m_dstSize;
+
+    ConflictAction m_action;
+    bool m_applyToAll;
+};
+
 void OnConfiguration(HWND hParent);
 void OnAbout(HWND hParent);

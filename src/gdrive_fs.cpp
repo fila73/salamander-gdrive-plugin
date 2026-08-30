@@ -1576,6 +1576,8 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         return FALSE;
     }
 
+    m_batchConflictAction.reset();
+
     std::string uploadPath = m_currentPath;
     if (targetPath && *targetPath)
     {
@@ -1925,6 +1927,28 @@ void WINAPI CPluginFS::ShowSecurityInfo(HWND parent)
 {
 }
 
+static std::wstring MakeUniqueLocalPath(const std::wstring& targetDir, const std::wstring& originalName)
+{
+    size_t dotPos = originalName.rfind(L'.');
+    std::wstring base = (dotPos != std::wstring::npos) ? originalName.substr(0, dotPos) : originalName;
+    std::wstring ext = (dotPos != std::wstring::npos) ? originalName.substr(dotPos) : L"";
+
+    int counter = 1;
+    while (true)
+    {
+        std::wstring candidate = targetDir;
+        if (!candidate.empty() && candidate.back() != L'\\') candidate += L"\\";
+        candidate += base + L" (" + std::to_wstring(counter) + L")" + ext;
+
+        DWORD dw = GetFileAttributesW(candidate.c_str());
+        if (dw == INVALID_FILE_ATTRIBUTES)
+        {
+            return candidate;
+        }
+        counter++;
+    }
+}
+
 bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent, CTransferProgressDialog* pProgressDlg)
 {
     std::string fileName = item.name;
@@ -1952,20 +1976,46 @@ bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std:
     DWORD dwAttr = GetFileAttributesW(localPath.c_str());
     if (dwAttr != INVALID_FILE_ATTRIBUTES && !(dwAttr & FILE_ATTRIBUTE_DIRECTORY))
     {
-        std::string ansiLocalPath = GDriveHttp::HttpClient::WideToAnsi(localPath);
-        char msg[1024] = {0};
-        snprintf(msg, sizeof(msg), LoadStr(IDS_PROMPT_OVERWRITE_FILE), ansiLocalPath.c_str());
-        int res = SalamanderGeneral->SalMessageBox(parent, msg, LoadStr(IDS_PROMPT_OVERWRITE_TITLE), MB_YESNOCANCEL | MB_ICONQUESTION);
-        if (res == IDCANCEL)
+        ConflictAction act;
+        if (m_batchConflictAction.has_value())
+        {
+            act = *m_batchConflictAction;
+        }
+        else
+        {
+            int64_t localSize = 0;
+            HANDLE hLocal = CreateFileW(localPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+            if (hLocal != INVALID_HANDLE_VALUE)
+            {
+                LARGE_INTEGER li;
+                if (GetFileSizeEx(hLocal, &li)) localSize = li.QuadPart;
+                CloseHandle(hLocal);
+            }
+
+            std::string ansiLocalPath = GDriveHttp::HttpClient::WideToAnsi(localPath);
+            COverwriteConflictDialog dlg(parent, false, fileName, item.size, ansiLocalPath, localSize);
+            dlg.Execute();
+            act = dlg.GetAction();
+            if (dlg.IsApplyToAll())
+            {
+                m_batchConflictAction = act;
+            }
+        }
+
+        if (act == ConflictAction::Cancel)
         {
             if (pProgressDlg) pProgressDlg->Cancel();
             return false;
         }
-        if (res == IDNO)
+        if (act == ConflictAction::Skip)
         {
             return true; // Skip file
         }
-        // If IDYES -> proceed to overwrite
+        if (act == ConflictAction::KeepBoth)
+        {
+            localPath = MakeUniqueLocalPath(targetDir, wFileName);
+        }
+        // If ConflictAction::Overwrite -> proceed with original localPath
     }
 
     std::unique_ptr<CTransferProgressDialog> localProgress;
@@ -2057,44 +2107,62 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
     }
 
     // Check if item with this name already exists in target GDrive folder
-    std::string existingId;
+    const GDriveApi::GDriveItem* existingItem = nullptr;
     std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(fileName);
     for (const auto& it : m_cachedItems)
     {
         if (!it.isFolder && (_stricmp(it.name.c_str(), fileName.c_str()) == 0 ||
                              _stricmp(it.name.c_str(), ansiFileName.c_str()) == 0))
         {
-            existingId = it.id;
+            existingItem = &it;
             break;
         }
     }
 
-    if (!existingId.empty())
+    if (existingItem != nullptr)
     {
-        char promptMsg[512] = {0};
-        snprintf(promptMsg, sizeof(promptMsg), LoadStr(IDS_PROMPT_OVERWRITE_GDRIVE), ansiFileName.c_str());
-        int res = SalamanderGeneral->SalMessageBox(parent, promptMsg, LoadStr(IDS_PROMPT_OVERWRITE_TITLE), MB_YESNOCANCEL | MB_ICONQUESTION);
-        if (res == IDCANCEL)
+        ConflictAction act;
+        if (m_batchConflictAction.has_value())
+        {
+            act = *m_batchConflictAction;
+        }
+        else
+        {
+            std::string ansiLocalPath = GDriveHttp::HttpClient::WideToAnsi(localPath);
+            COverwriteConflictDialog dlg(parent, true, ansiLocalPath, localFileSize.QuadPart, existingItem->name, existingItem->size);
+            dlg.Execute();
+            act = dlg.GetAction();
+            if (dlg.IsApplyToAll())
+            {
+                m_batchConflictAction = act;
+            }
+        }
+
+        if (act == ConflictAction::Cancel)
         {
             if (pProgressDlg) pProgressDlg->Cancel();
             return false;
         }
-        if (res == IDNO)
+        if (act == ConflictAction::Skip)
         {
             return true; // Skip file
         }
-        // User agreed to overwrite existing file on Google Drive: trash the old version first
-        std::string trashErr;
-        GDriveApi::ApiClient::GetInstance().TrashItem(existingId, &trashErr);
-        GDriveCache::CacheManager::GetInstance().RemoveItem(parentFolderId, existingId);
-        for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+        if (act == ConflictAction::Overwrite)
         {
-            if (it->id == existingId)
+            std::string existingId = existingItem->id;
+            std::string trashErr;
+            GDriveApi::ApiClient::GetInstance().TrashItem(existingId, &trashErr);
+            GDriveCache::CacheManager::GetInstance().RemoveItem(parentFolderId, existingId);
+            for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
             {
-                m_cachedItems.erase(it);
-                break;
+                if (it->id == existingId)
+                {
+                    m_cachedItems.erase(it);
+                    break;
+                }
             }
         }
+        // If ConflictAction::KeepBoth -> proceed to upload new file without trashing existing item
     }
 
     std::unique_ptr<CTransferProgressDialog> localProgress;
@@ -2247,6 +2315,8 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
     {
         return FALSE;
     }
+
+    m_batchConflictAction.reset();
 
     std::string tpStr = targetPath ? targetPath : "";
     std::string prefix = std::string(fsName && *fsName ? fsName : AssignedFSName) + ":";

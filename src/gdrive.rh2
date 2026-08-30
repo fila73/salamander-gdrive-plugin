@@ -135,5 +135,14 @@
 #define IDS_DOWNLOAD_FAILED                      2180
 #define IDS_STORAGE_INFO_FMT                     2181
 #define IDS_STORAGE_UNLIMITED_FMT                2182
+#define IDS_CONFLICT_TITLE                       2183
+#define IDS_CONFLICT_PROMPT_UPLOAD               2184
+#define IDS_CONFLICT_PROMPT_DOWNLOAD             2185
+#define IDS_CONFLICT_SRC_FMT                     2186
+#define IDS_CONFLICT_DST_FMT                     2187
+#define IDS_CONFLICT_BTN_OVERWRITE               2188
+#define IDS_CONFLICT_BTN_KEEPBOTH                2189
+#define IDS_CONFLICT_BTN_SKIP                    2190
+#define IDS_CONFLICT_APPLY_ALL                   2191
 
 #endif // __GDRIVE_RH2

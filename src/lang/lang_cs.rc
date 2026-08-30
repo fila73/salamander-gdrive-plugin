@@ -125,6 +125,24 @@ BEGIN
     PUSHBUTTON      "Zrušit",IDCANCEL,100,78,60,14
 END
 
+IDD_OVERWRITE_CONFLICT DIALOGEX 0, 0, 310, 155
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Konflikt souborů"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    ICON            "",IDC_CONFLICT_ICON,15,12,20,20
+    LTEXT           "",IDC_CONFLICT_PROMPT,45,12,250,20
+    GROUPBOX        "Zdrojový soubor",-1,15,36,280,32
+    LTEXT           "",IDC_CONFLICT_SRC_INFO,25,48,260,14,SS_PATHELLIPSIS
+    GROUPBOX        "Cílový soubor (existující)",-1,15,72,280,32
+    LTEXT           "",IDC_CONFLICT_DST_INFO,25,84,260,14,SS_PATHELLIPSIS
+    CONTROL         "&Použít pro všechny zbývající konflikty",IDC_CONFLICT_APPLY_ALL,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,15,110,200,10
+    DEFPUSHBUTTON   "&Přepsat",IDC_CONFLICT_BTN_OVERWRITE,15,130,65,14
+    PUSHBUTTON      "&Ponechat oba",IDC_CONFLICT_BTN_KEEPBOTH,85,130,65,14
+    PUSHBUTTON      "Pře&skočit",IDC_CONFLICT_BTN_SKIP,155,130,65,14
+    PUSHBUTTON      "Zrušit",IDCANCEL,230,130,65,14
+END
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // String Table
@@ -231,6 +249,15 @@ BEGIN
     IDS_DOWNLOAD_FAILED         "Nepodařilo se stáhnout soubor."
     IDS_STORAGE_INFO_FMT        "Účet: %s (%s)\n\nÚložiště Google Disk:\nVyužito: %.2f GB z %.2f GB (%.1f %%)\nKoš: %.2f MB"
     IDS_STORAGE_UNLIMITED_FMT   "Účet: %s (%s)\n\nÚložiště Google Disk:\nVyužito: %.2f GB (Neomezená kvóta)"
+    IDS_CONFLICT_TITLE          "Konflikt souborů"
+    IDS_CONFLICT_PROMPT_UPLOAD  "Soubor se stejným názvem již v cílové složce na Google Disku existuje:"
+    IDS_CONFLICT_PROMPT_DOWNLOAD "Soubor se stejným názvem již v cílovém lokálním adresáři existuje:"
+    IDS_CONFLICT_SRC_FMT        "Zdroj: %s (%s)"
+    IDS_CONFLICT_DST_FMT        "Cíl: %s (%s)"
+    IDS_CONFLICT_BTN_OVERWRITE  "&Přepsat"
+    IDS_CONFLICT_BTN_KEEPBOTH   "&Ponechat oba"
+    IDS_CONFLICT_BTN_SKIP       "Pře&skočit"
+    IDS_CONFLICT_APPLY_ALL      "&Použít pro všechny zbývající konflikty"
 END
 
 #endif // Czech resources

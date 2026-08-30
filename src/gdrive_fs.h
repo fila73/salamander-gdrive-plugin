@@ -190,6 +190,8 @@ private:
     bool DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
     bool UploadSingleItem(const std::wstring& localPath, const std::string& fileName, const std::string& parentFolderId, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
     bool UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
+
+    std::optional<ConflictAction> m_batchConflictAction;
 };
 
 class CPluginInterfaceForFS : public CPluginInterfaceForFSAbstract
