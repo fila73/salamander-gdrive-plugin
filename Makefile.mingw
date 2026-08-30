@@ -23,6 +23,9 @@ CPP_SRCS = \
     src/gdrive_cache.cpp \
     src/gdrive_log.cpp \
     src/gdrive_fs.cpp \
+    src/gdrive_fs_nav.cpp \
+    src/gdrive_fs_transfer.cpp \
+    src/gdrive_fs_ops.cpp \
     src/dialogs.cpp \
     src/menu.cpp \
     src/gdrive.cpp \

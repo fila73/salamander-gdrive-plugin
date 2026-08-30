@@ -13,6 +13,13 @@
 
 #define TOP_INDEX_MEM_SIZE 30
 
+inline constexpr const char* kMyDriveDir = "My Drive";
+inline constexpr const char* kSharedDrivesDir = "Shared Drives";
+inline constexpr const char* kSharedWithMeDir = "Shared with me";
+inline constexpr const char* kStarredDir = "Starred";
+inline constexpr const char* kRecentDir = "Recent";
+inline constexpr const char* kTrashDir = "Trash";
+
 struct CTopIndexMem
 {
     char Path[MAX_PATH];
