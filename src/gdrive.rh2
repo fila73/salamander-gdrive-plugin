@@ -170,5 +170,19 @@
 #define IDS_COL_STARRED_DESC                     2215
 #define IDS_YES                                  2216
 #define IDS_NO                                   2217
+#define IDS_FIND_TITLE                           2220
+#define IDS_FIND_READY                           2221
+#define IDS_FIND_SEARCHING                       2222
+#define IDS_FIND_FINISHED_FMT                    2223
+#define IDS_FIND_STOPPED_FMT                     2224
+#define IDS_FIND_FOUND_FMT                       2225
+#define IDS_FIND_ADVANCED_ALL                    2226
+#define IDS_FIND_COL_NAME                        2227
+#define IDS_FIND_COL_PATH                        2228
+#define IDS_FIND_COL_SIZE                        2229
+#define IDS_FIND_COL_DATE                        2230
+#define IDS_FIND_COL_TIME                        2231
+#define IDS_FIND_COL_OWNER                       2232
+#define IDS_FIND_LOOKIN_ALL_DRIVE                2233
 
 #endif // __GDRIVE_RH2

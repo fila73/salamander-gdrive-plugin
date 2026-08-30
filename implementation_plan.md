@@ -64,21 +64,17 @@ Tento dokument shrnuje stav implementace jednotlivých funkcí **Google Drive AP
   - Správné ošetření `mode == 1` v `QuickRename` a `CreateDir` a volání `PostRefreshPanelFS` i `RefreshPanelPath`.
 - [x] **Modularizace CPluginFS (CR-08)**:
   - Rozdělení monolitického `gdrive_fs.cpp` na `gdrive_fs_nav.cpp`, `gdrive_fs_transfer.cpp`, `gdrive_fs_ops.cpp` a `gdrive_fs.cpp`.
+- [x] **Vlastní sloupce panelu (Owner, Shared, Starred)**:
+  - Implementace rozhraní `CPluginDataInterfaceAbstract` a `CSalamanderViewAbstract` pro zobrazení sloupců Vlastník, Sdíleno a Hvězdička.
+- [x] **Cloudové a fulltextové vyhledávání (`Alt+F7` / `OpenFindDialog`)**:
+  - Implementace `FS_SERVICE_OPENFINDDLG` a asynchronního dialogu `CGDriveFindDialog` s věrným rozložením okna Find ze Salamandera.
+  - Podpora vyhledávání podle názvu, fulltextového prohledávání obsahu (`fullText contains`), funkce Focus (přechod na nalezenou položku), zobrazení v ListView a Dark Mode.
 
 ---
 
 ## 🟡 2. Budoucí rozšíření (Roadmapa)
 
-### 2.1 Hledání na Google Disku (Alt+F7 / Find Files)
-- **API endpoint:** `GET https://www.googleapis.com/drive/v3/files?q=...`
-- **Salamander rozhraní:** `CPluginFS::OpenFindDialog`
-- **Možnosti dotazů:**
-  - Hledání podle názvu: `name contains 'rozpocet'`
-  - **Fulltextové vyhledávání v obsahu**: `fullText contains 'smlouva'` (Google indexuje text uvnitř Docs, Sheets, PDF, TXT i obrázků s OCR).
-  - Filtrování podle typu (dokumenty, tabulky, obrázky, složky).
-  - Filtrování podle data změny / autora.
-
-### 2.2 Historie verzí (Revisions API)
+### 2.1 Historie verzí (Revisions API)
 - **API endpoint:** `GET https://www.googleapis.com/drive/v3/files/{fileId}/revisions`
 - **Funkcionalita:**
   - Dialog „Historie verzí...“ v kontextovém menu souboru.

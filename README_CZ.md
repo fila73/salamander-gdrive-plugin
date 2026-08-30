@@ -43,6 +43,12 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
   - **`Sdíleno`**: Indikace, zda je položka sdílena s dalšími uživateli (`Ano` / `Ne`).
   - **`Hvězdička`**: Vizuální označení `*` pro oblíbené položky.
   - Plná podpora řazení podle sloupců a interaktivní změny šířky myší s perzistentním ukládáním.
+- 🔎 **Cloudové a fulltextové vyhledávání (`Alt+F7` / `FS_SERVICE_OPENFINDDLG`)**:
+  - Rozhraní dialogu přebírá přesnou podobu a ovládání okna Find ze Salamandera.
+  - **Hledání podle názvu**: `name contains '...'` s podporou zástupných znaků.
+  - **Fulltextové prohledávání obsahu**: `fullText contains '...'` uvnitř Docs, Sheets, Slides, PDF, textů i OCR obrázků.
+  - **Přejít do složky (Focus)**: Dvojklik nebo `Enter` okamžitě přepne panel Salamandera do složky souboru a vybere danou položku.
+  - Asynchronní vlákno na pozadí, okamžité přerušení klávesou `Esc` a plná podpora Dark Mode.
 
 ### ⭐ Virtuální složky a kontextové menu
 - **Virtuální pohledy**:

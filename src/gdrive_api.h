@@ -32,11 +32,28 @@ struct GDriveItem
     std::string ownerEmail;
     FILETIME createdTime = {0, 0};
     int64_t version = 0;
+    std::string parentId;
+    std::string parentPath;
     std::string webViewLink;
     std::string webContentLink;
     std::string driveId;
     std::string exportMimeType;
     std::string exportExtension;
+};
+
+struct SearchOptions
+{
+    std::string queryNamed;     // Name / wildcard to search, e.g. "budget", "*.pdf"
+    bool searchSubdirs = true;  // If folderScopeId is set, search subdirs or just this folder
+    bool searchContent = false; // Search inside file content
+    std::string queryContent;   // Content string for fullText contains '...'
+    bool caseSensitive = false;
+    std::string folderScopeId;  // Scope folder ID (empty = entire drive)
+    std::string driveId;        // Shared drive ID if searching within a specific shared drive
+    bool isSharedDrive = false;
+    int typeFilter = 0;         // 0: All, 1: Docs/Sheets/Slides, 2: PDF, 3: Images, 4: Folders
+    bool starredOnly = false;
+    bool trashedOnly = false;
 };
 
 struct StorageQuota
@@ -59,6 +76,11 @@ class ApiClient
 {
 public:
     static ApiClient& GetInstance();
+
+    bool SearchFiles(const SearchOptions& opts,
+                     std::vector<GDriveItem>& resultsOut,
+                     volatile bool* cancelFlag = nullptr,
+                     std::string* errorOut = nullptr);
 
     bool GetAbout(AboutInfo& info, std::string* errorOut = nullptr);
     bool ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string* errorOut = nullptr);

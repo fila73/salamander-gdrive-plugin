@@ -202,7 +202,7 @@ bool ApiClient::ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string
     return true;
 }
 
-static const char* kItemFields = "id,name,mimeType,size,modifiedTime,createdTime,starred,trashed,shared,ownedByMe,owners(displayName,emailAddress),version,webViewLink,webContentLink";
+static const char* kItemFields = "id,name,mimeType,size,modifiedTime,createdTime,starred,trashed,shared,ownedByMe,owners(displayName,emailAddress),version,webViewLink,webContentLink,parents";
 
 static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool isSharedDrive = false, const std::string& driveId = "")
 {
@@ -227,12 +227,171 @@ static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool
             item.ownerEmail = owners[0].GetString("emailAddress");
         }
     }
+    if (f.Has("parents") && f.GetArray("parents").IsArray())
+    {
+        const auto& parents = f.GetArray("parents");
+        if (parents.Size() > 0)
+        {
+            item.parentId = parents[0].AsString();
+        }
+    }
     item.webViewLink = f.GetString("webViewLink");
     item.webContentLink = f.GetString("webContentLink");
     item.isSharedDrive = isSharedDrive;
     item.driveId = driveId;
 
     ApiClient::SetupGoogleDocExport(item);
+}
+
+static std::string EscapeDriveQueryString(const std::string& str)
+{
+    std::string res;
+    for (char c : str)
+    {
+        if (c == '\\' || c == '\'')
+        {
+            res += '\\';
+        }
+        res += c;
+    }
+    return res;
+}
+
+bool ApiClient::SearchFiles(const SearchOptions& opts,
+                           std::vector<GDriveItem>& resultsOut,
+                           volatile bool* cancelFlag,
+                           std::string* errorOut)
+{
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string pageToken;
+
+    std::vector<std::string> queryParts;
+
+    if (opts.trashedOnly)
+    {
+        queryParts.push_back("trashed = true");
+    }
+    else
+    {
+        queryParts.push_back("trashed = false");
+    }
+
+    if (opts.starredOnly)
+    {
+        queryParts.push_back("starred = true");
+    }
+
+    // Name query
+    if (!opts.queryNamed.empty() && opts.queryNamed != "*" && opts.queryNamed != "*.*")
+    {
+        std::string rawName = opts.queryNamed;
+        while (!rawName.empty() && (rawName.front() == '*' || rawName.front() == '?')) rawName.erase(rawName.begin());
+        while (!rawName.empty() && (rawName.back() == '*' || rawName.back() == '?')) rawName.pop_back();
+
+        if (!rawName.empty())
+        {
+            queryParts.push_back("name contains '" + EscapeDriveQueryString(rawName) + "'");
+        }
+    }
+
+    // Content query
+    if (opts.searchContent && !opts.queryContent.empty())
+    {
+        queryParts.push_back("fullText contains '" + EscapeDriveQueryString(opts.queryContent) + "'");
+    }
+
+    // Type filter
+    if (opts.typeFilter == 1) // Google Docs
+    {
+        queryParts.push_back("mimeType = 'application/vnd.google-apps.document'");
+    }
+    else if (opts.typeFilter == 2) // Google Sheets
+    {
+        queryParts.push_back("mimeType = 'application/vnd.google-apps.spreadsheet'");
+    }
+    else if (opts.typeFilter == 3) // Google Slides
+    {
+        queryParts.push_back("mimeType = 'application/vnd.google-apps.presentation'");
+    }
+    else if (opts.typeFilter == 4) // PDF
+    {
+        queryParts.push_back("mimeType = 'application/pdf'");
+    }
+    else if (opts.typeFilter == 5) // Images
+    {
+        queryParts.push_back("mimeType contains 'image/'");
+    }
+    else if (opts.typeFilter == 6) // Folders only
+    {
+        queryParts.push_back("mimeType = 'application/vnd.google-apps.folder'");
+    }
+
+    // Folder scope (if not searching subdirs)
+    if (!opts.folderScopeId.empty() && opts.folderScopeId != "root" && opts.folderScopeId != "shared_drives_root" &&
+        opts.folderScopeId != "shared_with_me_root" && opts.folderScopeId != "starred_root" &&
+        opts.folderScopeId != "recent_root" && opts.folderScopeId != "trash_root")
+    {
+        if (!opts.searchSubdirs)
+        {
+            queryParts.push_back("'" + EscapeDriveQueryString(opts.folderScopeId) + "' in parents");
+        }
+    }
+
+    std::string q;
+    for (size_t i = 0; i < queryParts.size(); ++i)
+    {
+        if (i > 0) q += " and ";
+        q += queryParts[i];
+    }
+
+    while (true)
+    {
+        if (cancelFlag && *cancelFlag)
+        {
+            break;
+        }
+
+        std::string url = "https://www.googleapis.com/drive/v3/files?"
+                          "q=" + GDriveHttp::HttpClient::UrlEncode(q) +
+                          "&fields=" + GDriveHttp::HttpClient::UrlEncode(std::string("nextPageToken,files(") + kItemFields + ")") +
+                          "&pageSize=100" +
+                          "&supportsAllDrives=true" +
+                          "&includeItemsFromAllDrives=true";
+
+        if (opts.isSharedDrive && !opts.driveId.empty())
+        {
+            url += "&corpora=drive&driveId=" + GDriveHttp::HttpClient::UrlEncode(opts.driveId);
+        }
+
+        auto resp = http.Get(url, token);
+        if (!resp.success)
+        {
+            if (errorOut) *errorOut = "Search failed: " + ExtractErrorMessage(resp);
+            return false;
+        }
+
+        auto json = GDriveJson::Value::Parse(resp.body);
+        if (json.Has("files") && json.GetArray("files").IsArray())
+        {
+            const auto& filesArr = json.GetArray("files");
+            for (size_t i = 0; i < filesArr.Size(); ++i)
+            {
+                if (cancelFlag && *cancelFlag) break;
+                GDriveItem item;
+                ParseItemFromJson(filesArr[i], item, opts.isSharedDrive, opts.driveId);
+                resultsOut.push_back(item);
+            }
+        }
+
+        pageToken = json.GetString("nextPageToken");
+        if (pageToken.empty() || (cancelFlag && *cancelFlag))
+            break;
+    }
+
+    return true;
 }
 
 bool ApiClient::ListSharedWithMe(std::vector<GDriveItem>& itemsOut, std::string* errorOut)

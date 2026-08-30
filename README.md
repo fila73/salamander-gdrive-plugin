@@ -43,6 +43,12 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
   - **`Shared`**: Indicates whether an item is shared (`Yes` / `No`).
   - **`Starred`**: Visual `*` indicator for favorite items.
   - Supports column sorting and mouse width adjustments with persistent sizing.
+- 🔎 **Cloud & Fulltext Search (`Alt+F7` / `FS_SERVICE_OPENFINDDLG`)**:
+  - Open Salamander Find window layout with instant Google Drive cloud search.
+  - **Filename Search**: `name contains '...'` with wildcard support.
+  - **Fulltext Content Search**: `fullText contains '...'` searching inside Docs, Sheets, Slides, PDFs, Text files, and image OCR.
+  - **Focus & Jump**: Double-click or `Enter` immediately navigates the Salamander panel to the selected file's location and highlights it.
+  - Asynchronous background worker thread with instant `Esc` cancellation and Dark Mode support.
 
 ### ⭐ Virtual Views & Context Menu
 - **Virtual Folders**:

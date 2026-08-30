@@ -435,3 +435,22 @@ Open Salamander umožňuje souborovým a archivním pluginům plně definovat vl
    - Plugin přečte data z `(*s_transferFileData)->PluginData`, zformátuje text do `s_transferBuffer` a nastaví `*s_transferLen = len`.
    - Žádné paměťové alokace během kreslení zaručují maximální plynulost a 60 FPS při procházení.
 
+---
+
+## 10. Integrace vyhledávání na souborových systémech (`FS_SERVICE_OPENFINDDLG`)
+
+Open Salamander umožňuje souborovým systémům (`CPluginFS`) převzít obsluhu klávesové zkratky **`Alt+F7`** (a položky v menu *Příkazy → Hledat...*):
+
+1. **Registrace služby**:
+   - V metodě `CPluginFS::GetSupportedServices()` přidáme příznak `FS_SERVICE_OPENFINDDLG`.
+
+2. **Otevření dialogu v `OpenFindDialog`**:
+   - Salamander při stisku `Alt+F7` v panelu zavolá `CPluginFS::OpenFindDialog(fsName, panel)`.
+   - Plugin vytvoří a zobrazí svůj specializovaný vyhledávací dialog s předvyplněnou aktuální cestou panelu.
+   - Návratová hodnota `TRUE` oznamuje Salamanderu, že plugin hledání obsloužil (hodnota `FALSE` by otevřela standardní lokální diskový Find dialog).
+
+3. **Asynchronní běh a funkce Focus**:
+   - Dotazování cloudového API běží v dedikovaném pracovním vlákně (`std::thread`) s atomickým příznakem pro okamžité zrušení (`cancelFlag`).
+   - Po nalezení položky a stisku klávesy `Enter` nebo tlačítka *Focus* plugin zavolá `SalamanderGeneral->ChangePanelPath(panel, fullPath)`, čímž okamžitě přepne panel Salamandera na cílové umístění souboru a označí ho.
+
+

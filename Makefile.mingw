@@ -27,6 +27,7 @@ CPP_SRCS = \
     src/gdrive_fs_transfer.cpp \
     src/gdrive_fs_ops.cpp \
     src/dialogs.cpp \
+    src/dialog_find.cpp \
     src/menu.cpp \
     src/gdrive.cpp \
     $(SHARED_DIR)/auxtools.cpp \

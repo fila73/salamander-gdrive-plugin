@@ -10,6 +10,7 @@
 #include "gdrive_http.h"
 #include "gdrive_log.h"
 #include "dialogs.h"
+#include "dialog_find.h"
 
 CPluginInterfaceForFS InterfaceForFS;
 
@@ -63,6 +64,7 @@ DWORD WINAPI CPluginFS::GetSupportedServices()
            FS_SERVICE_GETFSICON |
            FS_SERVICE_GETFREESPACE |
            FS_SERVICE_CONTEXTMENU |
+           FS_SERVICE_OPENFINDDLG |
            FS_SERVICE_ACCEPTSCHANGENOTIF;
 }
 
@@ -159,7 +161,9 @@ BOOL WINAPI CPluginFS::ExecuteCommandLine(HWND parent, char* command, int& selFr
 
 BOOL WINAPI CPluginFS::OpenFindDialog(const char* fsName, int panel)
 {
-    return FALSE;
+    CGDriveFindDialog dlg(SalamanderGeneral->GetMainWindowHWND(), this, panel, m_currentPath, m_currentFolderId);
+    dlg.ShowModal();
+    return TRUE;
 }
 
 void WINAPI CPluginFS::OpenActiveFolder(const char* fsName, HWND parent)

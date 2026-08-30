@@ -151,6 +151,46 @@ BEGIN
     PUSHBUTTON      "Zrušit",IDCANCEL,230,150,65,14
 END
 
+IDD_FIND DIALOGEX 0, 0, 380, 270
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "Hledat - Google Disk"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Název:",-1,10,12,35,8
+    COMBOBOX        IDC_FIND_NAMED,50,10,240,120,CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "&Hledat",IDC_FIND_BTN_FINDNOW,300,9,70,14
+    PUSHBUTTON      "&Zastavit",IDC_FIND_BTN_STOP,300,9,70,14,NOT WS_VISIBLE
+
+    LTEXT           "&Kde hledat:",-1,10,30,38,8
+    COMBOBOX        IDC_FIND_LOOKIN,50,28,240,100,CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Procházet...",IDC_FIND_LOOKIN_BROWSE,300,27,70,14
+
+    CONTROL         "Prohledávat &podsložky",IDC_FIND_INCLUDE_SUBDIR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,50,46,120,10
+
+    CONTROL         "Hledat &obsah souborů",IDC_FIND_GREP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,60,85,10
+    CONTROL         "",-1,"Static",SS_ETCHEDHORZ | WS_GROUP,100,65,270,1
+
+    LTEXT           "&Obsahuje:",-1,10,76,40,8
+    COMBOBOX        IDC_FIND_CONTAINING,50,74,240,100,CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+
+    CONTROL         "Hledat &Docs / PDF / OCR",IDC_FIND_DOCS_OCR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,50,92,120,10
+    CONTROL         "Rozlišovat &velikost",IDC_FIND_CASE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,180,92,75,10
+
+    PUSHBUTTON      "&Rozšířené...",IDC_FIND_ADVANCED,10,110,60,14
+    LTEXT           "Všechny typy (Aktivní účet)",IDC_FIND_ADVANCED_TEXT,75,113,295,10,SS_PATHELLIPSIS
+
+    CONTROL         "",-1,"Static",SS_ETCHEDHORZ | WS_GROUP,0,132,380,1
+
+    PUSHBUTTON      "&Přejít (Enter)",IDC_FIND_BTN_FOCUS,10,138,55,14
+    PUSHBUTTON      "&Náhled (F3)",IDC_FIND_BTN_VIEW,70,138,55,14
+    PUSHBUTTON      "&Web",IDC_FIND_BTN_OPENWEB,130,138,45,14
+    PUSHBUTTON      "&Kopírovat odkaz",IDC_FIND_BTN_COPYLINK,180,138,65,14
+    RTEXT           "Nalezeno položek: 0",IDC_FIND_FOUND_COUNT,250,141,120,8
+
+    CONTROL         "",IDC_FIND_RESULTS,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_BORDER | WS_TABSTOP,10,156,360,95
+    LTEXT           "Zadejte parametry hledání a klikněte na Hledat.",IDC_FIND_STATUS,10,256,360,10,SS_PATHELLIPSIS
+END
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // String Table
@@ -292,6 +332,20 @@ BEGIN
     IDS_COL_STARRED_DESC         "Oblíbená položka (*)"
     IDS_YES                      "Ano"
     IDS_NO                       "Ne"
+    IDS_FIND_TITLE               "Hledat - Google Disk"
+    IDS_FIND_READY               "Zadejte parametry hledání a klikněte na Hledat."
+    IDS_FIND_SEARCHING           "Vyhledávám na Google Disku..."
+    IDS_FIND_FINISHED_FMT        "Nalezeno %d položek (dokončeno za %.1fs)."
+    IDS_FIND_STOPPED_FMT         "Hledání zastaveno uživatelem. Nalezeno %d položek."
+    IDS_FIND_FOUND_FMT           "Nalezeno položek: %d"
+    IDS_FIND_ADVANCED_ALL        "Všechny typy položek (Aktivní účet: %s)"
+    IDS_FIND_COL_NAME            "Název"
+    IDS_FIND_COL_PATH            "Cesta"
+    IDS_FIND_COL_SIZE            "Velikost"
+    IDS_FIND_COL_DATE            "Datum"
+    IDS_FIND_COL_TIME            "Čas"
+    IDS_FIND_COL_OWNER           "Vlastník"
+    IDS_FIND_LOOKIN_ALL_DRIVE    "Celý Google Disk"
 END
 
 #endif // Czech resources
