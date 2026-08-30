@@ -270,6 +270,7 @@ BEGIN
     IDS_CONFLICT_DUP_ALL        "Všechny duplikáty"
     IDS_CONFLICT_DUP_NEWEST     "Pouze nejnovější soubor"
     IDS_CONFLICT_DUP_OLDEST     "Pouze nejstarší soubor"
+    IDS_CONFLICT_DUP_COUNT_FMT  "Na Google Disku nalezeno %d existujících souborů s tímto názvem."
     IDS_TRANSFER_TOTAL_LABEL    "Celkový průběh:"
     IDS_TRANSFER_TOTAL_FILES_FMT "Soubor %d z %d"
     IDS_TRANSFER_TOTAL_BYTES_FMT "%s z %s (%d%%)"

@@ -270,6 +270,7 @@ BEGIN
     IDS_CONFLICT_DUP_ALL        "All duplicate files"
     IDS_CONFLICT_DUP_NEWEST     "Newest file only"
     IDS_CONFLICT_DUP_OLDEST     "Oldest file only"
+    IDS_CONFLICT_DUP_COUNT_FMT  "%d existing files with this name found on Google Drive."
     IDS_TRANSFER_TOTAL_LABEL    "Total progress:"
     IDS_TRANSFER_TOTAL_FILES_FMT "File %d of %d"
     IDS_TRANSFER_TOTAL_BYTES_FMT "%s of %s (%d%%)"
