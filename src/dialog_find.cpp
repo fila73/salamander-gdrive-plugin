@@ -541,6 +541,80 @@ void CGDriveFindDialog::StopSearch()
     m_cancelRequested = true;
 }
 
+static std::string ResolveParentPath(const std::string& folderId,
+                                     std::map<std::string, std::string>& pathCache,
+                                     const std::atomic<bool>& cancelFlag)
+{
+    if (folderId.empty() || folderId == "root")
+    {
+        return "\\My Drive";
+    }
+    if (folderId == "shared_with_me_root")
+    {
+        return "\\Shared with me";
+    }
+    if (folderId == "shared_drives_root")
+    {
+        return "\\Shared Drives";
+    }
+    if (folderId == "trash_root")
+    {
+        return "\\Trash";
+    }
+    if (folderId == "starred_root")
+    {
+        return "\\Starred";
+    }
+    if (folderId == "recent_root")
+    {
+        return "\\Recent";
+    }
+
+    auto it = pathCache.find(folderId);
+    if (it != pathCache.end())
+    {
+        return it->second;
+    }
+
+    if (cancelFlag)
+    {
+        return "\\My Drive";
+    }
+
+    GDriveApi::GDriveItem folderItem;
+    if (GDriveApi::ApiClient::GetInstance().GetFileMetadata(folderId, folderItem))
+    {
+        std::string parentPath;
+        if (folderItem.parentId.empty() || folderItem.parentId == "root")
+        {
+            parentPath = "\\My Drive";
+        }
+        else if (folderItem.isSharedDrive && !folderItem.driveId.empty() && folderItem.parentId == folderItem.driveId)
+        {
+            parentPath = "\\Shared Drives\\" + folderItem.name;
+            pathCache[folderId] = parentPath;
+            return parentPath;
+        }
+        else
+        {
+            parentPath = ResolveParentPath(folderItem.parentId, pathCache, cancelFlag);
+        }
+
+        std::string fullPath = parentPath;
+        if (fullPath.empty() || fullPath.back() != '\\')
+        {
+            fullPath += "\\";
+        }
+        fullPath += folderItem.name;
+
+        pathCache[folderId] = fullPath;
+        return fullPath;
+    }
+
+    pathCache[folderId] = "\\My Drive";
+    return "\\My Drive";
+}
+
 void CGDriveFindDialog::SearchWorker()
 {
     GDriveApi::SearchOptions opts;
@@ -588,6 +662,33 @@ void CGDriveFindDialog::SearchWorker()
 
     // Search in thread
     bool ok = GDriveApi::ApiClient::GetInstance().SearchFiles(opts, results, &cancelBool, &err);
+
+    // Resolve parent folder paths for all items
+    std::map<std::string, std::string> folderPathMap;
+    folderPathMap[""] = "\\My Drive";
+    folderPathMap["root"] = "\\My Drive";
+
+    if (!m_initialPath.empty() && !opts.folderScopeId.empty())
+    {
+        std::string winInitial = m_initialPath;
+        std::replace(winInitial.begin(), winInitial.end(), '/', '\\');
+        if (winInitial.empty() || winInitial[0] != '\\') winInitial = "\\" + winInitial;
+        folderPathMap[opts.folderScopeId] = winInitial;
+    }
+
+    for (auto& item : results)
+    {
+        if (m_cancelRequested) break;
+
+        if (item.parentId.empty() || item.parentId == "root")
+        {
+            item.parentPath = "\\My Drive";
+        }
+        else
+        {
+            item.parentPath = ResolveParentPath(item.parentId, folderPathMap, m_cancelRequested);
+        }
+    }
 
     {
         std::lock_guard<std::mutex> lock(m_resultsMutex);
@@ -655,7 +756,9 @@ void CGDriveFindDialog::PopulateResults(const std::vector<GDriveApi::GDriveItem>
         ListView_InsertItem(m_hResultsList, &lvi);
 
         // Path / Location
-        std::string loc = item.parentPath.empty() ? (item.isFolder ? "/[Folder]" : "/[File]") : item.parentPath;
+        std::string loc = item.parentPath.empty() ? "\\My Drive" : item.parentPath;
+        std::replace(loc.begin(), loc.end(), '/', '\\');
+        if (loc.empty() || loc[0] != '\\') loc = "\\" + loc;
         ListView_SetItemText(m_hResultsList, i, 1, const_cast<char*>(loc.c_str()));
 
         // Size
