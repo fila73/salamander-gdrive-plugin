@@ -1238,6 +1238,9 @@ void CGDriveFindDialog::FocusSelectedItem()
         relPath = "\\" + relPath;
     }
 
+    GDriveLog::Log("[FIND] FocusSelectedItem: sel=%d, item.name='%s', item.id='%s', item.parentPath='%s' -> relPath='%s', ansiName='%s', panel=%d",
+                   sel, item.name.c_str(), item.id.c_str(), item.parentPath.c_str(), relPath.c_str(), ansiName.c_str(), m_panel);
+
     InterfaceForMenuExt.PostFocusTarget(m_panel, relPath, ansiName);
 }
 

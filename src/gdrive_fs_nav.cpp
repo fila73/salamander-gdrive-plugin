@@ -111,11 +111,14 @@ BOOL WINAPI CPluginFS::IsCurrentPath(int currentFSNameIndex, int fsNameIndex, co
     if (currentFSNameIndex != fsNameIndex) return FALSE;
     char cur[MAX_PATH] = {0};
     GetCurrentPath(cur);
-    return SalamanderGeneral->IsTheSamePath(cur, userPart ? userPart : "\\");
+    BOOL isSame = SalamanderGeneral->IsTheSamePath(cur, userPart ? userPart : "\\");
+    GDriveLog::Log("[NAV] IsCurrentPath: cur='%s', userPart='%s' -> isSame=%d", cur, userPart ? userPart : "", isSame);
+    return isSame;
 }
 
 BOOL WINAPI CPluginFS::IsOurPath(int currentFSNameIndex, int fsNameIndex, const char* userPart)
 {
+    GDriveLog::Log("[NAV] IsOurPath: currentIdx=%d, fsIdx=%d, userPart='%s'", currentFSNameIndex, fsNameIndex, userPart ? userPart : "");
     return currentFSNameIndex == fsNameIndex;
 }
 
@@ -143,11 +146,15 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
     else if (newPath[0] != '/')
         newPath = "/" + newPath;
 
+    GDriveLog::Log("[NAV] ChangePath: userPart='%s' -> oldPath='%s', newPath='%s', mode=%d",
+                   userPart ? userPart : "", oldPath.c_str(), newPath.c_str(), mode);
+
     m_currentPath = newPath;
     m_lastErrorPath.clear();
 
     if (ResolveCurrentFolderId())
     {
+        GDriveLog::Log("[NAV] ChangePath resolved '%s' -> folderId='%s'", m_currentPath.c_str(), m_currentFolderId.c_str());
         // If navigating up from a subpath, populate cutFileName so Salamander focuses the exited folder
         if (cutFileName && !oldPath.empty() && oldPath.length() > newPath.length())
         {
@@ -422,6 +429,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         folderId = it->second;
         isShared = (_strnicmp(normPath.c_str(), "/Shared Drives", 14) == 0 && _stricmp(normPath.c_str(), "/Shared Drives") != 0);
         driveId = "";
+        GDriveLog::Log("[NAV] ResolveFolderIdForPath cached '%s' -> folderId='%s'", normPath.c_str(), folderId.c_str());
         return true;
     }
 

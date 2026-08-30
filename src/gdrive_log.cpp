@@ -34,8 +34,35 @@ std::wstring GetLogFilePath()
 
 void Log(const char* fmt, ...)
 {
-    // Logging disabled for release
-    (void)fmt;
+    std::lock_guard<std::mutex> lock(s_logMutex);
+    std::wstring logPath = GetLogFilePath();
+    if (logPath.empty()) return;
+
+    char buf[2048] = {0};
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    auto now = std::chrono::system_clock::now();
+    std::time_t t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm;
+    localtime_s(&tm, &t);
+
+    char timeStr[64];
+    std::strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &tm);
+
+    char finalLine[2200];
+    snprintf(finalLine, sizeof(finalLine), "[%s] %s\n", timeStr, buf);
+
+    OutputDebugStringA(finalLine);
+
+    FILE* f = _wfopen(logPath.c_str(), L"a, ccs=UTF-8");
+    if (f)
+    {
+        fputs(finalLine, f);
+        fclose(f);
+    }
 }
 
 } // namespace GDriveLog

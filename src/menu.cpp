@@ -3,6 +3,7 @@
 #include "gdrive_auth.h"
 #include "dialogs.h"
 #include "gdrive_fs.h"
+#include "gdrive_log.h"
 
 CPluginInterfaceForMenuExt InterfaceForMenuExt;
 
@@ -15,6 +16,7 @@ void CPluginInterfaceForMenuExt::PostFocusTarget(int panel, const std::string& p
     s_pendingFocusPanel = panel;
     s_pendingFocusPath = path;
     s_pendingFocusName = name;
+    GDriveLog::Log("[FOCUS] PostFocusTarget: panel=%d, path='%s', name='%s'", panel, path.c_str(), name.c_str());
     if (SalamanderGeneral)
     {
         SalamanderGeneral->PostMenuExtCommand(CM_FIND_FOCUS_TARGET, TRUE);
@@ -44,10 +46,12 @@ BOOL WINAPI CPluginInterfaceForMenuExt::ExecuteMenuItem(CSalamanderForOperations
         if (!s_pendingFocusPath.empty())
         {
             int failReason = 0;
-            SalamanderGeneral->ChangePanelPathToPluginFS(s_pendingFocusPanel, AssignedFSName,
-                                                         s_pendingFocusPath.c_str(), &failReason, -1,
-                                                         s_pendingFocusName.c_str(), TRUE, TRUE);
-            (void)failReason;
+            GDriveLog::Log("[FOCUS] Calling ChangePanelPathToPluginFS: panel=%d, FS='%s', path='%s', focusName='%s'",
+                           s_pendingFocusPanel, AssignedFSName, s_pendingFocusPath.c_str(), s_pendingFocusName.c_str());
+            BOOL res = SalamanderGeneral->ChangePanelPathToPluginFS(s_pendingFocusPanel, AssignedFSName,
+                                                                    s_pendingFocusPath.c_str(), &failReason, -1,
+                                                                    s_pendingFocusName.c_str(), TRUE, TRUE);
+            GDriveLog::Log("[FOCUS] ChangePanelPathToPluginFS returned %d, failReason=%d", res, failReason);
             s_pendingFocusPath.clear();
             s_pendingFocusName.clear();
 
