@@ -1089,10 +1089,7 @@ void WINAPI CPluginFS::ShowInfoDialog(const char* fsName, HWND parent)
     if (info.quota.limit > 0)
     {
         snprintf(msg, sizeof(msg),
-                 "Account: %s (%s)\n\n"
-                 "Google Drive Storage:\n"
-                 "Used: %.2f GB of %.2f GB (%.1f %%)\n"
-                 "Trash: %.2f MB",
+                 LoadStr(IDS_STORAGE_INFO_FMT),
                  info.userName.c_str(), info.userEmail.c_str(),
                  usedGB, totalGB, (usedGB / totalGB) * 100.0,
                  (double)info.quota.usageInTrash / (1024.0 * 1024.0));
@@ -1100,9 +1097,7 @@ void WINAPI CPluginFS::ShowInfoDialog(const char* fsName, HWND parent)
     else
     {
         snprintf(msg, sizeof(msg),
-                 "Account: %s (%s)\n\n"
-                 "Google Drive Storage:\n"
-                 "Used: %.2f GB (Unlimited quota)",
+                 LoadStr(IDS_STORAGE_UNLIMITED_FMT),
                  info.userName.c_str(), info.userEmail.c_str(),
                  usedGB);
     }
@@ -1245,6 +1240,7 @@ BOOL WINAPI CPluginFS::CreateDir(const char* fsName, int mode, HWND parent, char
     m_cachedItems.push_back(newItem);
     GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(m_currentFolderId, newItem);
 
+    SalamanderGeneral->RefreshPanelPath(PANEL_SOURCE);
     return TRUE;
 }
 
@@ -1332,18 +1328,42 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
         return FALSE;
     }
 
+    CTransferProgressDialog progressDlg(parent, false, "", (int64_t)itemsToDelete.size());
+    progressDlg.SetActionLabel(IDS_TRANSFER_DELETING);
+    bool progressStarted = false;
+    if (itemsToDelete.size() > 1)
+    {
+        progressDlg.Start();
+        progressStarted = true;
+    }
+
+    int deletedCount = 0;
     for (const auto& [name, id] : itemsToDelete)
     {
+        if (progressDlg.IsCancelled())
+        {
+            cancelOrError = TRUE;
+            break;
+        }
+
+        if (progressStarted)
+        {
+            progressDlg.SetCurrentFile(name, (int64_t)itemsToDelete.size());
+            progressDlg.OnProgress(deletedCount, (int64_t)itemsToDelete.size());
+        }
+
         std::string err;
         bool ok = shiftPressed ? GDriveApi::ApiClient::GetInstance().DeleteItem(id, &err)
                                : GDriveApi::ApiClient::GetInstance().TrashItem(id, &err);
         if (!ok)
         {
+            if (progressStarted) progressDlg.Stop();
             SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
             cancelOrError = TRUE;
-            return FALSE;
+            break;
         }
 
+        deletedCount++;
         std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + name;
         m_pathToIdCache.erase(subPath);
 
@@ -1359,7 +1379,13 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
         GDriveCache::CacheManager::GetInstance().RemoveItem(m_currentFolderId, id);
     }
 
-    return TRUE;
+    if (progressStarted)
+    {
+        progressDlg.Stop();
+    }
+
+    SalamanderGeneral->RefreshPanelPath(panel);
+    return !cancelOrError;
 }
 
 BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* fsName, HWND parent,
@@ -1374,7 +1400,8 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         // Pre-fill target path for Salamander Copy dialog
         if (targetPath)
         {
-            std::string dest = "gdrive:\\";
+            std::string fsPrefix = std::string(fsName && *fsName ? fsName : AssignedFSName) + ":\\";
+            std::string dest = fsPrefix;
             if (!m_currentPath.empty() && m_currentPath != "/")
             {
                 std::string rel = m_currentPath;
@@ -1384,6 +1411,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
             }
             std::string ansiDest = GDriveHttp::HttpClient::Utf8ToAnsi(dest);
             strncpy(targetPath, ansiDest.c_str(), MAX_PATH - 1);
+            targetPath[MAX_PATH - 1] = '\0';
         }
         return FALSE; // Return FALSE so Salamander shows its standard Copy/Move dialog
     }
@@ -1512,6 +1540,9 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         progressDlg.Stop();
     }
 
+    SalamanderGeneral->RefreshPanelPath(PANEL_SOURCE);
+    SalamanderGeneral->RefreshPanelPath(PANEL_TARGET);
+
     return overallSuccess;
 }
 
@@ -1533,10 +1564,10 @@ void WINAPI CPluginFS::ShowProperties(const char* fsName, HWND parent, int panel
 
     char info[1024] = {0};
     uint64_t size = f->Size.Value;
-    snprintf(info, sizeof(info), "Name: %s\nType: %s\nSize: %llu B\nPath: %s",
+    snprintf(info, sizeof(info), LoadStr(IDS_PROPERTIES_FMT),
              f->Name, isDir ? "Folder" : "File", (unsigned long long)size, m_currentPath.c_str());
 
-    SalamanderGeneral->SalMessageBox(parent, info, "Properties", MB_OK | MB_ICONINFORMATION);
+    SalamanderGeneral->SalMessageBox(parent, info, LoadStr(IDS_PROPERTIES_TITLE), MB_OK | MB_ICONINFORMATION);
 }
 
 void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, int menuY, int type,
@@ -1718,6 +1749,25 @@ bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std:
         localPath += L"\\";
     localPath += wFileName;
 
+    // Check if local target file already exists
+    DWORD dwAttr = GetFileAttributesW(localPath.c_str());
+    if (dwAttr != INVALID_FILE_ATTRIBUTES && !(dwAttr & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        std::string ansiLocalPath = GDriveHttp::HttpClient::WideToAnsi(localPath);
+        char msg[1024] = {0};
+        snprintf(msg, sizeof(msg), LoadStr(IDS_PROMPT_OVERWRITE_FILE), ansiLocalPath.c_str());
+        int res = SalamanderGeneral->SalMessageBox(parent, msg, LoadStr(IDS_PROMPT_OVERWRITE_TITLE), MB_YESNOCANCEL | MB_ICONQUESTION);
+        if (res == IDCANCEL)
+        {
+            return false;
+        }
+        if (res == IDNO)
+        {
+            return true; // Skip file
+        }
+        // If IDYES -> proceed to overwrite
+    }
+
     std::unique_ptr<CTransferProgressDialog> localProgress;
     CTransferProgressDialog* activeDlg = pProgressDlg;
     if (!activeDlg)
@@ -1804,6 +1854,46 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
     {
         GetFileSizeEx(hF, &localFileSize);
         CloseHandle(hF);
+    }
+
+    // Check if item with this name already exists in target GDrive folder
+    std::string existingId;
+    std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(fileName);
+    for (const auto& it : m_cachedItems)
+    {
+        if (!it.isFolder && (_stricmp(it.name.c_str(), fileName.c_str()) == 0 ||
+                             _stricmp(it.name.c_str(), ansiFileName.c_str()) == 0))
+        {
+            existingId = it.id;
+            break;
+        }
+    }
+
+    if (!existingId.empty())
+    {
+        char promptMsg[512] = {0};
+        snprintf(promptMsg, sizeof(promptMsg), LoadStr(IDS_PROMPT_OVERWRITE_GDRIVE), ansiFileName.c_str());
+        int res = SalamanderGeneral->SalMessageBox(parent, promptMsg, LoadStr(IDS_PROMPT_OVERWRITE_TITLE), MB_YESNOCANCEL | MB_ICONQUESTION);
+        if (res == IDCANCEL)
+        {
+            return false;
+        }
+        if (res == IDNO)
+        {
+            return true; // Skip file
+        }
+        // User agreed to overwrite existing file on Google Drive: trash the old version first
+        std::string trashErr;
+        GDriveApi::ApiClient::GetInstance().TrashItem(existingId, &trashErr);
+        GDriveCache::CacheManager::GetInstance().RemoveItem(parentFolderId, existingId);
+        for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+        {
+            if (it->id == existingId)
+            {
+                m_cachedItems.erase(it);
+                break;
+            }
+        }
     }
 
     std::unique_ptr<CTransferProgressDialog> localProgress;
@@ -1943,6 +2033,12 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
 
     if (mode == 1)
     {
+        // Pre-fill target path from opposite panel if not already set
+        if (targetPath && targetPath[0] == 0)
+        {
+            int otherPanel = (panel == PANEL_SOURCE) ? PANEL_TARGET : PANEL_SOURCE;
+            SalamanderGeneral->GetPanelPath(otherPanel, targetPath, MAX_PATH, NULL, NULL, 0);
+        }
         // Ask Salamander to show standard destination dialog
         return FALSE;
     }
@@ -1970,6 +2066,8 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
     int index = 0;
     BOOL isDir = FALSE;
     BOOL success = TRUE;
+
+    std::vector<std::pair<std::string, std::string>> itemsToTrash; // name, id for Move operations
 
     CTransferProgressDialog progressDlg(parent, false, "", 0);
     bool progressStarted = false;
@@ -2004,6 +2102,10 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
                     success = FALSE;
                     break;
                 }
+                else
+                {
+                    itemsToTrash.emplace_back(f->Name, targetItem->id);
+                }
             }
             else
             {
@@ -2011,6 +2113,10 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
                 {
                     success = FALSE;
                     break;
+                }
+                else
+                {
+                    itemsToTrash.emplace_back(f->Name, targetItem->id);
                 }
             }
         }
@@ -2024,10 +2130,41 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
         progressDlg.Stop();
     }
 
+    // If Move operation and transfer succeeded, delete source items from Google Drive
+    if (!copy && success && !itemsToTrash.empty())
+    {
+        for (const auto& [name, id] : itemsToTrash)
+        {
+            std::string trashErr;
+            GDriveApi::ApiClient::GetInstance().TrashItem(id, &trashErr);
+
+            std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + name;
+            m_pathToIdCache.erase(subPath);
+
+            for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+            {
+                if (it->id == id)
+                {
+                    m_cachedItems.erase(it);
+                    break;
+                }
+            }
+
+            GDriveCache::CacheManager::GetInstance().RemoveItem(m_currentFolderId, id);
+        }
+
+        SalamanderGeneral->RefreshPanelPath(panel);
+    }
+
     if (success)
+    {
         targetPath[0] = 0;
+        SalamanderGeneral->RefreshPanelPath((panel == PANEL_SOURCE) ? PANEL_TARGET : PANEL_SOURCE);
+    }
     else
+    {
         cancelOrHandlePath = TRUE;
+    }
 
     return TRUE;
 }
@@ -2060,7 +2197,7 @@ void WINAPI CPluginFS::ViewFile(const char* fsName, HWND parent,
         if (!newFileOK)
         {
             salamander->FreeFileNameInCache(uniqueFileName.c_str(), FALSE, FALSE, newFileSize, NULL, FALSE, TRUE);
-            SalamanderGeneral->SalMessageBox(parent, err.empty() ? "Failed to download file" : err.c_str(),
+            SalamanderGeneral->SalMessageBox(parent, err.empty() ? LoadStr(IDS_DOWNLOAD_FAILED) : err.c_str(),
                                              LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
             return;
         }
@@ -2138,7 +2275,7 @@ void CPluginFS::CalculateFolderSize(HWND parent, int panel)
 
     if (folderId.empty())
     {
-        SalamanderGeneral->SalMessageBox(parent, "Nelze zjistit identifikátor této položky.", LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONEXCLAMATION);
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_GET_ITEM_ID), LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONEXCLAMATION);
         return;
     }
 
