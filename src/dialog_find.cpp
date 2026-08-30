@@ -127,6 +127,19 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
         OnGetMinMaxInfo(hDlg, (LPMINMAXINFO)lParam);
         return TRUE;
 
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE)
+        {
+            OnCommand(hDlg, IDCANCEL, NULL, 0);
+            return TRUE;
+        }
+        else if (wParam == VK_RETURN)
+        {
+            OnCommand(hDlg, IDC_FIND_BTN_FINDNOW, NULL, 0);
+            return TRUE;
+        }
+        break;
+
     case WM_NOTIFY:
     {
         LPNMHDR pnm = (LPNMHDR)lParam;
@@ -416,17 +429,35 @@ static RECT GetChildRect(HWND hDlg, HWND hCtrl)
     return rc;
 }
 
-static LRESULT CALLBACK EditEnterSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+static LRESULT CALLBACK DialogControlKeySubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
-    if (uMsg == WM_KEYDOWN && wParam == VK_RETURN)
+    if (uMsg == WM_KEYDOWN)
     {
         HWND hDlg = (HWND)dwRefData;
-        PostMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_FIND_BTN_FINDNOW, BN_CLICKED), 0);
-        return 0;
+        if (wParam == VK_RETURN)
+        {
+            char className[32] = {0};
+            GetClassNameA(hwnd, className, sizeof(className));
+            if (_stricmp(className, "SysListView32") == 0)
+            {
+                PostMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_FIND_BTN_FOCUS, BN_CLICKED), 0);
+                return 0;
+            }
+            else
+            {
+                PostMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_FIND_BTN_FINDNOW, BN_CLICKED), 0);
+                return 0;
+            }
+        }
+        else if (wParam == VK_ESCAPE)
+        {
+            PostMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDCANCEL, BN_CLICKED), 0);
+            return 0;
+        }
     }
     else if (uMsg == WM_NCDESTROY)
     {
-        RemoveWindowSubclass(hwnd, EditEnterSubclassProc, uIdSubclass);
+        RemoveWindowSubclass(hwnd, DialogControlKeySubclassProc, uIdSubclass);
     }
     return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
@@ -454,14 +485,11 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
 
     SendMessage(hDlg, DM_SETDEFID, IDC_FIND_BTN_FINDNOW, 0);
 
-    // Subclass combobox edit controls so pressing Enter triggers Find Now
-    COMBOBOXINFO cbi = { sizeof(cbi) };
-    if (GetComboBoxInfo(m_hNamed, &cbi) && cbi.hwndItem)
-        SetWindowSubclass(cbi.hwndItem, EditEnterSubclassProc, 101, (DWORD_PTR)hDlg);
-    if (GetComboBoxInfo(m_hLookIn, &cbi) && cbi.hwndItem)
-        SetWindowSubclass(cbi.hwndItem, EditEnterSubclassProc, 102, (DWORD_PTR)hDlg);
-    if (GetComboBoxInfo(m_hContaining, &cbi) && cbi.hwndItem)
-        SetWindowSubclass(cbi.hwndItem, EditEnterSubclassProc, 103, (DWORD_PTR)hDlg);
+    // Subclass all children controls so Enter/Esc work reliably anywhere
+    EnumChildWindows(hDlg, [](HWND hwndChild, LPARAM lParam) -> BOOL {
+        SetWindowSubclass(hwndChild, DialogControlKeySubclassProc, 200, (DWORD_PTR)lParam);
+        return TRUE;
+    }, (LPARAM)hDlg);
 
     SetWindowTextA(hDlg, LoadStr(IDS_FIND_TITLE));
     GDriveDarkMode::ApplyWindowTheme(hDlg);
