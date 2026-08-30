@@ -942,7 +942,7 @@ COverwriteConflictDialog::COverwriteConflictDialog(HWND hParent, bool isUpload,
                                                    const std::string& srcName, int64_t srcSize,
                                                    const std::string& dstName, int64_t dstSize,
                                                    int duplicateCount)
-    : CCommonDialog(DLLInstance, IDD_OVERWRITE_CONFLICT, hParent),
+    : CCommonDialog(HLanguage, IDD_OVERWRITE_CONFLICT, hParent, ooStatic),
       m_isUpload(isUpload),
       m_srcName(srcName),
       m_srcSize(srcSize),
@@ -957,10 +957,22 @@ COverwriteConflictDialog::COverwriteConflictDialog(HWND hParent, bool isUpload,
 
 INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    INT_PTR colorResult = 0;
+    if (GDriveDarkMode::HandleDialogColors(uMsg, wParam, lParam, &colorResult))
+    {
+        return colorResult;
+    }
+
     switch (uMsg)
     {
     case WM_INITDIALOG:
     {
+        GDriveDarkMode::ApplyWindowTheme(HWindow);
+        if (Parent != NULL)
+        {
+            SalamanderGeneral->MultiMonCenterWindow(HWindow, Parent, TRUE);
+        }
+
         HWND hIcon = GetDlgItem(HWindow, IDC_CONFLICT_ICON);
         if (hIcon)
         {
@@ -1049,5 +1061,5 @@ INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lP
         break;
     }
     }
-    return FALSE;
+    return CCommonDialog::DialogProc(uMsg, wParam, lParam);
 }
