@@ -4,6 +4,7 @@
 
 #include "dialog_find.h"
 #include "dialogs.h"
+#include "gdrive.h"
 #include "gdrive.rh2"
 #include "lang.rh"
 #include "gdrive_log.h"
@@ -180,7 +181,7 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
             else if (pnm->code == LVN_KEYDOWN)
             {
                 LPNMLVKEYDOWN pnkd = (LPNMLVKEYDOWN)lParam;
-                if (pnkd->wVKey == VK_RETURN)
+                if (pnkd->wVKey == VK_RETURN || pnkd->wVKey == VK_SPACE)
                 {
                     FocusSelectedItem();
                     return TRUE;
@@ -696,12 +697,17 @@ void CGDriveFindDialog::FocusSelectedItem()
 
     const auto& item = m_results[sel];
 
-    // Navigate Salamander panel
-    std::string targetPath = "/My Drive";
-    if (m_pFS)
+    std::string relPath = item.parentPath.empty() ? "\\My Drive" : item.parentPath;
+    std::replace(relPath.begin(), relPath.end(), '/', '\\');
+    if (relPath.empty() || relPath[0] != '\\')
     {
-        std::string fullPath = "gdrive:" + (item.parentPath.empty() ? "/My Drive" : item.parentPath);
-        SalamanderGeneral->ChangePanelPath(m_panel, fullPath.c_str());
+        relPath = "\\" + relPath;
+    }
+
+    if (SalamanderGeneral)
+    {
+        int failReason = 0;
+        SalamanderGeneral->ChangePanelPathToPluginFS(m_panel, AssignedFSName, relPath.c_str(), NULL, -1, item.name.c_str());
     }
 
     EndDialog(m_hDlg, IDOK);

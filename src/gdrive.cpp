@@ -52,29 +52,27 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
                 HWND hActive = GetActiveWindow();
 
                 // Only intercept if Salamander main window is active (no dialogs, popups or message boxes open)
-                if (hMain != NULL && hActive == hMain && pMsg->hwnd != NULL && IsChild(hMain, pMsg->hwnd))
+                if (hMain != NULL && hActive == hMain && pMsg->hwnd != NULL)
                 {
-                    char className[64] = {0};
-                    GetClassNameA(pMsg->hwnd, className, sizeof(className));
-
-                    // Do not intercept if typing in an editbox, pressing a button, or using a combobox/listbox
-                    if (_stricmp(className, "Edit") != 0 &&
-                        _stricmp(className, "Button") != 0 &&
-                        _stricmp(className, "ComboBox") != 0 &&
-                        _stricmp(className, "ListBox") != 0 &&
-                        _stricmp(className, "RichEdit") != 0 &&
-                        _stricmp(className, "RichEdit20W") != 0 &&
-                        _stricmp(className, "RichEdit20A") != 0)
+                    HWND hRoot = GetAncestor(pMsg->hwnd, GA_ROOT);
+                    if (hRoot == hMain)
                     {
-                        CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
-                        if (activeFS)
+                        char className[64] = {0};
+                        GetClassNameA(pMsg->hwnd, className, sizeof(className));
+
+                        // Only intercept if focus is directly on the panel's SysListView32
+                        if (_stricmp(className, "SysListView32") == 0)
                         {
-                            BOOL isDir = FALSE;
-                            const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
-                            if (f && isDir && strcmp(f->Name, "..") != 0)
+                            CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
+                            if (activeFS && CPluginFS::IsOurFS(activeFS))
                             {
-                                CPluginFS* gdriveFS = (CPluginFS*)activeFS;
-                                gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
+                                BOOL isDir = FALSE;
+                                const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
+                                if (f && isDir && strcmp(f->Name, "..") != 0)
+                                {
+                                    CPluginFS* gdriveFS = (CPluginFS*)activeFS;
+                                    gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
+                                }
                             }
                         }
                     }

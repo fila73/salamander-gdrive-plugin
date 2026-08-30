@@ -184,6 +184,16 @@ void WINAPI CPluginFS::ShowSecurityInfo(HWND parent)
 {
 }
 
+static std::set<CPluginFSInterfaceAbstract*> s_activeFSInstances;
+static std::mutex s_fsInstancesMutex;
+
+bool CPluginFS::IsOurFS(CPluginFSInterfaceAbstract* fs)
+{
+    if (!fs) return false;
+    std::lock_guard<std::mutex> lock(s_fsInstancesMutex);
+    return s_activeFSInstances.find(fs) != s_activeFSInstances.end();
+}
+
 //
 // CPluginInterfaceForFS
 //
@@ -200,13 +210,23 @@ CPluginFSInterfaceAbstract* WINAPI CPluginInterfaceForFS::OpenFS(const char* fsN
         }
     }
 
-    return new (std::nothrow) CPluginFS(fsName);
+    CPluginFS* fs = new (std::nothrow) CPluginFS(fsName);
+    if (fs)
+    {
+        std::lock_guard<std::mutex> lock(s_fsInstancesMutex);
+        s_activeFSInstances.insert(fs);
+    }
+    return fs;
 }
 
 void WINAPI CPluginInterfaceForFS::CloseFS(CPluginFSInterfaceAbstract* fs)
 {
     if (fs)
     {
+        {
+            std::lock_guard<std::mutex> lock(s_fsInstancesMutex);
+            s_activeFSInstances.erase(fs);
+        }
         delete (CPluginFS*)fs;
     }
 }
