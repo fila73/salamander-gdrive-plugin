@@ -2062,7 +2062,7 @@ bool CPluginFS::DownloadSingleItem(const GDriveApi::GDriveItem& item, const std:
     return success;
 }
 
-bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, CTransferProgressDialog* pProgressDlg)
+bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, CTransferProgressDialog* pProgressDlg, const std::set<std::string>* pPrecalculatedFolderIds)
 {
     std::wstring wFolderName = GDriveHttp::HttpClient::Utf8ToWide(folder.name);
     if (CfgSanitizeInvalidChars)
@@ -2084,7 +2084,8 @@ bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, con
         return false;
     }
 
-    if (pProgressDlg)
+    bool isPrecalculated = (pPrecalculatedFolderIds && pPrecalculatedFolderIds->find(folder.id) != pPrecalculatedFolderIds->end());
+    if (pProgressDlg && !isPrecalculated)
     {
         int newItemsCount = 0;
         int64_t newBytes = 0;
@@ -2105,7 +2106,7 @@ bool CPluginFS::DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, con
 
         if (child.isFolder)
         {
-            if (!DownloadFolderRecursive(child, subDir, parent, pProgressDlg))
+            if (!DownloadFolderRecursive(child, subDir, parent, pProgressDlg, pPrecalculatedFolderIds))
                 return false;
         }
         else
@@ -2535,15 +2536,39 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
 
     int64_t totalBatchBytes = 0;
     int totalItems = 0;
+    std::set<std::string> precalculatedFolderIds;
+
+    auto inspectItemForBatch = [&](const CFileData* f) {
+        if (!f) return;
+        const GDriveApi::GDriveItem* item = FindItemByPanelName(f->Name);
+        if (!item) return;
+        if (!item->isFolder)
+        {
+            totalItems++;
+            totalBatchBytes += item->size;
+        }
+        else
+        {
+            int64_t folderSize = 0;
+            int filesCount = 0;
+            int dirsCount = 0;
+            if (GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(item->id, folderSize, filesCount, dirsCount))
+            {
+                totalItems += filesCount;
+                totalBatchBytes += folderSize;
+                precalculatedFolderIds.insert(item->id);
+            }
+            else
+            {
+                totalItems++;
+            }
+        }
+    };
+
     if (focused)
     {
         const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(panel, &isDir);
-        if (f)
-        {
-            totalItems = 1;
-            const GDriveApi::GDriveItem* item = FindItemByPanelName(f->Name);
-            if (item && !item->isFolder) totalBatchBytes = item->size;
-        }
+        inspectItemForBatch(f);
     }
     else
     {
@@ -2551,9 +2576,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
         BOOL tempIsDir = FALSE;
         while (const CFileData* f = SalamanderGeneral->GetPanelSelectedItem(panel, &tempIdx, &tempIsDir))
         {
-            totalItems++;
-            const GDriveApi::GDriveItem* item = FindItemByPanelName(f->Name);
-            if (item && !item->isFolder) totalBatchBytes += item->size;
+            inspectItemForBatch(f);
         }
     }
 
@@ -2586,7 +2609,7 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromFS(BOOL copy, int mode, const char* fsName,
 
             if (targetItem->isFolder)
             {
-                if (!DownloadFolderRecursive(*targetItem, wTargetDir, parent, &progressDlg))
+                if (!DownloadFolderRecursive(*targetItem, wTargetDir, parent, &progressDlg, &precalculatedFolderIds))
                 {
                     success = FALSE;
                     break;

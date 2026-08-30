@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
+#include <optional>
 
 #define TOP_INDEX_MEM_SIZE 30
 
@@ -187,7 +189,7 @@ private:
     bool ResolveCurrentFolderId();
     bool ResolveFolderIdForPath(const std::string& path, std::string& folderId, std::string& driveId, bool& isShared);
     bool DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
-    bool DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
+    bool DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr, const std::set<std::string>* pPrecalculatedFolderIds = nullptr);
     bool UploadSingleItem(const std::wstring& localPath, const std::string& fileName, const std::string& parentFolderId, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
     bool UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
 
