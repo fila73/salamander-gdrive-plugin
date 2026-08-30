@@ -22,9 +22,19 @@ CCommonDialog::CCommonDialog(HINSTANCE hInstance, int resID, int helpID, HWND hP
 
 INT_PTR CCommonDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    if (uMsg == WM_INITDIALOG && Parent != NULL)
+    INT_PTR colorResult = 0;
+    if (GDriveDarkMode::HandleDialogColors(uMsg, wParam, lParam, &colorResult))
     {
-        SalamanderGeneral->MultiMonCenterWindow(HWindow, Parent, TRUE);
+        return colorResult;
+    }
+
+    if (uMsg == WM_INITDIALOG)
+    {
+        GDriveDarkMode::ApplyWindowTheme(HWindow);
+        if (Parent != NULL)
+        {
+            SalamanderGeneral->MultiMonCenterWindow(HWindow, Parent, TRUE);
+        }
     }
     return CDialog::DialogProc(uMsg, wParam, lParam);
 }
@@ -37,6 +47,21 @@ void CCommonDialog::NotifDlgJustCreated()
 void CCommonPropSheetPage::NotifDlgJustCreated()
 {
     SalamanderGUI->ArrangeHorizontalLines(HWindow);
+}
+
+INT_PTR CCommonPropSheetPage::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    INT_PTR colorResult = 0;
+    if (GDriveDarkMode::HandleDialogColors(uMsg, wParam, lParam, &colorResult))
+    {
+        return colorResult;
+    }
+
+    if (uMsg == WM_INITDIALOG)
+    {
+        GDriveDarkMode::ApplyWindowTheme(HWindow);
+    }
+    return CPropSheetPage::DialogProc(uMsg, wParam, lParam);
 }
 
 #include "gdrive_cache.h"
@@ -146,6 +171,27 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
             RefreshAccountsList();
             return TRUE;
         }
+        else if (ctrlId == IDC_CFG_ACCOUNT_SAVE_BTN && notifyCode == BN_CLICKED)
+        {
+            HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
+            int curSel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+            auto accounts = GDriveAuth::AuthManager::GetInstance().GetAccounts();
+            std::string email = "";
+            if (curSel >= 0 && curSel < (int)accounts.size())
+            {
+                email = accounts[curSel].email;
+            }
+
+            char szClientId[512] = {0};
+            char szClientSecret[512] = {0};
+            GetDlgItemTextA(HWindow, IDC_CFG_CLIENTID, szClientId, sizeof(szClientId));
+            GetDlgItemTextA(HWindow, IDC_CFG_CLIENTSECRET, szClientSecret, sizeof(szClientSecret));
+
+            GDriveAuth::AuthManager::GetInstance().SaveAccountKeys(email, szClientId, szClientSecret);
+            SalamanderGeneral->SalMessageBox(HWindow, LoadStr(IDS_KEYS_SAVED), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONINFORMATION);
+            RefreshAccountsList();
+            return TRUE;
+        }
         else if (ctrlId == IDC_CFG_ACCOUNTS_COMBO && notifyCode == CBN_SELCHANGE)
         {
             HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
@@ -213,11 +259,11 @@ void CConfigPageCache::UpdateCacheStatus()
     char buf[256] = {0};
     if (!acc.empty())
     {
-        snprintf(buf, sizeof(buf), "Active account: %s (Isolated cache)", acc.c_str());
+        snprintf(buf, sizeof(buf), LoadStr(IDS_CFG_CACHE_ACTIVE_FMT), acc.c_str());
     }
     else
     {
-        snprintf(buf, sizeof(buf), "No active account");
+        snprintf(buf, sizeof(buf), "%s", LoadStr(IDS_CFG_CACHE_NO_ACTIVE));
     }
     SetDlgItemTextA(HWindow, IDC_CFG_CACHE_STATUS, buf);
 }
@@ -338,6 +384,15 @@ static int CALLBACK CenterCallback(HWND HWindow, UINT uMsg, LPARAM lParam)
 {
     if (uMsg == PSCB_INITIALIZED)
     {
+        GDriveDarkMode::ApplyWindowTheme(HWindow);
+
+        HWND hOk = GetDlgItem(HWindow, IDOK);
+        if (hOk) SetWindowTextA(hOk, LoadStr(IDS_BUTTON_OK));
+        HWND hCancel = GetDlgItem(HWindow, IDCANCEL);
+        if (hCancel) SetWindowTextA(hCancel, LoadStr(IDS_BUTTON_CANCEL));
+        HWND hHelp = GetDlgItem(HWindow, IDHELP);
+        if (hHelp) SetWindowTextA(hHelp, LoadStr(IDS_BUTTON_HELP));
+
         CCenteredPropertyWindow* wnd = new CCenteredPropertyWindow;
         if (wnd != NULL)
         {
@@ -660,6 +715,7 @@ bool CCalcSizeProgressDialog::Run()
 CTransferProgressDialog::CTransferProgressDialog(HWND hParent, bool isUpload, const std::string& fileName, int64_t totalBytes)
     : CCommonDialog(HLanguage, IDD_TRANSFER_PROGRESS, hParent, ooStatic),
       m_isUpload(isUpload),
+      m_actionResId(isUpload ? IDS_TRANSFER_UPLOADING : IDS_TRANSFER_DOWNLOADING),
       m_fileName(fileName),
       m_totalBytes(totalBytes),
       m_cancelled(false),
@@ -671,6 +727,16 @@ CTransferProgressDialog::CTransferProgressDialog(HWND hParent, bool isUpload, co
 CTransferProgressDialog::~CTransferProgressDialog()
 {
     Stop();
+}
+
+void CTransferProgressDialog::SetActionLabel(int strResId)
+{
+    m_actionResId = strResId;
+    if (HWindow)
+    {
+        std::string actionText = LoadStr(m_actionResId);
+        SetDlgItemTextA(HWindow, IDC_TRANSFER_ACTION_LABEL, actionText.c_str());
+    }
 }
 
 INT_PTR CTransferProgressDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -719,7 +785,7 @@ bool CTransferProgressDialog::Start()
     ShowWindow(HWindow, SW_SHOW);
     UpdateWindow(HWindow);
 
-    std::string actionText = LoadStr(m_isUpload ? IDS_TRANSFER_UPLOADING : IDS_TRANSFER_DOWNLOADING);
+    std::string actionText = LoadStr(m_actionResId);
     SetDlgItemTextA(HWindow, IDC_TRANSFER_ACTION_LABEL, actionText.c_str());
 
     std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(m_fileName);

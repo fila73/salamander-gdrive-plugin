@@ -827,7 +827,7 @@ std::vector<AccountProfile> AuthManager::GetAccounts()
         RegCloseKey(hKeyAccounts);
     }
 
-    if (accounts.empty() && !m_tokens.accountEmail.empty())
+    if (accounts.empty() && !m_tokens.accountEmail.empty() && !m_tokens.refreshToken.empty())
     {
         AccountProfile prof;
         prof.email = m_tokens.accountEmail;
@@ -947,6 +947,61 @@ bool AuthManager::AddAccount(HWND hParent, std::string* errorOut)
     return LaunchInteractiveAuth(hParent, errorOut);
 }
 
+bool AuthManager::SaveAccountKeys(const std::string& email, const std::string& clientId, const std::string& clientSecret)
+{
+    if (email.empty())
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_clientId = clientId;
+        m_clientSecret = clientSecret;
+        HKEY hKeyMain = NULL;
+        DWORD disp = 0;
+        if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, NULL, 0, KEY_WRITE, NULL, &hKeyMain, &disp) == ERROR_SUCCESS)
+        {
+            std::wstring wCid = GDriveHttp::HttpClient::Utf8ToWide(clientId);
+            RegSetValueExW(hKeyMain, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
+            std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(clientSecret);
+            RegSetValueExW(hKeyMain, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+            RegCloseKey(hKeyMain);
+        }
+        return true;
+    }
+
+    std::wstring wSafeKey = MakeSafeAccountKey(email);
+    std::wstring accSubKey = std::wstring(kRegAccountsSubKey) + L"\\" + wSafeKey;
+    HKEY hKeyAcc = NULL;
+    DWORD disp = 0;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, accSubKey.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hKeyAcc, &disp) == ERROR_SUCCESS)
+    {
+        std::wstring wCid = GDriveHttp::HttpClient::Utf8ToWide(clientId);
+        RegSetValueExW(hKeyAcc, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
+        std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(clientSecret);
+        RegSetValueExW(hKeyAcc, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+        RegCloseKey(hKeyAcc);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (_stricmp(email.c_str(), m_tokens.accountEmail.c_str()) == 0)
+        {
+            m_clientId = clientId;
+            m_clientSecret = clientSecret;
+        }
+    }
+
+    HKEY hKeyMain = NULL;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kRegSubKey, 0, NULL, 0, KEY_WRITE, NULL, &hKeyMain, &disp) == ERROR_SUCCESS)
+    {
+        std::wstring wCid = GDriveHttp::HttpClient::Utf8ToWide(clientId);
+        RegSetValueExW(hKeyMain, kRegValClientId, 0, REG_SZ, (const BYTE*)wCid.c_str(), (DWORD)(wCid.length() + 1) * sizeof(wchar_t));
+        std::wstring wSec = GDriveHttp::HttpClient::Utf8ToWide(clientSecret);
+        RegSetValueExW(hKeyMain, kRegValClientSecret, 0, REG_SZ, (const BYTE*)wSec.c_str(), (DWORD)(wSec.length() + 1) * sizeof(wchar_t));
+        RegCloseKey(hKeyMain);
+    }
+
+    return true;
+}
+
 bool AuthManager::RemoveAccount(const std::string& email)
 {
     if (email.empty()) return false;
@@ -960,19 +1015,23 @@ bool AuthManager::RemoveAccount(const std::string& email)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         wasActive = (_stricmp(email.c_str(), m_tokens.accountEmail.c_str()) == 0);
+        if (wasActive)
+        {
+            m_tokens = AuthTokens();
+        }
     }
 
-    if (wasActive)
+    auto remaining = GetAccounts();
+    if (!remaining.empty())
     {
-        auto remaining = GetAccounts();
-        if (!remaining.empty())
+        if (wasActive)
         {
             SwitchAccount(remaining[0].email);
         }
-        else
-        {
-            Logout();
-        }
+    }
+    else
+    {
+        Logout();
     }
 
     return true;

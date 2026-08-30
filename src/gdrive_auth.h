@@ -53,6 +53,7 @@ public:
     bool SwitchAccount(const std::string& email);
     bool RemoveAccount(const std::string& email);
     bool AddAccount(HWND hParent, std::string* errorOut = nullptr);
+    bool SaveAccountKeys(const std::string& email, const std::string& clientId, const std::string& clientSecret);
 
     bool LoadSavedTokens();
     bool SaveTokens();

@@ -14,6 +14,7 @@
 #define IDC_CFG_AUTOCONNECT             496
 #define IDC_CFG_RESET_DEFAULT_BTN       497
 #define IDC_CFG_CLIENTSECRET            498
+#define IDC_CFG_ACCOUNT_SAVE_BTN        499
 
 #define IDD_AUTH_PROGRESS               500
 #define IDC_AUTH_STATUS_LABEL           501

@@ -118,5 +118,22 @@
 #define IDS_TRANSFER_CANCEL                      2163
 #define IDS_TRANSFER_SPEED_FMT                   2164
 #define IDS_TRANSFER_BYTES_FMT                   2165
+#define IDS_TRANSFER_DELETING                    2166
+#define IDS_BTN_SAVE_KEYS                        2167
+#define IDS_KEYS_SAVED                           2168
+#define IDS_PROMPT_OVERWRITE_FILE                2169
+#define IDS_PROMPT_OVERWRITE_TITLE               2170
+#define IDS_PROMPT_OVERWRITE_GDRIVE              2171
+#define IDS_CFG_CACHE_ACTIVE_FMT                 2172
+#define IDS_CFG_CACHE_NO_ACTIVE                  2173
+#define IDS_BUTTON_OK                            2174
+#define IDS_BUTTON_CANCEL                        2175
+#define IDS_BUTTON_HELP                          2176
+#define IDS_ERR_CANNOT_GET_ITEM_ID               2177
+#define IDS_PROPERTIES_TITLE                     2178
+#define IDS_PROPERTIES_FMT                       2179
+#define IDS_DOWNLOAD_FAILED                      2180
+#define IDS_STORAGE_INFO_FMT                     2181
+#define IDS_STORAGE_UNLIMITED_FMT                2182
 
 #endif // __GDRIVE_RH2

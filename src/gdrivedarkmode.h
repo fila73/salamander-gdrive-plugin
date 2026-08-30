@@ -45,5 +45,7 @@ void ApplyWindowTheme(HWND hwnd);
 void ApplyListViewTheme(HWND hwndList);
 void ApplyEditTheme(HWND hwndEdit);
 void ApplyStatusBarTheme(HWND hwndStatus);
+void ApplyDialogControlsTheme(HWND hwndDlg);
+BOOL HandleDialogColors(UINT uMsg, WPARAM wParam, LPARAM lParam, INT_PTR* pResult);
 
 } // namespace GDriveDarkMode

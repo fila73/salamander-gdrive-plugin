@@ -29,6 +29,7 @@ public:
 
 protected:
     virtual void NotifDlgJustCreated();
+    virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam);
 };
 
 class CConfigPageGeneral : public CCommonPropSheetPage
@@ -109,6 +110,7 @@ public:
     bool Start();
     void Stop();
     void SetCurrentFile(const std::string& fileName, int64_t totalBytes);
+    void SetActionLabel(int strResId);
 
     bool OnProgress(int64_t bytesTransferred, int64_t totalBytes);
     bool IsCancelled() const { return m_cancelled; }
@@ -120,6 +122,7 @@ protected:
 
 private:
     bool m_isUpload;
+    int m_actionResId;
     std::string m_fileName;
     int64_t m_totalBytes;
     bool m_cancelled;

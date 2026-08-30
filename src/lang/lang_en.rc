@@ -44,7 +44,7 @@ END
 
 IDD_CFGPAGEGENERAL DIALOGEX 66, 53, 250, 180
 STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
-CAPTION "Accounts & General"
+CAPTION "Accounts && General"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     GROUPBOX        "Google Accounts",IDC_STATIC_1,4,4,242,76
@@ -59,13 +59,14 @@ BEGIN
     LTEXT           "OAuth &Client ID:",IDC_STATIC_4,12,96,80,8
     EDITTEXT        IDC_CFG_CLIENTID,12,107,224,14,ES_AUTOHSCROLL
     LTEXT           "OAuth Client &Secret:",IDC_STATIC_5,12,124,80,8
-    EDITTEXT        IDC_CFG_CLIENTSECRET,12,135,224,14,ES_PASSWORD | ES_AUTOHSCROLL
+    EDITTEXT        IDC_CFG_CLIENTSECRET,12,135,156,14,ES_PASSWORD | ES_AUTOHSCROLL
+    PUSHBUTTON      "&Save Keys",IDC_CFG_ACCOUNT_SAVE_BTN,174,135,62,14
     LTEXT           "Note: To use custom keys, create a Desktop App in Google Cloud Console.",IDC_STATIC_6,12,153,224,18
 END
 
 IDD_CFGPAGECACHE DIALOGEX 66, 53, 250, 180
 STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
-CAPTION "Cache & Sync"
+CAPTION "Cache && Sync"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     GROUPBOX        "Metadata Cache & Sync",IDC_STATIC_1,4,4,242,126
@@ -73,9 +74,9 @@ BEGIN
     LTEXT           "Changes check frequency (TTL):",IDC_STATIC_2,12,28,220,8
     COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,38,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     CONTROL         "&Ctrl+R: Do not force reload if current folder is unchanged",IDC_CFG_SMART_CTRL_R,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,54,224,10
-    CONTROL         "&Sanitize incompatible Windows characters on download",IDC_CFG_SANITIZE_INVALID_CHARS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,68,200,10
-    LTEXT           "With:",IDC_STATIC_5,214,69,18,8
-    EDITTEXT        IDC_CFG_SANITIZE_CHAR,232,67,14,12,ES_AUTOHSCROLL
+    CONTROL         "&Sanitize incompatible Windows characters on download",IDC_CFG_SANITIZE_INVALID_CHARS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,68,188,10
+    LTEXT           "With:",IDC_STATIC_5,202,69,18,8
+    EDITTEXT        IDC_CFG_SANITIZE_CHAR,222,67,14,12,ES_AUTOHSCROLL
     LTEXT           "Cache status: Ready (Isolated per account)",IDC_CFG_CACHE_STATUS,12,84,220,8
     PUSHBUTTON      "&Clear Cache for Active Account",IDC_CFG_CACHE_CLEAR_BTN,12,98,140,14
 
@@ -197,8 +198,8 @@ BEGIN
     IDS_RECENT                  "Recent"
     IDS_LINK_COPIED             "Web link was copied to clipboard."
     IDS_CONFIRM_EMPTY_TRASH     "Are you sure you want to permanently delete all items in Trash?\n\nWarning: This operation cannot be undone!"
-    IDS_CFG_PAGE_GENERAL        "Accounts & General"
-    IDS_CFG_PAGE_CACHE          "Cache & Sync"
+    IDS_CFG_PAGE_GENERAL        "Accounts && General"
+    IDS_CFG_PAGE_CACHE          "Cache && Sync"
     IDS_CACHE_CLEARED           "Local cache for active account was cleared."
     IDS_CONFIRM_REMOVE_ACCOUNT  "Are you sure you want to remove account '%s' and its local cache?"
     IDS_TTL_10SEC               "10 seconds (High precision)"
@@ -213,6 +214,23 @@ BEGIN
     IDS_TRANSFER_CANCEL         "Transfer cancelled by user."
     IDS_TRANSFER_SPEED_FMT      "%.2f MB/s"
     IDS_TRANSFER_BYTES_FMT      "%s of %s (%d%%)"
+    IDS_TRANSFER_DELETING       "Deleting:"
+    IDS_BTN_SAVE_KEYS           "&Save Keys"
+    IDS_KEYS_SAVED              "OAuth Client ID and Secret were saved for the selected account."
+    IDS_PROMPT_OVERWRITE_FILE   "Destination file already exists:\n\n%s\n\nDo you want to overwrite it?"
+    IDS_PROMPT_OVERWRITE_TITLE  "Confirm File Overwrite"
+    IDS_PROMPT_OVERWRITE_GDRIVE "File '%s' already exists in the destination folder on Google Drive.\n\nDo you want to overwrite (update) the existing file?"
+    IDS_CFG_CACHE_ACTIVE_FMT    "Active account: %s (Isolated cache)"
+    IDS_CFG_CACHE_NO_ACTIVE     "No active account"
+    IDS_BUTTON_OK               "OK"
+    IDS_BUTTON_CANCEL           "Cancel"
+    IDS_BUTTON_HELP             "Help"
+    IDS_ERR_CANNOT_GET_ITEM_ID  "Cannot determine identifier for this item."
+    IDS_PROPERTIES_TITLE        "Properties"
+    IDS_PROPERTIES_FMT          "Name: %s\nType: %s\nSize: %llu B\nPath: %s"
+    IDS_DOWNLOAD_FAILED         "Failed to download file."
+    IDS_STORAGE_INFO_FMT        "Account: %s (%s)\n\nGoogle Drive Storage:\nUsed: %.2f GB of %.2f GB (%.1f %%)\nTrash: %.2f MB"
+    IDS_STORAGE_UNLIMITED_FMT   "Account: %s (%s)\n\nGoogle Drive Storage:\nUsed: %.2f GB (Unlimited quota)"
 END
 
 #endif // English resources

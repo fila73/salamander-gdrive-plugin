@@ -95,10 +95,102 @@ const ThemeColors& GetTheme()
 
 void ApplyWindowTheme(HWND hwnd)
 {
+    if (!hwnd) return;
     if (IsDarkMode())
     {
         PluginDarkMode_ApplyTitleBar(hwnd);
+        ApplyDialogControlsTheme(hwnd);
     }
+}
+
+static BOOL CALLBACK EnumChildProc(HWND hwndChild, LPARAM lParam)
+{
+    char className[64] = {0};
+    GetClassNameA(hwndChild, className, sizeof(className));
+
+    if (_stricmp(className, "Edit") == 0)
+    {
+        SetWindowTheme(hwndChild, L"DarkMode_CFD", NULL);
+    }
+    else if (_stricmp(className, "ComboBox") == 0)
+    {
+        SetWindowTheme(hwndChild, L"DarkMode_CFD", NULL);
+    }
+    else if (_stricmp(className, "Button") == 0)
+    {
+        SetWindowTheme(hwndChild, L"DarkMode_Explorer", NULL);
+    }
+    else if (_stricmp(className, "msctls_progress32") == 0)
+    {
+        SendMessage(hwndChild, PBM_SETBARCOLOR, 0, (LPARAM)RGB(0, 120, 215));
+        SendMessage(hwndChild, PBM_SETBKCOLOR, 0, (LPARAM)RGB(45, 45, 45));
+    }
+    else if (_stricmp(className, "SysListView32") == 0)
+    {
+        ApplyListViewTheme(hwndChild);
+    }
+    return TRUE;
+}
+
+void ApplyDialogControlsTheme(HWND hwndDlg)
+{
+    if (!hwndDlg) return;
+    if (IsDarkMode())
+    {
+        EnumChildWindows(hwndDlg, EnumChildProc, 0);
+    }
+}
+
+BOOL HandleDialogColors(UINT uMsg, WPARAM wParam, LPARAM lParam, INT_PTR* pResult)
+{
+    if (!IsDarkMode()) return FALSE;
+
+    InitTheme();
+
+    switch (uMsg)
+    {
+    case WM_CTLCOLORDLG:
+        if (pResult) *pResult = (INT_PTR)g_theme.brushBgMain;
+        return TRUE;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdc = (HDC)wParam;
+        SetTextColor(hdc, g_theme.textMain);
+        SetBkColor(hdc, g_theme.bgMain);
+        if (pResult) *pResult = (INT_PTR)g_theme.brushBgMain;
+        return TRUE;
+    }
+
+    case WM_CTLCOLOREDIT:
+    {
+        HDC hdc = (HDC)wParam;
+        SetTextColor(hdc, g_theme.editText);
+        SetBkColor(hdc, g_theme.editBg);
+        if (pResult) *pResult = (INT_PTR)g_theme.brushEditBg;
+        return TRUE;
+    }
+
+    case WM_CTLCOLORLISTBOX:
+    {
+        HDC hdc = (HDC)wParam;
+        SetTextColor(hdc, g_theme.textMain);
+        SetBkColor(hdc, g_theme.bgMain);
+        if (pResult) *pResult = (INT_PTR)g_theme.brushBgMain;
+        return TRUE;
+    }
+
+    case WM_CTLCOLORBTN:
+    {
+        HDC hdc = (HDC)wParam;
+        SetTextColor(hdc, g_theme.textMain);
+        SetBkColor(hdc, g_theme.bgMain);
+        if (pResult) *pResult = (INT_PTR)g_theme.brushBgMain;
+        return TRUE;
+    }
+    }
+
+    return FALSE;
 }
 
 void ApplyListViewTheme(HWND hwndList)

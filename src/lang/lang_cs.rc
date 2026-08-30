@@ -59,7 +59,8 @@ BEGIN
     LTEXT           "OAuth &Client ID:",IDC_STATIC_4,12,96,80,8
     EDITTEXT        IDC_CFG_CLIENTID,12,107,224,14,ES_AUTOHSCROLL
     LTEXT           "OAuth Client &Secret:",IDC_STATIC_5,12,124,80,8
-    EDITTEXT        IDC_CFG_CLIENTSECRET,12,135,224,14,ES_PASSWORD | ES_AUTOHSCROLL
+    EDITTEXT        IDC_CFG_CLIENTSECRET,12,135,156,14,ES_PASSWORD | ES_AUTOHSCROLL
+    PUSHBUTTON      "&Uložit klíče",IDC_CFG_ACCOUNT_SAVE_BTN,174,135,62,14
     LTEXT           "Poznámka: Pro přístup zadejte klíče typu Desktop App z Google Cloud Console.",IDC_STATIC_6,12,153,224,18
 END
 
@@ -73,9 +74,9 @@ BEGIN
     LTEXT           "Frekvence kontroly změn (TTL):",IDC_STATIC_2,12,28,220,8
     COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,38,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     CONTROL         "&Ctrl+R: Nevynucovat refresh, pokud složka není změněna",IDC_CFG_SMART_CTRL_R,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,54,224,10
-    CONTROL         "&Nahrazovat neplatné znaky při stahování na disk",IDC_CFG_SANITIZE_INVALID_CHARS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,68,200,10
-    LTEXT           "Znak:",IDC_STATIC_5,214,69,18,8
-    EDITTEXT        IDC_CFG_SANITIZE_CHAR,232,67,14,12,ES_AUTOHSCROLL
+    CONTROL         "&Nahrazovat neplatné znaky při stahování na disk",IDC_CFG_SANITIZE_INVALID_CHARS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,68,188,10
+    LTEXT           "Znak:",IDC_STATIC_5,202,69,18,8
+    EDITTEXT        IDC_CFG_SANITIZE_CHAR,222,67,14,12,ES_AUTOHSCROLL
     LTEXT           "Stav mezipaměti: Připraveno (izolováno pro účet)",IDC_CFG_CACHE_STATUS,12,84,220,8
     PUSHBUTTON      "&Vymazat mezipaměť aktivního účtu",IDC_CFG_CACHE_CLEAR_BTN,12,98,140,14
 
@@ -213,6 +214,23 @@ BEGIN
     IDS_TRANSFER_CANCEL         "Přenos byl zrušen uživatelem."
     IDS_TRANSFER_SPEED_FMT      "%.2f MB/s"
     IDS_TRANSFER_BYTES_FMT      "%s z %s (%d%%)"
+    IDS_TRANSFER_DELETING       "Mazání:"
+    IDS_BTN_SAVE_KEYS           "&Uložit klíče"
+    IDS_KEYS_SAVED              "OAuth Client ID a Secret byly uloženy pro vybraný účet."
+    IDS_PROMPT_OVERWRITE_FILE   "Cílový soubor již existuje:\n\n%s\n\nChcete jej přepsat?"
+    IDS_PROMPT_OVERWRITE_TITLE  "Potvrdit přepsání souboru"
+    IDS_PROMPT_OVERWRITE_GDRIVE "Soubor '%s' již v cílové složce na Google Disku existuje.\n\nChcete existující soubor přepsat (aktualizovat)?"
+    IDS_CFG_CACHE_ACTIVE_FMT    "Aktivní účet: %s (izolovaná mezipaměť)"
+    IDS_CFG_CACHE_NO_ACTIVE     "Žádný aktivní účet"
+    IDS_BUTTON_OK               "OK"
+    IDS_BUTTON_CANCEL           "Zrušit"
+    IDS_BUTTON_HELP             "Nápověda"
+    IDS_ERR_CANNOT_GET_ITEM_ID  "Nelze zjistit identifikátor této položky."
+    IDS_PROPERTIES_TITLE        "Vlastnosti"
+    IDS_PROPERTIES_FMT          "Název: %s\nTyp: %s\nVelikost: %llu B\nCesta: %s"
+    IDS_DOWNLOAD_FAILED         "Nepodařilo se stáhnout soubor."
+    IDS_STORAGE_INFO_FMT        "Účet: %s (%s)\n\nÚložiště Google Disk:\nVyužito: %.2f GB z %.2f GB (%.1f %%)\nKoš: %.2f MB"
+    IDS_STORAGE_UNLIMITED_FMT   "Účet: %s (%s)\n\nÚložiště Google Disk:\nVyužito: %.2f GB (Neomezená kvóta)"
 END
 
 #endif // Czech resources
