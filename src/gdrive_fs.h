@@ -175,18 +175,19 @@ public:
 
     const std::string& GetCurrentPathStr() const { return m_currentPath; }
 
+public:
+    struct CaseInsensitiveCompare {
+        bool operator()(const std::string& a, const std::string& b) const {
+            return _stricmp(a.c_str(), b.c_str()) < 0;
+        }
+    };
+
 private:
     std::string m_fsName;
     std::string m_currentPath; // e.g. "", "/My Drive", "/My Drive/Folder", "/Shared Drives", "/Shared Drives/TeamA"
     std::string m_currentFolderId; // Google Drive folder ID for m_currentPath
     std::string m_currentDriveId; // Shared drive ID if inside shared drive
     bool m_isSharedDrive = false;
-
-    struct CaseInsensitiveCompare {
-        bool operator()(const std::string& a, const std::string& b) const {
-            return _stricmp(a.c_str(), b.c_str()) < 0;
-        }
-    };
 
     std::vector<GDriveApi::GDriveItem> m_cachedItems;
     std::map<std::string, std::string, CaseInsensitiveCompare> m_pathToIdCache;
@@ -201,6 +202,12 @@ private:
     bool UploadFolderRecursive(const std::wstring& localDirPath, const std::string& dirName, const std::string& parentFolderId, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
 
     std::optional<ConflictAction> m_batchConflictAction;
+
+public:
+    static std::string ExtractIdSuffix(const std::string& id);
+    static std::string ExtractSuffixFromDisambiguatedName(const std::string& name);
+    static std::string GetBaseDisplayName(const GDriveApi::GDriveItem& item);
+    static std::map<std::string, std::string> ComputeDisplayNames(const std::vector<GDriveApi::GDriveItem>& items);
 };
 
 class CPluginInterfaceForFS : public CPluginInterfaceForFSAbstract

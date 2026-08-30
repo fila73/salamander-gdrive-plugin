@@ -187,6 +187,85 @@ BOOL WINAPI CPluginFS::ChangePath(int currentFSNameIndex, char* fsName, int fsNa
     return FALSE;
 }
 
+std::string CPluginFS::ExtractIdSuffix(const std::string& id)
+{
+    if (id.length() <= 6) return id;
+    return id.substr(id.length() - 6);
+}
+
+std::string CPluginFS::ExtractSuffixFromDisambiguatedName(const std::string& name)
+{
+    size_t openBracket = name.rfind('[');
+    size_t closeBracket = name.rfind(']');
+    if (openBracket != std::string::npos && closeBracket != std::string::npos && closeBracket > openBracket + 1)
+    {
+        return name.substr(openBracket + 1, closeBracket - openBracket - 1);
+    }
+    return "";
+}
+
+std::string CPluginFS::GetBaseDisplayName(const GDriveApi::GDriveItem& item)
+{
+    std::string baseName = item.name;
+    if (item.isGoogleDoc && !item.exportExtension.empty())
+    {
+        if (baseName.length() < item.exportExtension.length() ||
+            baseName.compare(baseName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+        {
+            baseName += item.exportExtension;
+        }
+    }
+    return baseName;
+}
+
+std::map<std::string, std::string> CPluginFS::ComputeDisplayNames(const std::vector<GDriveApi::GDriveItem>& items)
+{
+    std::map<std::string, std::string> idToDisplayName;
+    std::map<std::string, int> baseNameCounts;
+
+    for (const auto& item : items)
+    {
+        std::string baseName = GetBaseDisplayName(item);
+        std::string lowerBaseName = baseName;
+        std::transform(lowerBaseName.begin(), lowerBaseName.end(), lowerBaseName.begin(), ::tolower);
+        baseNameCounts[lowerBaseName]++;
+    }
+
+    for (const auto& item : items)
+    {
+        std::string baseName = GetBaseDisplayName(item);
+        std::string lowerBaseName = baseName;
+        std::transform(lowerBaseName.begin(), lowerBaseName.end(), lowerBaseName.begin(), ::tolower);
+
+        if (baseNameCounts[lowerBaseName] > 1 && !item.id.empty())
+        {
+            std::string suffix = ExtractIdSuffix(item.id);
+            if (item.isFolder)
+            {
+                idToDisplayName[item.id] = baseName + " [" + suffix + "]";
+            }
+            else
+            {
+                size_t dotPos = baseName.rfind('.');
+                if (dotPos != std::string::npos && dotPos > 0)
+                {
+                    idToDisplayName[item.id] = baseName.substr(0, dotPos) + " [" + suffix + "]" + baseName.substr(dotPos);
+                }
+                else
+                {
+                    idToDisplayName[item.id] = baseName + " [" + suffix + "]";
+                }
+            }
+        }
+        else
+        {
+            idToDisplayName[item.id] = baseName;
+        }
+    }
+
+    return idToDisplayName;
+}
+
 const GDriveApi::GDriveItem* CPluginFS::FindItemByPanelName(const char* panelName) const
 {
     if (!panelName || !panelName[0] || strcmp(panelName, "..") == 0) return nullptr;
@@ -194,18 +273,41 @@ const GDriveApi::GDriveItem* CPluginFS::FindItemByPanelName(const char* panelNam
     std::string fileAnsiName = panelName;
     std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(panelName);
 
-    for (const auto& item : m_cachedItems)
+    // 1. If panelName contains [suffix], match item whose ID ends with suffix
+    std::string suffix = ExtractSuffixFromDisambiguatedName(fileUtf8Name);
+    if (!suffix.empty())
     {
-        std::string checkName = item.name;
-        if (item.isGoogleDoc && !item.exportExtension.empty())
+        for (const auto& item : m_cachedItems)
         {
-            if (checkName.length() < item.exportExtension.length() ||
-                checkName.compare(checkName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
+            if (item.id.length() >= suffix.length() &&
+                item.id.compare(item.id.length() - suffix.length(), suffix.length(), suffix) == 0)
             {
-                checkName += item.exportExtension;
+                return &item;
             }
         }
+    }
 
+    // 2. Compute display names for cached items and match against panel name
+    auto displayNames = ComputeDisplayNames(m_cachedItems);
+    for (const auto& item : m_cachedItems)
+    {
+        auto itName = displayNames.find(item.id);
+        std::string dispName = (itName != displayNames.end()) ? itName->second : GetBaseDisplayName(item);
+        std::string ansiDispName = GDriveHttp::HttpClient::Utf8ToAnsi(dispName);
+        for (char& c : ansiDispName) { if (c == '/' || c == '\\') c = '_'; }
+
+        if (_stricmp(dispName.c_str(), fileAnsiName.c_str()) == 0 ||
+            _stricmp(dispName.c_str(), fileUtf8Name.c_str()) == 0 ||
+            _stricmp(ansiDispName.c_str(), fileAnsiName.c_str()) == 0)
+        {
+            return &item;
+        }
+    }
+
+    // 3. Fallback: match raw/sanitized names
+    for (const auto& item : m_cachedItems)
+    {
+        std::string checkName = GetBaseDisplayName(item);
         std::string ansiCheckName = GDriveHttp::HttpClient::Utf8ToAnsi(checkName);
         for (char& c : ansiCheckName) { if (c == '/' || c == '\\') c = '_'; }
 
@@ -227,79 +329,83 @@ const GDriveApi::GDriveItem* CPluginFS::FindItemByPanelName(const char* panelNam
 
 bool CPluginFS::ResolveCurrentFolderId()
 {
-    if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
+    return ResolveFolderIdForPath(m_currentPath, m_currentFolderId, m_currentDriveId, m_isSharedDrive);
+}
+
+bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& folderId, std::string& driveId, bool& isShared)
+{
+    std::string normPath = path;
+    std::replace(normPath.begin(), normPath.end(), '\\', '/');
+    while (normPath.size() > 1 && normPath.back() == '/') normPath.pop_back();
+    if (normPath.empty() || normPath == "/")
     {
-        m_currentFolderId = "";
-        m_currentDriveId = "";
-        m_isSharedDrive = false;
+        folderId = "";
+        driveId = "";
+        isShared = false;
         return true;
     }
 
-    if (_stricmp(m_currentPath.c_str(), "/My Drive") == 0)
+    if (_stricmp(normPath.c_str(), "/My Drive") == 0)
     {
-        m_currentFolderId = "root";
-        m_currentDriveId = "";
-        m_isSharedDrive = false;
-        m_pathToIdCache[m_currentPath] = "root";
+        folderId = "root";
+        driveId = "";
+        isShared = false;
+        m_pathToIdCache[normPath] = "root";
+        return true;
+    }
+    if (_stricmp(normPath.c_str(), "/Shared Drives") == 0)
+    {
+        folderId = "shared_drives_root";
+        driveId = "";
+        isShared = true;
+        m_pathToIdCache[normPath] = "shared_drives_root";
+        return true;
+    }
+    if (_stricmp(normPath.c_str(), "/Shared with me") == 0)
+    {
+        folderId = "shared_with_me_root";
+        driveId = "";
+        isShared = false;
+        m_pathToIdCache[normPath] = "shared_with_me_root";
+        return true;
+    }
+    if (_stricmp(normPath.c_str(), "/Starred") == 0)
+    {
+        folderId = "starred_root";
+        driveId = "";
+        isShared = false;
+        m_pathToIdCache[normPath] = "starred_root";
+        return true;
+    }
+    if (_stricmp(normPath.c_str(), "/Recent") == 0)
+    {
+        folderId = "recent_root";
+        driveId = "";
+        isShared = false;
+        m_pathToIdCache[normPath] = "recent_root";
+        return true;
+    }
+    if (_stricmp(normPath.c_str(), "/Trash") == 0)
+    {
+        folderId = "trash_root";
+        driveId = "";
+        isShared = false;
+        m_pathToIdCache[normPath] = "trash_root";
         return true;
     }
 
-    if (_stricmp(m_currentPath.c_str(), "/Shared Drives") == 0)
-    {
-        m_currentFolderId = "shared_drives_root";
-        m_currentDriveId = "";
-        m_isSharedDrive = true;
-        m_pathToIdCache[m_currentPath] = "shared_drives_root";
-        return true;
-    }
-
-    if (_stricmp(m_currentPath.c_str(), "/Shared with me") == 0)
-    {
-        m_currentFolderId = "shared_with_me_root";
-        m_currentDriveId = "";
-        m_isSharedDrive = false;
-        m_pathToIdCache[m_currentPath] = "shared_with_me_root";
-        return true;
-    }
-
-    if (_stricmp(m_currentPath.c_str(), "/Starred") == 0)
-    {
-        m_currentFolderId = "starred_root";
-        m_currentDriveId = "";
-        m_isSharedDrive = false;
-        m_pathToIdCache[m_currentPath] = "starred_root";
-        return true;
-    }
-
-    if (_stricmp(m_currentPath.c_str(), "/Recent") == 0)
-    {
-        m_currentFolderId = "recent_root";
-        m_currentDriveId = "";
-        m_isSharedDrive = false;
-        m_pathToIdCache[m_currentPath] = "recent_root";
-        return true;
-    }
-
-    if (_stricmp(m_currentPath.c_str(), "/Trash") == 0)
-    {
-        m_currentFolderId = "trash_root";
-        m_currentDriveId = "";
-        m_isSharedDrive = false;
-        m_pathToIdCache[m_currentPath] = "trash_root";
-        return true;
-    }
-
-    auto it = m_pathToIdCache.find(m_currentPath);
+    auto it = m_pathToIdCache.find(normPath);
     if (it != m_pathToIdCache.end())
     {
-        m_currentFolderId = it->second;
-        m_isSharedDrive = (_strnicmp(m_currentPath.c_str(), "/Shared Drives", 14) == 0 && _stricmp(m_currentPath.c_str(), "/Shared Drives") != 0);
+        folderId = it->second;
+        isShared = (_strnicmp(normPath.c_str(), "/Shared Drives", 14) == 0 && _stricmp(normPath.c_str(), "/Shared Drives") != 0);
+        driveId = "";
         return true;
     }
 
     std::vector<std::string> segs;
     std::string seg;
-    std::istringstream ss(m_currentPath);
+    std::istringstream ss(normPath);
     while (std::getline(ss, seg, '/'))
     {
         if (!seg.empty()) segs.push_back(seg);
@@ -307,8 +413,8 @@ bool CPluginFS::ResolveCurrentFolderId()
 
     std::string accumulated = "";
     std::string parentId = "root";
-    std::string driveId = "";
-    bool isShared = false;
+    driveId = "";
+    isShared = false;
 
     for (size_t i = 0; i < segs.size(); ++i)
     {
@@ -386,20 +492,51 @@ bool CPluginFS::ResolveCurrentFolderId()
         }
 
         bool found = false;
-        for (const auto& item : items)
+
+        // A. If segment has [suffix], match by ID suffix first
+        std::string segSuffix = ExtractSuffixFromDisambiguatedName(segs[i]);
+        if (!segSuffix.empty())
         {
-            if (item.isFolder && (_stricmp(item.name.c_str(), segs[i].c_str()) == 0 ||
-                                  _stricmp(GDriveHttp::HttpClient::Utf8ToAnsi(item.name).c_str(), segs[i].c_str()) == 0))
+            for (const auto& item : items)
             {
-                parentId = item.id;
-                if (isShared && driveId.empty()) driveId = parentId;
-                m_pathToIdCache[accumulated] = parentId;
-                found = true;
-                break;
+                if (item.isFolder && item.id.length() >= segSuffix.length() &&
+                    item.id.compare(item.id.length() - segSuffix.length(), segSuffix.length(), segSuffix) == 0)
+                {
+                    parentId = item.id;
+                    if (isShared && driveId.empty()) driveId = parentId;
+                    m_pathToIdCache[accumulated] = parentId;
+                    found = true;
+                    break;
+                }
             }
         }
 
-        // Multi-segment matching for folder names containing slashes (e.g. "Archiv2021/22")
+        // B. Match by display name or raw name
+        if (!found)
+        {
+            auto displayNames = ComputeDisplayNames(items);
+            for (const auto& item : items)
+            {
+                if (!item.isFolder) continue;
+                auto itDisp = displayNames.find(item.id);
+                std::string disp = (itDisp != displayNames.end()) ? itDisp->second : item.name;
+                std::string ansiDisp = GDriveHttp::HttpClient::Utf8ToAnsi(disp);
+
+                if (_stricmp(disp.c_str(), segs[i].c_str()) == 0 ||
+                    _stricmp(ansiDisp.c_str(), segs[i].c_str()) == 0 ||
+                    _stricmp(item.name.c_str(), segs[i].c_str()) == 0 ||
+                    _stricmp(GDriveHttp::HttpClient::Utf8ToAnsi(item.name).c_str(), segs[i].c_str()) == 0)
+                {
+                    parentId = item.id;
+                    if (isShared && driveId.empty()) driveId = parentId;
+                    m_pathToIdCache[accumulated] = parentId;
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        // C. Multi-segment matching for folder names containing slashes (e.g. "Archiv2021/22")
         if (!found && i + 1 < segs.size())
         {
             std::string combined = segs[i];
@@ -423,138 +560,6 @@ bool CPluginFS::ResolveCurrentFolderId()
                 }
                 if (found) break;
                 j++;
-            }
-        }
-
-        if (!found) return false;
-    }
-
-    m_currentFolderId = parentId;
-    m_currentDriveId = driveId;
-    m_isSharedDrive = isShared;
-    m_pathToIdCache[m_currentPath] = parentId;
-    return true;
-}
-
-bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& folderId, std::string& driveId, bool& isShared)
-{
-    std::string normPath = path;
-    std::replace(normPath.begin(), normPath.end(), '\\', '/');
-    while (normPath.size() > 1 && normPath.back() == '/') normPath.pop_back();
-    if (normPath.empty() || normPath == "/")
-    {
-        folderId = "";
-        driveId = "";
-        isShared = false;
-        return true;
-    }
-
-    if (_stricmp(normPath.c_str(), "/My Drive") == 0)
-    {
-        folderId = "root";
-        driveId = "";
-        isShared = false;
-        return true;
-    }
-    if (_stricmp(normPath.c_str(), "/Shared Drives") == 0)
-    {
-        folderId = "shared_drives_root";
-        driveId = "";
-        isShared = true;
-        return true;
-    }
-    if (_stricmp(normPath.c_str(), "/Shared with me") == 0)
-    {
-        folderId = "shared_with_me_root";
-        driveId = "";
-        isShared = false;
-        return true;
-    }
-
-    auto it = m_pathToIdCache.find(normPath);
-    if (it != m_pathToIdCache.end())
-    {
-        folderId = it->second;
-        isShared = (_strnicmp(normPath.c_str(), "/Shared Drives", 14) == 0 && _stricmp(normPath.c_str(), "/Shared Drives") != 0);
-        driveId = "";
-        return true;
-    }
-
-    std::vector<std::string> segs;
-    std::string seg;
-    std::istringstream ss(normPath);
-    while (std::getline(ss, seg, '/'))
-    {
-        if (!seg.empty()) segs.push_back(seg);
-    }
-
-    std::string accumulated = "";
-    std::string parentId = "root";
-    driveId = "";
-    isShared = false;
-
-    for (size_t i = 0; i < segs.size(); ++i)
-    {
-        accumulated += "/" + segs[i];
-
-        if (_stricmp(accumulated.c_str(), "/My Drive") == 0)
-        {
-            parentId = "root";
-            isShared = false;
-            m_pathToIdCache[accumulated] = "root";
-            continue;
-        }
-
-        if (_stricmp(accumulated.c_str(), "/Shared Drives") == 0)
-        {
-            parentId = "shared_drives_root";
-            isShared = true;
-            m_pathToIdCache[accumulated] = "shared_drives_root";
-            continue;
-        }
-
-        if (_stricmp(accumulated.c_str(), "/Shared with me") == 0)
-        {
-            parentId = "shared_with_me_root";
-            isShared = false;
-            m_pathToIdCache[accumulated] = "shared_with_me_root";
-            continue;
-        }
-
-        auto cached = m_pathToIdCache.find(accumulated);
-        if (cached != m_pathToIdCache.end())
-        {
-            parentId = cached->second;
-            if (isShared && driveId.empty()) driveId = parentId;
-            continue;
-        }
-
-        std::vector<GDriveApi::GDriveItem> items;
-        if (_stricmp(parentId.c_str(), "shared_drives_root") == 0)
-        {
-            if (!GDriveApi::ApiClient::GetInstance().ListSharedDrives(items)) return false;
-            for (auto& item : items) item.driveId = item.id;
-        }
-        else if (_stricmp(parentId.c_str(), "shared_with_me_root") == 0)
-        {
-            if (!GDriveApi::ApiClient::GetInstance().ListSharedWithMe(items)) return false;
-        }
-        else
-        {
-            if (!GDriveApi::ApiClient::GetInstance().ListFolder(parentId, driveId, isShared, items)) return false;
-        }
-
-        bool found = false;
-        for (const auto& item : items)
-        {
-            if (item.isFolder && (_stricmp(item.name.c_str(), segs[i].c_str()) == 0 ||
-                                  _stricmp(GDriveHttp::HttpClient::Utf8ToAnsi(item.name).c_str(), segs[i].c_str()) == 0))
-            {
-                parentId = item.id;
-                if (isShared && driveId.empty()) driveId = parentId;
-                m_pathToIdCache[accumulated] = parentId;
-                found = true;
-                break;
             }
         }
 
@@ -634,6 +639,46 @@ static bool GetCachedOrComputedFolderSize(const std::string& folderId, int64_t& 
         return true;
     }
     return false;
+}
+
+static void PopulateDirFromItems(CSalamanderDirectoryAbstract* dir,
+                                 const std::string& currentPath,
+                                 const std::vector<GDriveApi::GDriveItem>& items,
+                                 std::vector<GDriveApi::GDriveItem>& cachedItemsOut,
+                                 std::map<std::string, std::string, CPluginFS::CaseInsensitiveCompare>& pathToIdCacheOut,
+                                 CPluginDataInterfaceAbstract* pluginData)
+{
+    auto displayNames = CPluginFS::ComputeDisplayNames(items);
+
+    for (const auto& item : items)
+    {
+        cachedItemsOut.push_back(item);
+        auto itDisp = displayNames.find(item.id);
+        std::string displayName = (itDisp != displayNames.end()) ? itDisp->second : CPluginFS::GetBaseDisplayName(item);
+
+        std::string subPath = (currentPath == "/" ? "" : currentPath) + "/" + displayName;
+        pathToIdCacheOut[subPath] = item.id;
+
+        std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(displayName);
+        for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
+        std::string ansiSubPath = (currentPath == "/" ? "" : currentPath) + "/" + ansiName;
+        pathToIdCacheOut[ansiSubPath] = item.id;
+
+        // Also map raw item name as fallback
+        std::string rawSubPath = (currentPath == "/" ? "" : currentPath) + "/" + item.name;
+        pathToIdCacheOut[rawSubPath] = item.id;
+
+        if (item.isFolder)
+        {
+            int64_t folderSize = 0;
+            bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
+            AddItemToDir(dir, displayName.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
+        }
+        else
+        {
+            AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
+        }
+    }
 }
 
 BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
@@ -748,38 +793,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     {
         GDriveLog::Log("[PANEL] ListCurrentPath '%s' (ID: %s) -> Cache hit (%u items)",
                        m_currentPath.c_str(), m_currentFolderId.c_str(), (uint32_t)cachedList.size());
-        for (const auto& item : cachedList)
-        {
-            m_cachedItems.push_back(item);
-            std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + item.name;
-            m_pathToIdCache[subPath] = item.id;
-
-            std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
-            for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
-            std::string ansiSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
-            m_pathToIdCache[ansiSubPath] = item.id;
-
-            if (item.isFolder)
-            {
-                int64_t folderSize = 0;
-                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
-                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
-            }
-            else
-            {
-                std::string displayName = item.name;
-                if (item.isGoogleDoc && !item.exportExtension.empty())
-                {
-                    if (displayName.length() < item.exportExtension.length() ||
-                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
-                    {
-                        displayName += item.exportExtension;
-                    }
-                }
-
-                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
-            }
-        }
+        PopulateDirFromItems(dir, m_currentPath, cachedList, m_cachedItems, m_pathToIdCache, pluginData);
         return TRUE;
     }
 
@@ -800,20 +814,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         m_lastErrorPath.clear();
 
         GDriveCache::CacheManager::GetInstance().PutFolder("shared_drives_root", drives);
-
-        FILETIME ft = {0, 0};
-        GetSystemTimeAsFileTime(&ft);
-
-        for (const auto& d : drives)
-        {
-            m_cachedItems.push_back(d);
-            std::string subPath = m_currentPath + "/" + d.name;
-            m_pathToIdCache[subPath] = d.id;
-
-            int64_t folderSize = 0;
-            bool hasSize = GetCachedOrComputedFolderSize(d.id, folderSize);
-            AddItemToDir(dir, d.name.c_str(), true, folderSize, hasSize, &ft, pluginData);
-        }
+        PopulateDirFromItems(dir, m_currentPath, drives, m_cachedItems, m_pathToIdCache, pluginData);
         return TRUE;
     }
 
@@ -834,34 +835,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         m_lastErrorPath.clear();
 
         GDriveCache::CacheManager::GetInstance().PutFolder("shared_with_me_root", items);
-
-        for (auto& item : items)
-        {
-            m_cachedItems.push_back(item);
-            std::string subPath = m_currentPath + "/" + item.name;
-            m_pathToIdCache[subPath] = item.id;
-
-            if (item.isFolder)
-            {
-                int64_t folderSize = 0;
-                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
-                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
-            }
-            else
-            {
-                std::string displayName = item.name;
-                if (item.isGoogleDoc && !item.exportExtension.empty())
-                {
-                    if (displayName.length() < item.exportExtension.length() ||
-                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
-                    {
-                        displayName += item.exportExtension;
-                    }
-                }
-
-                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
-            }
-        }
+        PopulateDirFromItems(dir, m_currentPath, items, m_cachedItems, m_pathToIdCache, pluginData);
         return TRUE;
     }
 
@@ -882,34 +856,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         m_lastErrorPath.clear();
 
         GDriveCache::CacheManager::GetInstance().PutFolder("starred_root", items);
-
-        for (auto& item : items)
-        {
-            m_cachedItems.push_back(item);
-            std::string subPath = m_currentPath + "/" + item.name;
-            m_pathToIdCache[subPath] = item.id;
-
-            if (item.isFolder)
-            {
-                int64_t folderSize = 0;
-                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
-                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
-            }
-            else
-            {
-                std::string displayName = item.name;
-                if (item.isGoogleDoc && !item.exportExtension.empty())
-                {
-                    if (displayName.length() < item.exportExtension.length() ||
-                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
-                    {
-                        displayName += item.exportExtension;
-                    }
-                }
-
-                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
-            }
-        }
+        PopulateDirFromItems(dir, m_currentPath, items, m_cachedItems, m_pathToIdCache, pluginData);
         return TRUE;
     }
 
@@ -930,34 +877,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         m_lastErrorPath.clear();
 
         GDriveCache::CacheManager::GetInstance().PutFolder("recent_root", items);
-
-        for (auto& item : items)
-        {
-            m_cachedItems.push_back(item);
-            std::string subPath = m_currentPath + "/" + item.name;
-            m_pathToIdCache[subPath] = item.id;
-
-            if (item.isFolder)
-            {
-                int64_t folderSize = 0;
-                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
-                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
-            }
-            else
-            {
-                std::string displayName = item.name;
-                if (item.isGoogleDoc && !item.exportExtension.empty())
-                {
-                    if (displayName.length() < item.exportExtension.length() ||
-                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
-                    {
-                        displayName += item.exportExtension;
-                    }
-                }
-
-                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
-            }
-        }
+        PopulateDirFromItems(dir, m_currentPath, items, m_cachedItems, m_pathToIdCache, pluginData);
         return TRUE;
     }
 
@@ -978,34 +898,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         m_lastErrorPath.clear();
 
         GDriveCache::CacheManager::GetInstance().PutFolder("trash_root", items);
-
-        for (auto& item : items)
-        {
-            m_cachedItems.push_back(item);
-            std::string subPath = m_currentPath + "/" + item.name;
-            m_pathToIdCache[subPath] = item.id;
-
-            if (item.isFolder)
-            {
-                int64_t folderSize = 0;
-                bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
-                AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
-            }
-            else
-            {
-                std::string displayName = item.name;
-                if (item.isGoogleDoc && !item.exportExtension.empty())
-                {
-                    if (displayName.length() < item.exportExtension.length() ||
-                        displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
-                    {
-                        displayName += item.exportExtension;
-                    }
-                }
-
-                AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
-            }
-        }
+        PopulateDirFromItems(dir, m_currentPath, items, m_cachedItems, m_pathToIdCache, pluginData);
         return TRUE;
     }
 
@@ -1045,37 +938,9 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     GDriveLog::Log("[PANEL] ListCurrentPath '%s' (ID: %s) -> API fetched %u items",
                    m_currentPath.c_str(), m_currentFolderId.c_str(), (uint32_t)m_cachedItems.size());
 
-    for (auto& item : m_cachedItems)
-    {
-        std::string subPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + item.name;
-        m_pathToIdCache[subPath] = item.id;
-
-        std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
-        for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
-        std::string ansiSubPath = (m_currentPath == "/" ? "" : m_currentPath) + "/" + ansiName;
-        m_pathToIdCache[ansiSubPath] = item.id;
-
-        if (item.isFolder)
-        {
-            int64_t folderSize = 0;
-            bool hasSize = GetCachedOrComputedFolderSize(item.id, folderSize);
-            AddItemToDir(dir, item.name.c_str(), true, folderSize, hasSize, &item.modifiedTime, pluginData);
-        }
-        else
-        {
-            std::string displayName = item.name;
-            if (item.isGoogleDoc && !item.exportExtension.empty())
-            {
-                if (displayName.length() < item.exportExtension.length() ||
-                    displayName.compare(displayName.length() - item.exportExtension.length(), item.exportExtension.length(), item.exportExtension) != 0)
-                {
-                    displayName += item.exportExtension;
-                }
-            }
-
-            AddItemToDir(dir, displayName.c_str(), false, item.size, true, &item.modifiedTime, pluginData);
-        }
-    }
+    std::vector<GDriveApi::GDriveItem> fetchedItems = m_cachedItems;
+    m_cachedItems.clear();
+    PopulateDirFromItems(dir, m_currentPath, fetchedItems, m_cachedItems, m_pathToIdCache, pluginData);
 
     return TRUE;
 }

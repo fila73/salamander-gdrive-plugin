@@ -26,16 +26,8 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
     std::string fileAnsiName = file.Name;
     std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(file.Name);
 
-    std::string fileId;
-    for (const auto& it : m_cachedItems)
-    {
-        if (_stricmp(it.name.c_str(), fileAnsiName.c_str()) == 0 ||
-            _stricmp(it.name.c_str(), fileUtf8Name.c_str()) == 0)
-        {
-            fileId = it.id;
-            break;
-        }
-    }
+    const GDriveApi::GDriveItem* pTarget = FindItemByPanelName(file.Name);
+    std::string fileId = pTarget ? pTarget->id : "";
 
     if (fileId.empty())
     {
