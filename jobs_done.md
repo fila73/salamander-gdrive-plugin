@@ -8,15 +8,20 @@ Tento dokument rekapituluje všechny realizované části pluginu **Google Disk 
 
 | Oblast | Realizované funkce | Klíčové soubory |
 |---|---|---|
-| **Zápisové operace** | `F7` Vytvoření složky, `Shift+F6` Přejmenování, `F8` Přesun do koše, `Shift+F8` Trvalé smazání, `F5` Nahrávání na disk (jednotlivé soubory i rekurzivní stromy). | `src/gdrive_fs.cpp`, `src/gdrive_api.cpp` |
-| **Virtuální pohledy** | Virtuální složky `/Starred` (Oblíbené), `/Recent` (Nedávné), `/Trash` (Koš). | `src/gdrive_fs.cpp`, `src/gdrive_api.cpp` |
-| **Kontextové menu** | Otevřít ve webovém prohlížeči (`webViewLink`), Kopírovat odkaz, Přidat/Odebrat hvězdičku, Obnovit z koše, Vysypat koš, Spočítat velikost složky. | `src/gdrive_fs.cpp`, `src/dialogs.cpp` |
+| **Zápisové operace** | `F7` Vytvoření složky, `Shift+F6` Přejmenování, `F8` Přesun do koše, `Shift+F8` Trvalé smazání, `F5` Nahrávání na disk (jednotlivé soubory i rekurzivní stromy). | `src/gdrive_fs_ops.cpp`, `src/gdrive_fs_transfer.cpp`, `src/gdrive_api.cpp` |
+| **Průběh a předkalkulace (Pass 1)** | Předběžný průchod před zahájením přenosu (přesný počet položek a celková velikost v bajtech), dva progress bary (aktuální soubor + celkový přenos s ukazatelem rychlosti). | `src/gdrive_fs_transfer.cpp`, `src/dialogs.cpp` |
+| **Disambiguace duplicit** | Detekce stejnojmenných položek a přiřazení jednoznačného suffixu s ID (`[suffix]`) v panelu i cestách pro deterministickou navigaci a operace. | `src/gdrive_fs_nav.cpp`, `src/gdrive_fs_ops.cpp` |
+| **Kolize při nahrávání** | Interaktivní detekce existujících souborů i složek na disku s možnostmi Sloučit/Přepsat, Ponechat oba, Přeskočit a Použít pro všechny. | `src/gdrive_fs_transfer.cpp`, `src/dialogs.cpp` |
+| **Virtuální pohledy** | Virtuální složky `/Starred` (Oblíbené), `/Recent` (Nedávné), `/Trash` (Koš). | `src/gdrive_fs_nav.cpp`, `src/gdrive_api.cpp` |
+| **Kontextové menu** | Otevřít ve webovém prohlížeči (`webViewLink`), Kopírovat odkaz, Přidat/Odebrat hvězdičku, Obnovit z koše, Vysypat koš, Spočítat velikost složky. | `src/gdrive_fs_ops.cpp`, `src/dialogs.cpp`, `src/menu.cpp` |
 | **Kapacita disku** | Zobrazení volného a celkového místa v patičce panelu (`GetFSFreeSpace`). | `src/gdrive_fs.cpp` |
 | **Inteligentní mezipaměť (RAM)** | 0ms latence při procházení, okamžité lokální mutace při úpravách. | `src/gdrive_cache.cpp`, `src/gdrive_cache.h` |
 | **Changes API (`changes.list`)** | Detekce změn přes synchronizační token disku, selektivní zneplatnění pouze upravených složek bez zbytečných dotazů. | `src/gdrive_api.cpp`, `src/gdrive_cache.cpp` |
 | **Perzistence na disk** | Ukládání mezipaměti do profilu uživatele (`%APPDATA%\...\cache_<hash>.bin`), automatické uložení při ukončení a načtení při startu. | `src/gdrive_cache.cpp` |
 | **Multi-Account registr** | Možnost mít přihlášeno více Google účtů současně, 100% izolace cache souborů, správa v konfiguraci. | `src/gdrive_auth.cpp`, `src/gdrive_auth.h` |
 | **Konfigurace (Property Sheet)** | Záložka „Účty a obecné“ (přepínání účtů, OAuth klíče) a záložka „Mezipaměť a synchronizace“ (TTL frekvence, vymazání cache). | `src/dialogs.cpp`, `src/lang/` |
+| **Modularizace kódu (CR-08)** | Rozdělení monolitického `gdrive_fs.cpp` na navigaci (`gdrive_fs_nav.cpp`), přenosy (`gdrive_fs_transfer.cpp`), operace (`gdrive_fs_ops.cpp`) a jádro (`gdrive_fs.cpp`). | `src/gdrive_fs*.cpp` |
+| **Dynamický Dark Mode** | Striktní respektování uživatelského nastavení schématu v Salamanderu s okamžitým přepínáním. | `src/gdrivedarkmode.cpp` |
 
 ---
 
@@ -48,18 +53,39 @@ Tento dokument rekapituluje všechny realizované části pluginu **Google Disk 
 - **Problém:** Výchozí WinHTTP buffer (64 KB) způsoboval při nahrávání na linkách s vyšší latencí zbytečné režijní zpoždění.
 - **Řešení:** Zvýšení streamovacího bufferu na **256 KB** v `HttpClient::UploadMultipartFile`, což výrazně zrychlilo odesílání dat.
 
+### 2.6 Duplicitní názvy na Google Disku a deterministická navigace
+- **Problém:** Google Drive umožňuje mít v jedné složce více souborů či podsložek se zcela identickým názvem. Open Salamander však pracuje s jednoznačnými textovými cestami (`gdrive:\My Drive\Složka\Sub`).
+- **Příčina:** Při stejných názvech nebylo možné určit, do které podsložky chce uživatel vstoupit, a operace vždy cílily pouze na první nalezenou instanci.
+- **Řešení:**
+  1. Výpočet zobrazovaných jmen v `ComputeDisplayNames` – duplicity automaticky obdrží suffix s posledními 6 znaky ID (`Složka [mK9xQ2]`, `Dokument [mK9xQ2].pdf`).
+  2. V `ResolveFolderIdForPath` se z cesty detekuje suffix `[id]` a provede se přesné spárování s `item.id.endsWith(suffix)`.
+  3. Vyhledávání položek v panelu přes `FindItemByPanelName` cílí na přesnou instanci i při přejmenování, mazání či otevírání vlastností.
+
+### 2.7 Detekce a řešení kolizí existujících složek při uploadu
+- **Problém:** Při kopírování lokálního adresářového stromu na Google Disk docházelo k vytváření duplicitních složek namísto sloučení obsahu.
+- **Řešení:** Implementace Pass 1 předkalkulace lokálních souborů a interaktivního dialogu `COverwriteConflictDialog` pro složky (Sloučit/Přepsat, Ponechat oba, Přeskočit, Použít pro všechny).
+
+### 2.8 Životní cyklus a okamžitý refresh panelu
+- **Problém:** Po přejmenování (F2) nebo vytvoření složky (F7) zůstával panel neaktualizovaný.
+- **Příčina:** Salamander FS metody `QuickRename` a `CreateDir` nejprve volají plugin s parametrem `mode == 1`. Pokud plugin nevrátí `FALSE`, Salamander neotevře svůj standardní editační řádek. Navíc po dokončení operace (`mode == 2`) je nutné explicitně zavolat `SalamanderGeneral->PostRefreshPanelFS(this)` a `RefreshPanelPath`.
+- **Řešení:** Doplnění korektního zpracování `mode == 1` a volání refreshe po úspěšném provedení operace.
+
 ---
 
 ## 💡 3. Klíčová ponaučení pro budoucí vývoj
 
-1. **Vždy ověřovat signatury v SDK a libstdc++:**
-   - Předpoklad, že MinGW akceptuje `std::wstring` v `std::ifstream`, vedl k chybě při sestavení. Pro práci s Windows souborovým systémem je nejspolehlivější buď Win32 API (`CreateFileW`), nebo explicitní UTF-8 řetězce.
+1. **Vždy ověřovat signatury a sémantiku v SDK:**
+   - Předpoklad, že Salamander provede refresh panelu automaticky po vrácení `TRUE`, byl mylný. Sémantika Salamander FS rozhraní vyžaduje explicitní `PostRefreshPanelFS`.
 
 2. **Oddělení mezipaměti podle identit již od návrhu:**
    - Návrh mezipaměti od začátku počítající s parametrem `accountKey` předchází složitému refaktorování při přidávání multi-account podpory.
 
-3. **Inkrementální commity po logických celcích:**
-   - Každá fáze (zápisové operace -> virtuální složky -> kvóta disku -> Changes API -> perzistence & multi-account) byla samostatně zkompilována, zkontrolována na závislosti přes `objdump` a commitnuta. Díky tomu je historie projektu čistá a přehledná.
+3. **Modulární architektura předchází monolitům:**
+   - Rozdělení rozsáhlé FS třídy na specializované moduly (navigace, přenosy, položkové operace) výrazně zlepšuje udržovatelnost a přehlednost kódu.
 
-4. **Nulové externí závislosti:**
+4. **Inkrementální commity po logických celcích:**
+   - Každá fáze byla samostatně zkompilována, zkontrolována na závislosti přes `objdump` a commitnuta.
+
+5. **Nulové externí závislosti:**
    - Důsledné dodržování pravidla `-static -static-libgcc -static-libstdc++` zaručuje, že vygenerovaný `gdrive.spl` funguje na jakémkoliv Windows systému bez nutnosti instalovat další runtime knihovny.
+
