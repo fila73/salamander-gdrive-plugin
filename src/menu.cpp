@@ -50,6 +50,12 @@ BOOL WINAPI CPluginInterfaceForMenuExt::ExecuteMenuItem(CSalamanderForOperations
             (void)failReason;
             s_pendingFocusPath.clear();
             s_pendingFocusName.clear();
+
+            HWND hMain = SalamanderGeneral->GetMainWindowHWND();
+            if (hMain && IsWindow(hMain))
+            {
+                SetForegroundWindow(hMain);
+            }
         }
         return TRUE;
     }

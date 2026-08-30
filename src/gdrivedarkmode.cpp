@@ -88,6 +88,9 @@ void ReleaseTheme()
     g_themeInitialized = false;
 }
 
+static bool s_cachedDarkMode = false;
+static bool s_darkModeCached = false;
+
 bool IsDarkMode()
 {
     if (SalamanderGeneral != NULL)
@@ -95,13 +98,14 @@ bool IsDarkMode()
         BOOL useDark = FALSE;
         if (SalamanderGeneral->GetConfigParameter(SALCFG_USEWINDOWSDARKMODE, &useDark, sizeof(useDark), NULL))
         {
+            s_cachedDarkMode = (useDark != FALSE);
+            s_darkModeCached = true;
             PluginDarkMode_SetHostPolicyAvailable(TRUE, useDark);
-            return useDark != FALSE;
+            return s_cachedDarkMode;
         }
-        else
+        else if (s_darkModeCached)
         {
-            PluginDarkMode_SetHostPolicyAvailable(TRUE, FALSE);
-            return false;
+            return s_cachedDarkMode;
         }
     }
     return PluginDarkMode_ShouldUseDark() != FALSE;

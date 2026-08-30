@@ -61,7 +61,7 @@ void CGDriveFindDialog::ExecuteModeless()
     s_activeFindDialog = this;
     HWND hWnd = CreateDialogParam(HLanguage ? HLanguage : DLLInstance,
                                   MAKEINTRESOURCE(IDD_FIND),
-                                  m_hParent,
+                                  NULL,
                                   DialogProc,
                                   (LPARAM)this);
     if (!hWnd)
@@ -1183,7 +1183,8 @@ void CGDriveFindDialog::FocusSelectedItem()
         relPath = "\\" + relPath;
     }
 
-    InterfaceForMenuExt.PostFocusTarget(m_panel, relPath, item.name);
+    std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
+    InterfaceForMenuExt.PostFocusTarget(m_panel, relPath, ansiName);
 
     DestroyWindow(m_hDlg);
 }
