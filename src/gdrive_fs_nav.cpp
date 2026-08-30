@@ -353,6 +353,26 @@ const GDriveApi::GDriveItem* CPluginFS::FindItemByPanelName(const char* panelNam
 static std::map<std::string, std::string, CPluginFS::CaseInsensitiveCompare> s_pathToIdCache;
 static std::mutex s_pathToIdMutex;
 
+void CPluginFS::CachePathToId(const std::string& path, const std::string& folderId)
+{
+    if (path.empty() || folderId.empty()) return;
+    std::lock_guard<std::mutex> lock(s_pathToIdMutex);
+    std::string normPath = path;
+    std::replace(normPath.begin(), normPath.end(), '\\', '/');
+    while (!normPath.empty() && normPath.size() > 1 && normPath[0] == '/' && normPath[1] == '/')
+        normPath.erase(0, 1);
+    while (normPath.size() > 1 && normPath.back() == '/') normPath.pop_back();
+    if (!normPath.empty() && normPath[0] != '/') normPath = "/" + normPath;
+
+    s_pathToIdCache[normPath] = folderId;
+    std::string ansiNorm = GDriveHttp::HttpClient::Utf8ToAnsi(normPath);
+    if (ansiNorm != normPath)
+    {
+        s_pathToIdCache[ansiNorm] = folderId;
+    }
+    GDriveLog::Log("[CACHE] CachePathToId: '%s' -> '%s'", normPath.c_str(), folderId.c_str());
+}
+
 bool CPluginFS::ResolveCurrentFolderId()
 {
     return ResolveFolderIdForPath(m_currentPath, m_currentFolderId, m_currentDriveId, m_isSharedDrive);

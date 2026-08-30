@@ -1017,6 +1017,10 @@ static std::string ResolveParentPath(const std::string& folderId,
     GDriveApi::GDriveItem folderItem;
     if (GDriveApi::ApiClient::GetInstance().GetFileMetadata(folderId, folderItem))
     {
+        std::string safeName = CPluginFS::GetBaseDisplayName(folderItem);
+        std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(safeName);
+        for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
+
         std::string parentPath;
         if (folderItem.parentId.empty() || folderItem.parentId == "root")
         {
@@ -1024,8 +1028,9 @@ static std::string ResolveParentPath(const std::string& folderId,
         }
         else if (folderItem.isSharedDrive && !folderItem.driveId.empty() && folderItem.parentId == folderItem.driveId)
         {
-            parentPath = "\\Shared Drives\\" + folderItem.name;
+            parentPath = "\\Shared Drives\\" + ansiName;
             pathCache[folderId] = parentPath;
+            CPluginFS::CachePathToId(parentPath, folderId);
             return parentPath;
         }
         else
@@ -1038,9 +1043,10 @@ static std::string ResolveParentPath(const std::string& folderId,
         {
             fullPath += "\\";
         }
-        fullPath += folderItem.name;
+        fullPath += ansiName;
 
         pathCache[folderId] = fullPath;
+        CPluginFS::CachePathToId(fullPath, folderId);
         return fullPath;
     }
 
@@ -1070,6 +1076,7 @@ void CGDriveFindDialog::SearchWorker()
     if (!m_currentSearchOpts.targetFolderPath.empty() && !m_currentSearchOpts.folderScopeId.empty())
     {
         folderPathMap[m_currentSearchOpts.folderScopeId] = m_currentSearchOpts.targetFolderPath;
+        CPluginFS::CachePathToId(m_currentSearchOpts.targetFolderPath, m_currentSearchOpts.folderScopeId);
     }
 
     std::vector<GDriveApi::GDriveItem> filteredResults;
@@ -1082,10 +1089,22 @@ void CGDriveFindDialog::SearchWorker()
         if (item.parentId.empty() || item.parentId == "root")
         {
             item.parentPath = "\\My Drive";
+            CPluginFS::CachePathToId(item.parentPath, "root");
         }
         else
         {
             item.parentPath = ResolveParentPath(item.parentId, folderPathMap, m_cancelRequested);
+            CPluginFS::CachePathToId(item.parentPath, item.parentId);
+        }
+
+        if (item.isFolder)
+        {
+            std::string folderName = GDriveHttp::HttpClient::Utf8ToAnsi(CPluginFS::GetBaseDisplayName(item));
+            for (char& c : folderName) { if (c == '/' || c == '\\') c = '_'; }
+            std::string itemFullPath = item.parentPath;
+            if (itemFullPath.empty() || itemFullPath.back() != '\\') itemFullPath += "\\";
+            itemFullPath += folderName;
+            CPluginFS::CachePathToId(itemFullPath, item.id);
         }
 
         // Subtree path filtering: if a target folder is specified (e.g. \My Drive\Knihy)
