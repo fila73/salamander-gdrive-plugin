@@ -1565,10 +1565,11 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
                 dest += "My Drive";
             }
             std::string ansiDest = GDriveHttp::HttpClient::Utf8ToAnsi(dest);
-            strncpy(targetPath, ansiDest.c_str(), MAX_PATH - 1);
-            targetPath[MAX_PATH - 1] = '\0';
+            strncpy(targetPath, ansiDest.c_str(), 2 * MAX_PATH - 1);
+            targetPath[2 * MAX_PATH - 1] = '\0';
         }
-        return FALSE; // Return FALSE so Salamander shows its standard Copy/Move dialog
+        SalamanderGeneral->SalPathAppend(targetPath, "*.*", 2 * MAX_PATH);
+        return TRUE; // Return TRUE so Salamander uses this path in standard Copy/Move dialog
     }
     if (mode == 4)
     {
@@ -1582,6 +1583,18 @@ BOOL WINAPI CPluginFS::CopyOrMoveFromDiskToFS(BOOL copy, int mode, const char* f
         size_t colon = tp.find(':');
         if (colon != std::string::npos) tp = tp.substr(colon + 1);
         std::replace(tp.begin(), tp.end(), '\\', '/');
+
+        // Strip trailing wildcard masks like /*.*, /*, /?*
+        size_t lastSlash = tp.rfind('/');
+        if (lastSlash != std::string::npos)
+        {
+            std::string lastComp = tp.substr(lastSlash + 1);
+            if (lastComp.find('*') != std::string::npos || lastComp.find('?') != std::string::npos)
+            {
+                tp = tp.substr(0, lastSlash);
+            }
+        }
+
         while (tp.size() > 1 && tp.back() == '/') tp.pop_back();
         if (tp.empty() || tp == "/") tp = "/";
         else if (tp[0] != '/') tp = "/" + tp;
