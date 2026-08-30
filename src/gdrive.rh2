@@ -144,5 +144,10 @@
 #define IDS_CONFLICT_BTN_KEEPBOTH                2189
 #define IDS_CONFLICT_BTN_SKIP                    2190
 #define IDS_CONFLICT_APPLY_ALL                   2191
+#define IDS_CONFLICT_DUP_LABEL                   2192
+#define IDS_CONFLICT_DUP_ALL                     2193
+#define IDS_CONFLICT_DUP_NEWEST                  2194
+#define IDS_CONFLICT_DUP_OLDEST                  2195
+#define IDS_CONFLICT_DUP_COUNT_FMT               2196
 
 #endif // __GDRIVE_RH2

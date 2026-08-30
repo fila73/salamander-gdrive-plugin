@@ -2106,32 +2106,35 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
         CloseHandle(hF);
     }
 
-    // Check if item with this name already exists in target GDrive folder
-    const GDriveApi::GDriveItem* existingItem = nullptr;
+    // Check if items with this name already exist in target GDrive folder
+    std::vector<const GDriveApi::GDriveItem*> matchingItems;
     std::string ansiFileName = GDriveHttp::HttpClient::Utf8ToAnsi(fileName);
     for (const auto& it : m_cachedItems)
     {
         if (!it.isFolder && (_stricmp(it.name.c_str(), fileName.c_str()) == 0 ||
                              _stricmp(it.name.c_str(), ansiFileName.c_str()) == 0))
         {
-            existingItem = &it;
-            break;
+            matchingItems.push_back(&it);
         }
     }
 
-    if (existingItem != nullptr)
+    if (!matchingItems.empty())
     {
         ConflictAction act;
+        OverwriteScope scope = OverwriteScope::All;
         if (m_batchConflictAction.has_value())
         {
             act = *m_batchConflictAction;
         }
         else
         {
+            const GDriveApi::GDriveItem* refItem = matchingItems[0];
             std::string ansiLocalPath = GDriveHttp::HttpClient::WideToAnsi(localPath);
-            COverwriteConflictDialog dlg(parent, true, ansiLocalPath, localFileSize.QuadPart, existingItem->name, existingItem->size);
+            COverwriteConflictDialog dlg(parent, true, ansiLocalPath, localFileSize.QuadPart,
+                                         refItem->name, refItem->size, (int)matchingItems.size());
             dlg.Execute();
             act = dlg.GetAction();
+            scope = dlg.GetOverwriteScope();
             if (dlg.IsApplyToAll())
             {
                 m_batchConflictAction = act;
@@ -2149,16 +2152,42 @@ bool CPluginFS::UploadSingleItem(const std::wstring& localPath, const std::strin
         }
         if (act == ConflictAction::Overwrite)
         {
-            std::string existingId = existingItem->id;
-            std::string trashErr;
-            GDriveApi::ApiClient::GetInstance().TrashItem(existingId, &trashErr);
-            GDriveCache::CacheManager::GetInstance().RemoveItem(parentFolderId, existingId);
-            for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+            std::vector<std::string> idsToTrash;
+            if (matchingItems.size() == 1 || scope == OverwriteScope::All)
             {
-                if (it->id == existingId)
+                for (const auto* item : matchingItems)
                 {
-                    m_cachedItems.erase(it);
-                    break;
+                    idsToTrash.push_back(item->id);
+                }
+            }
+            else
+            {
+                auto sortedItems = matchingItems;
+                std::sort(sortedItems.begin(), sortedItems.end(), [](const GDriveApi::GDriveItem* a, const GDriveApi::GDriveItem* b) {
+                    return CompareFileTime(&a->modifiedTime, &b->modifiedTime) < 0;
+                });
+                if (scope == OverwriteScope::Newest)
+                {
+                    idsToTrash.push_back(sortedItems.back()->id);
+                }
+                else if (scope == OverwriteScope::Oldest)
+                {
+                    idsToTrash.push_back(sortedItems.front()->id);
+                }
+            }
+
+            for (const auto& id : idsToTrash)
+            {
+                std::string trashErr;
+                GDriveApi::ApiClient::GetInstance().TrashItem(id, &trashErr);
+                GDriveCache::CacheManager::GetInstance().RemoveItem(parentFolderId, id);
+                for (auto it = m_cachedItems.begin(); it != m_cachedItems.end(); ++it)
+                {
+                    if (it->id == id)
+                    {
+                        m_cachedItems.erase(it);
+                        break;
+                    }
                 }
             }
         }

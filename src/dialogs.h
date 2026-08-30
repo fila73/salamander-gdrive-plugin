@@ -142,14 +142,23 @@ enum class ConflictAction
     Cancel
 };
 
+enum class OverwriteScope
+{
+    All,
+    Newest,
+    Oldest
+};
+
 class COverwriteConflictDialog : public CCommonDialog
 {
 public:
     COverwriteConflictDialog(HWND hParent, bool isUpload,
                              const std::string& srcName, int64_t srcSize,
-                             const std::string& dstName, int64_t dstSize);
+                             const std::string& dstName, int64_t dstSize,
+                             int duplicateCount = 1);
 
     ConflictAction GetAction() const { return m_action; }
+    OverwriteScope GetOverwriteScope() const { return m_overwriteScope; }
     bool IsApplyToAll() const { return m_applyToAll; }
 
 protected:
@@ -161,8 +170,10 @@ private:
     int64_t m_srcSize;
     std::string m_dstName;
     int64_t m_dstSize;
+    int m_duplicateCount;
 
     ConflictAction m_action;
+    OverwriteScope m_overwriteScope;
     bool m_applyToAll;
 };
 

@@ -940,14 +940,17 @@ bool CTransferProgressDialog::OnProgress(int64_t bytesTransferred, int64_t total
 
 COverwriteConflictDialog::COverwriteConflictDialog(HWND hParent, bool isUpload,
                                                    const std::string& srcName, int64_t srcSize,
-                                                   const std::string& dstName, int64_t dstSize)
+                                                   const std::string& dstName, int64_t dstSize,
+                                                   int duplicateCount)
     : CCommonDialog(DLLInstance, IDD_OVERWRITE_CONFLICT, hParent),
       m_isUpload(isUpload),
       m_srcName(srcName),
       m_srcSize(srcSize),
       m_dstName(dstName),
       m_dstSize(dstSize),
+      m_duplicateCount(duplicateCount),
       m_action(ConflictAction::Cancel),
+      m_overwriteScope(OverwriteScope::All),
       m_applyToAll(false)
 {
 }
@@ -975,8 +978,35 @@ INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lP
 
         char dstInfo[512];
         std::string dstSzStr = CTransferProgressDialog::FormatSize(m_dstSize);
-        snprintf(dstInfo, sizeof(dstInfo), LoadStr(IDS_CONFLICT_DST_FMT), m_dstName.c_str(), dstSzStr.c_str());
+        if (m_duplicateCount > 1)
+        {
+            char dupCountBuf[256];
+            snprintf(dupCountBuf, sizeof(dupCountBuf), LoadStr(IDS_CONFLICT_DUP_COUNT_FMT), m_duplicateCount);
+            snprintf(dstInfo, sizeof(dstInfo), "%s\n%s", dupCountBuf, m_dstName.c_str());
+        }
+        else
+        {
+            snprintf(dstInfo, sizeof(dstInfo), LoadStr(IDS_CONFLICT_DST_FMT), m_dstName.c_str(), dstSzStr.c_str());
+        }
         SetDlgItemTextA(HWindow, IDC_CONFLICT_DST_INFO, dstInfo);
+
+        HWND hCombo = GetDlgItem(HWindow, IDC_CONFLICT_DUPLICATES_COMBO);
+        HWND hComboLabel = GetDlgItem(HWindow, IDC_CONFLICT_DUPLICATES_LABEL);
+
+        if (m_duplicateCount > 1 && hCombo)
+        {
+            SetDlgItemTextA(HWindow, IDC_CONFLICT_DUPLICATES_LABEL, LoadStr(IDS_CONFLICT_DUP_LABEL));
+            SendMessageA(hCombo, CB_RESETCONTENT, 0, 0);
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_CONFLICT_DUP_ALL));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_CONFLICT_DUP_NEWEST));
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)LoadStr(IDS_CONFLICT_DUP_OLDEST));
+            SendMessage(hCombo, CB_SETCURSEL, 0, 0);
+        }
+        else
+        {
+            if (hCombo) ShowWindow(hCombo, SW_HIDE);
+            if (hComboLabel) ShowWindow(hComboLabel, SW_HIDE);
+        }
 
         SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_OVERWRITE, LoadStr(IDS_CONFLICT_BTN_OVERWRITE));
         SetDlgItemTextA(HWindow, IDC_CONFLICT_BTN_KEEPBOTH, LoadStr(IDS_CONFLICT_BTN_KEEPBOTH));
@@ -994,6 +1024,15 @@ INT_PTR COverwriteConflictDialog::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lP
             id == IDC_CONFLICT_BTN_SKIP || id == IDCANCEL)
         {
             m_applyToAll = (IsDlgButtonChecked(HWindow, IDC_CONFLICT_APPLY_ALL) == BST_CHECKED);
+
+            HWND hCombo = GetDlgItem(HWindow, IDC_CONFLICT_DUPLICATES_COMBO);
+            int curSel = hCombo ? (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0) : 0;
+            if (curSel == 1)
+                m_overwriteScope = OverwriteScope::Newest;
+            else if (curSel == 2)
+                m_overwriteScope = OverwriteScope::Oldest;
+            else
+                m_overwriteScope = OverwriteScope::All;
 
             if (id == IDC_CONFLICT_BTN_OVERWRITE)
                 m_action = ConflictAction::Overwrite;
