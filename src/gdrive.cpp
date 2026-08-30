@@ -48,15 +48,35 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
         {
             if (SalamanderGeneral)
             {
-                CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
-                if (activeFS)
+                HWND hMain = SalamanderGeneral->GetMainWindowHWND();
+                HWND hActive = GetActiveWindow();
+
+                // Only intercept if Salamander main window is active (no dialogs, popups or message boxes open)
+                if (hMain != NULL && hActive == hMain && pMsg->hwnd != NULL && IsChild(hMain, pMsg->hwnd))
                 {
-                    BOOL isDir = FALSE;
-                    const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
-                    if (f && isDir && strcmp(f->Name, "..") != 0)
+                    char className[64] = {0};
+                    GetClassNameA(pMsg->hwnd, className, sizeof(className));
+
+                    // Do not intercept if typing in an editbox, pressing a button, or using a combobox/listbox
+                    if (_stricmp(className, "Edit") != 0 &&
+                        _stricmp(className, "Button") != 0 &&
+                        _stricmp(className, "ComboBox") != 0 &&
+                        _stricmp(className, "ListBox") != 0 &&
+                        _stricmp(className, "RichEdit") != 0 &&
+                        _stricmp(className, "RichEdit20W") != 0 &&
+                        _stricmp(className, "RichEdit20A") != 0)
                     {
-                        CPluginFS* gdriveFS = (CPluginFS*)activeFS;
-                        gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
+                        CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
+                        if (activeFS)
+                        {
+                            BOOL isDir = FALSE;
+                            const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
+                            if (f && isDir && strcmp(f->Name, "..") != 0)
+                            {
+                                CPluginFS* gdriveFS = (CPluginFS*)activeFS;
+                                gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
+                            }
+                        }
                     }
                 }
             }
