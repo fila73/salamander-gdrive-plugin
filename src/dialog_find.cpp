@@ -102,7 +102,69 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
     case WM_NOTIFY:
     {
         LPNMHDR pnm = (LPNMHDR)lParam;
-        if (pnm->idFrom == IDC_FIND_RESULTS)
+        HWND hwndHeader = ListView_GetHeader(m_hResultsList);
+        if (hwndHeader && pnm->hwndFrom == hwndHeader && pnm->code == NM_CUSTOMDRAW)
+        {
+            LPNMCUSTOMDRAW pnmcd = (LPNMCUSTOMDRAW)lParam;
+            if (pnmcd->dwDrawStage == CDDS_PREPAINT)
+            {
+                SetWindowLongPtr(hDlg, DWLP_MSGRESULT, CDRF_NOTIFYITEMDRAW);
+                return TRUE;
+            }
+            else if (pnmcd->dwDrawStage == CDDS_ITEMPREPAINT)
+            {
+                if (GDriveDarkMode::IsDarkMode())
+                {
+                    HDC hdc = pnmcd->hdc;
+                    RECT rc = pnmcd->rc;
+
+                    // Fill dark background
+                    HBRUSH hBg = CreateSolidBrush(RGB(40, 40, 40));
+                    FillRect(hdc, &rc, hBg);
+                    DeleteObject(hBg);
+
+                    // Right divider and bottom line
+                    HPEN hBorder = CreatePen(PS_SOLID, 1, RGB(70, 70, 70));
+                    HPEN hOldPen = (HPEN)SelectObject(hdc, hBorder);
+                    MoveToEx(hdc, rc.right - 1, rc.top + 3, NULL);
+                    LineTo(hdc, rc.right - 1, rc.bottom - 3);
+                    MoveToEx(hdc, rc.left, rc.bottom - 1, NULL);
+                    LineTo(hdc, rc.right, rc.bottom - 1);
+                    SelectObject(hdc, hOldPen);
+                    DeleteObject(hBorder);
+
+                    // Text
+                    char text[128] = {0};
+                    HDITEMA hdi;
+                    memset(&hdi, 0, sizeof(hdi));
+                    hdi.mask = HDI_TEXT | HDI_FORMAT;
+                    hdi.pszText = text;
+                    hdi.cchTextMax = sizeof(text);
+                    Header_GetItem(hwndHeader, (int)pnmcd->dwItemSpec, &hdi);
+
+                    SetBkMode(hdc, TRANSPARENT);
+                    SetTextColor(hdc, RGB(225, 225, 225));
+                    HFONT hFont = (HFONT)SendMessage(hwndHeader, WM_GETFONT, 0, 0);
+                    HFONT hOldFont = NULL;
+                    if (hFont) hOldFont = (HFONT)SelectObject(hdc, hFont);
+
+                    RECT textRc = rc;
+                    textRc.left += 6;
+                    textRc.right -= 6;
+                    UINT fmt = DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS;
+                    if (hdi.fmt & HDF_RIGHT) fmt |= DT_RIGHT;
+                    else fmt |= DT_LEFT;
+
+                    DrawTextA(hdc, text, -1, &textRc, fmt);
+
+                    if (hOldFont) SelectObject(hdc, hOldFont);
+
+                    SetWindowLongPtr(hDlg, DWLP_MSGRESULT, CDRF_SKIPDEFAULT);
+                    return TRUE;
+                }
+            }
+        }
+        else if (pnm->idFrom == IDC_FIND_RESULTS)
         {
             if (pnm->code == NM_DBLCLK)
             {
@@ -169,6 +231,17 @@ INT_PTR CGDriveFindDialog::HandleMessage(HWND hDlg, UINT uMsg, WPARAM wParam, LP
     return FALSE;
 }
 
+static RECT GetChildRect(HWND hDlg, HWND hCtrl)
+{
+    RECT rc = {0, 0, 0, 0};
+    if (hCtrl && IsWindow(hCtrl))
+    {
+        GetWindowRect(hCtrl, &rc);
+        MapWindowPoints(NULL, hDlg, (LPPOINT)&rc, 2);
+    }
+    return rc;
+}
+
 void CGDriveFindDialog::OnInitDialog(HWND hDlg)
 {
     m_hNamed = GetDlgItem(hDlg, IDC_FIND_NAMED);
@@ -194,6 +267,24 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
     GDriveDarkMode::ApplyWindowTheme(hDlg);
     GDriveDarkMode::ApplyDialogControlsTheme(hDlg);
     GDriveDarkMode::ApplyListViewTheme(m_hResultsList);
+
+    // Capture initial layout rects
+    GetClientRect(hDlg, &m_origClientRect);
+    m_minSize.x = (m_origClientRect.right > 0) ? m_origClientRect.right : 500;
+    m_minSize.y = (m_origClientRect.bottom > 0) ? m_origClientRect.bottom : 360;
+
+    m_rcNamed = GetChildRect(hDlg, m_hNamed);
+    m_rcLookIn = GetChildRect(hDlg, m_hLookIn);
+    m_rcContaining = GetChildRect(hDlg, m_hContaining);
+    m_rcFindNow = GetChildRect(hDlg, m_hBtnFindNow);
+    m_rcStop = GetChildRect(hDlg, m_hBtnStop);
+    m_rcBrowse = GetChildRect(hDlg, GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE));
+    m_rcLine1 = GetChildRect(hDlg, GetDlgItem(hDlg, IDC_FIND_LINE1));
+    m_rcLine2 = GetChildRect(hDlg, GetDlgItem(hDlg, IDC_FIND_LINE2));
+    m_rcFoundCount = GetChildRect(hDlg, m_hFoundCount);
+    m_rcResultsList = GetChildRect(hDlg, m_hResultsList);
+    m_rcStatus = GetChildRect(hDlg, m_hStatus);
+    m_initialLayoutDone = true;
 
     // Initial values
     SetWindowTextA(m_hNamed, "*.*");
@@ -347,29 +438,61 @@ void CGDriveFindDialog::OnCommand(HWND hDlg, int id, HWND hCtrl, UINT codeNotify
 
 void CGDriveFindDialog::OnSize(HWND hDlg, UINT state, int cx, int cy)
 {
-    if (cx <= 0 || cy <= 0) return;
+    if (!m_initialLayoutDone || cx <= 0 || cy <= 0) return;
 
-    // Resize controls
-    int editW = cx - 100;
-    if (editW < 150) editW = 150;
-    int btnX = cx - 80;
+    int deltaX = cx - m_origClientRect.right;
+    int deltaY = cy - m_origClientRect.bottom;
 
-    SetWindowPos(m_hNamed, NULL, 50, 10, editW - 40, 120, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(m_hBtnFindNow, NULL, btnX, 9, 70, 14, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(m_hBtnStop, NULL, btnX, 9, 70, 14, SWP_NOZORDER | SWP_NOACTIVATE);
+    HDWP hdwp = BeginDeferWindowPos(12);
+    if (!hdwp) return;
 
-    SetWindowPos(m_hLookIn, NULL, 50, 28, editW - 40, 100, SWP_NOZORDER | SWP_NOACTIVATE);
-    SetWindowPos(GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE), NULL, btnX, 27, 70, 14, SWP_NOZORDER | SWP_NOACTIVATE);
+    if (m_hNamed)
+        hdwp = DeferWindowPos(hdwp, m_hNamed, NULL, 0, 0, (m_rcNamed.right - m_rcNamed.left) + deltaX, m_rcNamed.bottom - m_rcNamed.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-    SetWindowPos(m_hContaining, NULL, 50, 74, editW - 40, 100, SWP_NOZORDER | SWP_NOACTIVATE);
+    if (m_hLookIn)
+        hdwp = DeferWindowPos(hdwp, m_hLookIn, NULL, 0, 0, (m_rcLookIn.right - m_rcLookIn.left) + deltaX, m_rcLookIn.bottom - m_rcLookIn.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-    SetWindowPos(m_hFoundCount, NULL, cx - 130, 141, 120, 8, SWP_NOZORDER | SWP_NOACTIVATE);
+    if (m_hContaining)
+        hdwp = DeferWindowPos(hdwp, m_hContaining, NULL, 0, 0, (m_rcContaining.right - m_rcContaining.left) + deltaX, m_rcContaining.bottom - m_rcContaining.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-    int listH = cy - 180;
-    if (listH < 60) listH = 60;
-    SetWindowPos(m_hResultsList, NULL, 10, 156, cx - 20, listH, SWP_NOZORDER | SWP_NOACTIVATE);
+    HWND hLine1 = GetDlgItem(hDlg, IDC_FIND_LINE1);
+    if (hLine1)
+        hdwp = DeferWindowPos(hdwp, hLine1, NULL, 0, 0, (m_rcLine1.right - m_rcLine1.left) + deltaX, m_rcLine1.bottom - m_rcLine1.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-    SetWindowPos(m_hStatus, NULL, 10, cy - 18, cx - 20, 12, SWP_NOZORDER | SWP_NOACTIVATE);
+    HWND hLine2 = GetDlgItem(hDlg, IDC_FIND_LINE2);
+    if (hLine2)
+        hdwp = DeferWindowPos(hdwp, hLine2, NULL, 0, 0, (m_rcLine2.right - m_rcLine2.left) + deltaX, m_rcLine2.bottom - m_rcLine2.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (m_hBtnFindNow)
+        hdwp = DeferWindowPos(hdwp, m_hBtnFindNow, NULL, m_rcFindNow.left + deltaX, m_rcFindNow.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (m_hBtnStop)
+        hdwp = DeferWindowPos(hdwp, m_hBtnStop, NULL, m_rcStop.left + deltaX, m_rcStop.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    HWND hBrowse = GetDlgItem(hDlg, IDC_FIND_LOOKIN_BROWSE);
+    if (hBrowse)
+        hdwp = DeferWindowPos(hdwp, hBrowse, NULL, m_rcBrowse.left + deltaX, m_rcBrowse.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (m_hFoundCount)
+        hdwp = DeferWindowPos(hdwp, m_hFoundCount, NULL, m_rcFoundCount.left + deltaX, m_rcFoundCount.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (m_hResultsList)
+    {
+        int w = (m_rcResultsList.right - m_rcResultsList.left) + deltaX;
+        int h = (m_rcResultsList.bottom - m_rcResultsList.top) + deltaY;
+        if (w < 100) w = 100;
+        if (h < 50) h = 50;
+        hdwp = DeferWindowPos(hdwp, m_hResultsList, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    if (m_hStatus)
+    {
+        int w = (m_rcStatus.right - m_rcStatus.left) + deltaX;
+        if (w < 100) w = 100;
+        hdwp = DeferWindowPos(hdwp, m_hStatus, NULL, m_rcStatus.left, m_rcStatus.top + deltaY, w, m_rcStatus.bottom - m_rcStatus.top, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    EndDeferWindowPos(hdwp);
 }
 
 void CGDriveFindDialog::OnGetMinMaxInfo(HWND hDlg, LPMINMAXINFO lpMMI)

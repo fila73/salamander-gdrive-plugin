@@ -85,6 +85,8 @@
 #define IDC_FIND_STATUS                 587
 #define IDC_FIND_BTN_FINDNOW            588
 #define IDC_FIND_BTN_STOP               589
+#define IDC_FIND_LINE1                  590
+#define IDC_FIND_LINE2                  591
 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS

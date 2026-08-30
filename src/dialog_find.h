@@ -82,6 +82,19 @@ private:
     int m_typeFilter = 0; // 0: All
 
     POINT m_minSize = {500, 360};
+    bool m_initialLayoutDone = false;
+    RECT m_origClientRect = {0, 0, 0, 0};
+    RECT m_rcNamed = {0, 0, 0, 0};
+    RECT m_rcLookIn = {0, 0, 0, 0};
+    RECT m_rcContaining = {0, 0, 0, 0};
+    RECT m_rcFindNow = {0, 0, 0, 0};
+    RECT m_rcStop = {0, 0, 0, 0};
+    RECT m_rcBrowse = {0, 0, 0, 0};
+    RECT m_rcLine1 = {0, 0, 0, 0};
+    RECT m_rcLine2 = {0, 0, 0, 0};
+    RECT m_rcFoundCount = {0, 0, 0, 0};
+    RECT m_rcResultsList = {0, 0, 0, 0};
+    RECT m_rcStatus = {0, 0, 0, 0};
 };
 
 #endif // __GDRIVE_DIALOG_FIND_H
