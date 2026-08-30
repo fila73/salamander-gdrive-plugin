@@ -46,7 +46,7 @@ BOOL WINAPI CPluginInterfaceForMenuExt::ExecuteMenuItem(CSalamanderForOperations
             int failReason = 0;
             SalamanderGeneral->ChangePanelPathToPluginFS(s_pendingFocusPanel, AssignedFSName,
                                                          s_pendingFocusPath.c_str(), &failReason, -1,
-                                                         s_pendingFocusName.c_str());
+                                                         s_pendingFocusName.c_str(), TRUE, TRUE);
             (void)failReason;
             s_pendingFocusPath.clear();
             s_pendingFocusName.clear();

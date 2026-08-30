@@ -261,8 +261,8 @@ public:
                                      CPluginFSInterfaceAbstract* pluginFS,
                                      const char* pluginFSName, int pluginFSNameIndex) override;
 
-    virtual void WINAPI ConvertPathToInternal(const char* fsName, int fsNameIndex, char* fsUserPart) override {}
-    virtual void WINAPI ConvertPathToExternal(const char* fsName, int fsNameIndex, char* fsUserPart) override {}
+    virtual void WINAPI ConvertPathToInternal(const char* fsName, int fsNameIndex, char* fsUserPart) override;
+    virtual void WINAPI ConvertPathToExternal(const char* fsName, int fsNameIndex, char* fsUserPart) override;
     virtual void WINAPI EnsureShareExistsOnServer(int panel, const char* server, const char* share) override {}
 };
 

@@ -290,8 +290,8 @@ void WINAPI CPluginInterfaceForFS::ExecuteOnFS(int panel, CPluginFSInterfaceAbst
 }
 
 BOOL WINAPI CPluginInterfaceForFS::DisconnectFS(HWND parent, BOOL isInPanel, int panel,
-                                               CPluginFSInterfaceAbstract* pluginFS,
-                                               const char* pluginFSName, int pluginFSNameIndex)
+                                                CPluginFSInterfaceAbstract* pluginFS,
+                                                const char* pluginFSName, int pluginFSNameIndex)
 {
     if (isInPanel)
     {
@@ -301,5 +301,23 @@ BOOL WINAPI CPluginInterfaceForFS::DisconnectFS(HWND parent, BOOL isInPanel, int
     else
     {
         return SalamanderGeneral->CloseDetachedFS(parent, pluginFS);
+    }
+}
+
+void WINAPI CPluginInterfaceForFS::ConvertPathToInternal(const char* fsName, int fsNameIndex, char* fsUserPart)
+{
+    if (!fsUserPart) return;
+    for (char* p = fsUserPart; *p; ++p)
+    {
+        if (*p == '/') *p = '\\';
+    }
+}
+
+void WINAPI CPluginInterfaceForFS::ConvertPathToExternal(const char* fsName, int fsNameIndex, char* fsUserPart)
+{
+    if (!fsUserPart) return;
+    for (char* p = fsUserPart; *p; ++p)
+    {
+        if (*p == '/') *p = '\\';
     }
 }

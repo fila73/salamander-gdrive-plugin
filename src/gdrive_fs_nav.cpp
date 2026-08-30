@@ -69,19 +69,32 @@ BOOL WINAPI CPluginFS::GetFullFSPath(HWND parent, const char* fsName, char* path
         return FALSE;
     }
 
-    char userPart[MAX_PATH] = {0};
-    GetCurrentPath(userPart);
+    std::string inputPath = path;
+    char curBuf[MAX_PATH] = {0};
+    GetCurrentPath(curBuf);
+    std::string current = curBuf;
+    if (current.empty()) current = "\\";
 
-    std::string up = userPart;
-    if (up.empty() || up == "\\")
+    std::string resultPath;
+    if (inputPath.rfind("gdrive:", 0) == 0)
     {
-        up = "\\My Drive";
+        resultPath = inputPath;
+    }
+    else if (!inputPath.empty() && (inputPath[0] == '\\' || inputPath[0] == '/'))
+    {
+        std::string p = inputPath;
+        std::replace(p.begin(), p.end(), '/', '\\');
+        resultPath = std::string(fsName && *fsName ? fsName : AssignedFSName) + ":" + p;
+    }
+    else
+    {
+        char combined[MAX_PATH] = {0};
+        lstrcpynA(combined, current.c_str(), MAX_PATH);
+        SalamanderGeneral->SalPathAppend(combined, inputPath.c_str(), MAX_PATH);
+        resultPath = std::string(fsName && *fsName ? fsName : AssignedFSName) + ":" + combined;
     }
 
-    std::string full = std::string(fsName && *fsName ? fsName : AssignedFSName) + ":" + up;
-    strncpy(path, full.c_str(), pathSize - 1);
-    path[pathSize - 1] = '\0';
-
+    lstrcpynA(path, resultPath.c_str(), pathSize);
     success = TRUE;
     return TRUE;
 }
