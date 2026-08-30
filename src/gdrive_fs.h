@@ -233,7 +233,7 @@ private:
 
 public:
     friend class CGDriveFindDialog;
-    bool ResolveFolderIdForPath(const std::string& path, std::string& folderId, std::string& driveId, bool& isShared);
+    static bool ResolveFolderIdForPath(const std::string& path, std::string& folderId, std::string& driveId, bool& isShared);
     static bool IsOurFS(CPluginFSInterfaceAbstract* fs);
     static std::string ExtractIdSuffix(const std::string& id);
     static std::string ExtractSuffixFromDisambiguatedName(const std::string& name);

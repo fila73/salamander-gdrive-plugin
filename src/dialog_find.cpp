@@ -871,15 +871,13 @@ void CGDriveFindDialog::StartSearch()
 
             std::string winPath = path;
             std::replace(winPath.begin(), winPath.end(), '/', '\\');
-            m_currentSearchOpts.targetFolderPath = winPath;
-
-            if (path == "/My Drive")
+            std::string folderId, driveId;
+            bool isShared = false;
+            if (CPluginFS::ResolveFolderIdForPath(path, folderId, driveId, isShared))
             {
-                m_currentSearchOpts.folderScopeId = "root";
-            }
-            else if (!m_initialFolderId.empty() && _stricmp(path.c_str(), m_initialPath.c_str()) == 0)
-            {
-                m_currentSearchOpts.folderScopeId = m_initialFolderId;
+                m_currentSearchOpts.folderScopeId = folderId;
+                m_currentSearchOpts.driveId = driveId;
+                m_currentSearchOpts.isSharedDrive = isShared;
             }
         }
     }
@@ -1045,14 +1043,13 @@ void CGDriveFindDialog::SearchWorker()
             item.parentPath = ResolveParentPath(item.parentId, folderPathMap, m_cancelRequested);
         }
 
-        // Subtree path filtering: if a target folder is specified (e.g. \My Drive\Knihy) and searchSubdirs is true
+        // Subtree path filtering: if a target folder is specified (e.g. \My Drive\Knihy)
         if (!m_currentSearchOpts.targetFolderPath.empty() &&
             m_currentSearchOpts.targetFolderPath != "\\" &&
             m_currentSearchOpts.targetFolderPath != "\\My Drive" &&
             m_currentSearchOpts.targetFolderPath != "\\Shared with me" &&
             m_currentSearchOpts.targetFolderPath != "\\Starred" &&
-            m_currentSearchOpts.targetFolderPath != "\\Trash" &&
-            m_currentSearchOpts.searchSubdirs)
+            m_currentSearchOpts.targetFolderPath != "\\Trash")
         {
             const std::string& tgt = m_currentSearchOpts.targetFolderPath;
             if (_stricmp(item.parentPath.c_str(), tgt.c_str()) == 0 ||

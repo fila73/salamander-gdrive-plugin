@@ -327,6 +327,9 @@ const GDriveApi::GDriveItem* CPluginFS::FindItemByPanelName(const char* panelNam
     return nullptr;
 }
 
+static std::map<std::string, std::string, CPluginFS::CaseInsensitiveCompare> s_pathToIdCache;
+static std::mutex s_pathToIdMutex;
+
 bool CPluginFS::ResolveCurrentFolderId()
 {
     return ResolveFolderIdForPath(m_currentPath, m_currentFolderId, m_currentDriveId, m_isSharedDrive);
@@ -334,6 +337,7 @@ bool CPluginFS::ResolveCurrentFolderId()
 
 bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& folderId, std::string& driveId, bool& isShared)
 {
+    std::lock_guard<std::mutex> lock(s_pathToIdMutex);
     std::string normPath = path;
     std::replace(normPath.begin(), normPath.end(), '\\', '/');
     while (normPath.size() > 1 && normPath.back() == '/') normPath.pop_back();
@@ -350,7 +354,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         folderId = "root";
         driveId = "";
         isShared = false;
-        m_pathToIdCache[normPath] = "root";
+        s_pathToIdCache[normPath] = "root";
         return true;
     }
     if (_stricmp(normPath.c_str(), "/Shared Drives") == 0)
@@ -358,7 +362,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         folderId = "shared_drives_root";
         driveId = "";
         isShared = true;
-        m_pathToIdCache[normPath] = "shared_drives_root";
+        s_pathToIdCache[normPath] = "shared_drives_root";
         return true;
     }
     if (_stricmp(normPath.c_str(), "/Shared with me") == 0)
@@ -366,7 +370,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         folderId = "shared_with_me_root";
         driveId = "";
         isShared = false;
-        m_pathToIdCache[normPath] = "shared_with_me_root";
+        s_pathToIdCache[normPath] = "shared_with_me_root";
         return true;
     }
     if (_stricmp(normPath.c_str(), "/Starred") == 0)
@@ -374,7 +378,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         folderId = "starred_root";
         driveId = "";
         isShared = false;
-        m_pathToIdCache[normPath] = "starred_root";
+        s_pathToIdCache[normPath] = "starred_root";
         return true;
     }
     if (_stricmp(normPath.c_str(), "/Recent") == 0)
@@ -382,7 +386,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         folderId = "recent_root";
         driveId = "";
         isShared = false;
-        m_pathToIdCache[normPath] = "recent_root";
+        s_pathToIdCache[normPath] = "recent_root";
         return true;
     }
     if (_stricmp(normPath.c_str(), "/Trash") == 0)
@@ -390,12 +394,12 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         folderId = "trash_root";
         driveId = "";
         isShared = false;
-        m_pathToIdCache[normPath] = "trash_root";
+        s_pathToIdCache[normPath] = "trash_root";
         return true;
     }
 
-    auto it = m_pathToIdCache.find(normPath);
-    if (it != m_pathToIdCache.end())
+    auto it = s_pathToIdCache.find(normPath);
+    if (it != s_pathToIdCache.end())
     {
         folderId = it->second;
         isShared = (_strnicmp(normPath.c_str(), "/Shared Drives", 14) == 0 && _stricmp(normPath.c_str(), "/Shared Drives") != 0);
@@ -424,7 +428,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         {
             parentId = "root";
             isShared = false;
-            m_pathToIdCache[accumulated] = "root";
+            s_pathToIdCache[accumulated] = "root";
             continue;
         }
 
@@ -432,7 +436,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         {
             parentId = "shared_drives_root";
             isShared = true;
-            m_pathToIdCache[accumulated] = "shared_drives_root";
+            s_pathToIdCache[accumulated] = "shared_drives_root";
             continue;
         }
 
@@ -440,7 +444,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         {
             parentId = "shared_with_me_root";
             isShared = false;
-            m_pathToIdCache[accumulated] = "shared_with_me_root";
+            s_pathToIdCache[accumulated] = "shared_with_me_root";
             continue;
         }
 
@@ -448,7 +452,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         {
             parentId = "starred_root";
             isShared = false;
-            m_pathToIdCache[accumulated] = "starred_root";
+            s_pathToIdCache[accumulated] = "starred_root";
             continue;
         }
 
@@ -456,7 +460,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         {
             parentId = "recent_root";
             isShared = false;
-            m_pathToIdCache[accumulated] = "recent_root";
+            s_pathToIdCache[accumulated] = "recent_root";
             continue;
         }
 
@@ -464,12 +468,12 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
         {
             parentId = "trash_root";
             isShared = false;
-            m_pathToIdCache[accumulated] = "trash_root";
+            s_pathToIdCache[accumulated] = "trash_root";
             continue;
         }
 
-        auto cached = m_pathToIdCache.find(accumulated);
-        if (cached != m_pathToIdCache.end())
+        auto cached = s_pathToIdCache.find(accumulated);
+        if (cached != s_pathToIdCache.end())
         {
             parentId = cached->second;
             if (isShared && driveId.empty()) driveId = parentId;
@@ -504,7 +508,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
                 {
                     parentId = item.id;
                     if (isShared && driveId.empty()) driveId = parentId;
-                    m_pathToIdCache[accumulated] = parentId;
+                    s_pathToIdCache[accumulated] = parentId;
                     found = true;
                     break;
                 }
@@ -529,7 +533,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
                 {
                     parentId = item.id;
                     if (isShared && driveId.empty()) driveId = parentId;
-                    m_pathToIdCache[accumulated] = parentId;
+                    s_pathToIdCache[accumulated] = parentId;
                     found = true;
                     break;
                 }
@@ -552,7 +556,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
                         parentId = item.id;
                         if (isShared && driveId.empty()) driveId = parentId;
                         accumulated += "/" + segs[j];
-                        m_pathToIdCache[accumulated] = parentId;
+                        s_pathToIdCache[accumulated] = parentId;
                         found = true;
                         i = j;
                         break;
