@@ -416,6 +416,21 @@ static RECT GetChildRect(HWND hDlg, HWND hCtrl)
     return rc;
 }
 
+static LRESULT CALLBACK EditEnterSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_KEYDOWN && wParam == VK_RETURN)
+    {
+        HWND hDlg = (HWND)dwRefData;
+        PostMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_FIND_BTN_FINDNOW, BN_CLICKED), 0);
+        return 0;
+    }
+    else if (uMsg == WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(hwnd, EditEnterSubclassProc, uIdSubclass);
+    }
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+}
+
 void CGDriveFindDialog::OnInitDialog(HWND hDlg)
 {
     m_hNamed = GetDlgItem(hDlg, IDC_FIND_NAMED);
@@ -436,6 +451,17 @@ void CGDriveFindDialog::OnInitDialog(HWND hDlg)
     m_hBtnView = GetDlgItem(hDlg, IDC_FIND_BTN_VIEW);
     m_hBtnOpenWeb = GetDlgItem(hDlg, IDC_FIND_BTN_OPENWEB);
     m_hBtnCopyLink = GetDlgItem(hDlg, IDC_FIND_BTN_COPYLINK);
+
+    SendMessage(hDlg, DM_SETDEFID, IDC_FIND_BTN_FINDNOW, 0);
+
+    // Subclass combobox edit controls so pressing Enter triggers Find Now
+    COMBOBOXINFO cbi = { sizeof(cbi) };
+    if (GetComboBoxInfo(m_hNamed, &cbi) && cbi.hwndItem)
+        SetWindowSubclass(cbi.hwndItem, EditEnterSubclassProc, 101, (DWORD_PTR)hDlg);
+    if (GetComboBoxInfo(m_hLookIn, &cbi) && cbi.hwndItem)
+        SetWindowSubclass(cbi.hwndItem, EditEnterSubclassProc, 102, (DWORD_PTR)hDlg);
+    if (GetComboBoxInfo(m_hContaining, &cbi) && cbi.hwndItem)
+        SetWindowSubclass(cbi.hwndItem, EditEnterSubclassProc, 103, (DWORD_PTR)hDlg);
 
     SetWindowTextA(hDlg, LoadStr(IDS_FIND_TITLE));
     GDriveDarkMode::ApplyWindowTheme(hDlg);
@@ -1022,16 +1048,20 @@ static std::string ResolveParentPath(const std::string& folderId,
         for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
 
         std::string parentPath;
-        if (folderItem.parentId.empty() || folderItem.parentId == "root")
-        {
-            parentPath = "\\My Drive";
-        }
-        else if (folderItem.isSharedDrive && !folderItem.driveId.empty() && folderItem.parentId == folderItem.driveId)
+        if (folderItem.isSharedDrive && !folderItem.driveId.empty() && folderItem.parentId == folderItem.driveId)
         {
             parentPath = "\\Shared Drives\\" + ansiName;
             pathCache[folderId] = parentPath;
             CPluginFS::CachePathToId(parentPath, folderId);
             return parentPath;
+        }
+        else if (!folderItem.isOwnedByMe && (folderItem.parentId.empty() || folderItem.parentId == "root"))
+        {
+            parentPath = "\\Shared with me";
+        }
+        else if (folderItem.parentId.empty() || folderItem.parentId == "root")
+        {
+            parentPath = "\\My Drive";
         }
         else
         {
@@ -1088,8 +1118,8 @@ void CGDriveFindDialog::SearchWorker()
 
         if (item.parentId.empty() || item.parentId == "root")
         {
-            item.parentPath = "\\My Drive";
-            CPluginFS::CachePathToId(item.parentPath, "root");
+            item.parentPath = item.isOwnedByMe ? "\\My Drive" : "\\Shared with me";
+            CPluginFS::CachePathToId(item.parentPath, item.isOwnedByMe ? "root" : "shared_with_me_root");
         }
         else
         {
