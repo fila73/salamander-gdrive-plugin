@@ -15,6 +15,9 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
                                    BOOL isDir, char* newName, BOOL& cancel)
 {
     cancel = FALSE;
+    if (mode == 1)
+        return FALSE; // request the standard dialog
+
     if (!newName || !*newName || !file.Name) return FALSE;
 
     if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
@@ -80,6 +83,9 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
 
     GDriveCache::CacheManager::GetInstance().RenameItem(m_currentFolderId, fileId, utf8NewName);
 
+    SalamanderGeneral->RefreshPanelPath(PANEL_SOURCE);
+    SalamanderGeneral->PostRefreshPanelFS(this);
+
     return TRUE;
 }
 
@@ -90,6 +96,9 @@ void WINAPI CPluginFS::AcceptChangeOnPathNotification(const char* fsName, const 
 BOOL WINAPI CPluginFS::CreateDir(const char* fsName, int mode, HWND parent, char* newName, BOOL& cancel)
 {
     cancel = FALSE;
+    if (mode == 1)
+        return FALSE; // request standard dialog
+
     if (!newName || !*newName) return FALSE;
 
     if (m_currentPath.empty() || m_currentPath == "/" || _stricmp(m_currentPath.c_str(), "/") == 0)
@@ -134,6 +143,7 @@ BOOL WINAPI CPluginFS::CreateDir(const char* fsName, int mode, HWND parent, char
     GDriveCache::CacheManager::GetInstance().AddOrUpdateItem(m_currentFolderId, newItem);
 
     SalamanderGeneral->RefreshPanelPath(PANEL_SOURCE);
+    SalamanderGeneral->PostRefreshPanelFS(this);
     return TRUE;
 }
 
