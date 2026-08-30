@@ -410,6 +410,77 @@ BOOL HandleDialogColors(UINT uMsg, WPARAM wParam, LPARAM lParam, INT_PTR* pResul
     return FALSE;
 }
 
+static LRESULT CALLBACK HeaderSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_PAINT)
+    {
+        if (IsDarkMode())
+        {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            if (hdc)
+            {
+                InitTheme();
+                RECT rcClient;
+                GetClientRect(hwnd, &rcClient);
+                FillRect(hdc, &rcClient, g_theme.brushBgMain);
+
+                int count = Header_GetItemCount(hwnd);
+                HFONT font = (HFONT)SendMessage(hwnd, WM_GETFONT, 0, 0);
+                HFONT oldFont = font ? (HFONT)SelectObject(hdc, font) : NULL;
+                SetBkMode(hdc, TRANSPARENT);
+                SetTextColor(hdc, g_theme.textMain);
+                HPEN pen = CreatePen(PS_SOLID, 1, RGB(70, 70, 70));
+                HPEN oldPen = (HPEN)SelectObject(hdc, pen);
+
+                for (int i = 0; i < count; ++i)
+                {
+                    RECT itemRc;
+                    if (!Header_GetItemRect(hwnd, i, &itemRc)) continue;
+
+                    char text[256] = {0};
+                    HDITEMA hdi;
+                    memset(&hdi, 0, sizeof(hdi));
+                    hdi.mask = HDI_TEXT | HDI_FORMAT;
+                    hdi.pszText = text;
+                    hdi.cchTextMax = sizeof(text);
+                    Header_GetItem(hwnd, i, &hdi);
+
+                    RECT textRc = itemRc;
+                    textRc.left += 6;
+                    textRc.right -= 6;
+                    UINT fmt = DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS;
+                    if (hdi.fmt & HDF_RIGHT) fmt |= DT_RIGHT;
+                    else fmt |= DT_LEFT;
+
+                    DrawTextA(hdc, text, -1, &textRc, fmt);
+
+                    MoveToEx(hdc, itemRc.right - 1, itemRc.top, NULL);
+                    LineTo(hdc, itemRc.right - 1, itemRc.bottom);
+                    MoveToEx(hdc, itemRc.left, itemRc.bottom - 1, NULL);
+                    LineTo(hdc, itemRc.right, itemRc.bottom - 1);
+                }
+
+                if (oldPen) SelectObject(hdc, oldPen);
+                DeleteObject(pen);
+                if (oldFont) SelectObject(hdc, oldFont);
+
+                EndPaint(hwnd, &ps);
+                return 0;
+            }
+        }
+    }
+    else if (uMsg == WM_ERASEBKGND)
+    {
+        if (IsDarkMode()) return 1;
+    }
+    else if (uMsg == WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(hwnd, HeaderSubclassProc, uIdSubclass);
+    }
+    return DefSubclassProc(hwnd, uMsg, wParam, lParam);
+}
+
 void ApplyListViewTheme(HWND hwndList)
 {
     if (!hwndList) return;
@@ -418,6 +489,20 @@ void ApplyListViewTheme(HWND hwndList)
     ListView_SetBkColor(hwndList, g_theme.bgMain);
     ListView_SetTextBkColor(hwndList, g_theme.bgMain);
     ListView_SetTextColor(hwndList, g_theme.textMain);
+
+    HWND hwndHeader = ListView_GetHeader(hwndList);
+    if (hwndHeader)
+    {
+        if (IsDarkMode())
+        {
+            SetWindowSubclass(hwndHeader, HeaderSubclassProc, 1, 0);
+        }
+        else
+        {
+            RemoveWindowSubclass(hwndHeader, HeaderSubclassProc, 1);
+        }
+        InvalidateRect(hwndHeader, NULL, TRUE);
+    }
 
     if (IsDarkMode())
     {
