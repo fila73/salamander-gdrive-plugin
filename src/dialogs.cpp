@@ -728,7 +728,7 @@ bool CCalcSizeProgressDialog::Run()
         std::string szStr = FormatSize(m_totalBytes);
         std::string numStr = FormatNumber(m_totalBytes);
         _snprintf_s(msg, _TRUNCATE, LoadStr(IDS_CALC_CANCELLED_FMT),
-                    m_itemName.c_str(), m_totalDirs, m_totalFiles, szStr.c_str(), numStr.c_str());
+                    m_itemName.c_str(), (int)m_totalDirs, (int)m_totalFiles, szStr.c_str(), numStr.c_str());
         SalamanderGeneral->SalMessageBox(hParent, msg, LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONEXCLAMATION);
     }
 
