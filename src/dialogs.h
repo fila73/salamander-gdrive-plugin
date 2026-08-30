@@ -114,6 +114,7 @@ public:
 
     bool OnProgress(int64_t bytesTransferred, int64_t totalBytes);
     bool IsCancelled() const { return m_cancelled; }
+    void Cancel() { m_cancelled = true; }
 
     static std::string FormatSize(int64_t bytes);
 

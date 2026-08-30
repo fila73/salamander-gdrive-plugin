@@ -862,6 +862,7 @@ void CTransferProgressDialog::Stop()
         {
             EnableWindow(hParent, TRUE);
             SetForegroundWindow(hParent);
+            SetFocus(hParent);
         }
         DestroyWindow(HWindow);
         HWindow = NULL;

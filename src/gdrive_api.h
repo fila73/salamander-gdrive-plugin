@@ -87,6 +87,17 @@ public:
                     const std::string& newName,
                     std::string* errorOut = nullptr);
 
+    bool MoveItem(const std::string& fileId,
+                  const std::string& previousParents,
+                  const std::string& newParents,
+                  std::string* errorOut = nullptr);
+
+    bool CopyFile(const std::string& fileId,
+                  const std::string& targetParentId,
+                  const std::string& newName,
+                  GDriveItem& itemOut,
+                  std::string* errorOut = nullptr);
+
     bool TrashItem(const std::string& fileId,
                    std::string* errorOut = nullptr);
 

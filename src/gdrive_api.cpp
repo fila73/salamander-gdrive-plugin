@@ -766,6 +766,83 @@ bool ApiClient::RenameItem(const std::string& fileId,
     return true;
 }
 
+bool ApiClient::MoveItem(const std::string& fileId,
+                         const std::string& previousParents,
+                         const std::string& newParents,
+                         std::string* errorOut)
+{
+    if (fileId.empty())
+    {
+        if (errorOut) *errorOut = "Invalid file ID";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId +
+                      "?supportsAllDrives=true";
+
+    if (!newParents.empty())
+    {
+        url += "&addParents=" + GDriveHttp::HttpClient::UrlEncode(newParents);
+    }
+    if (!previousParents.empty() && previousParents != "root" && previousParents != "shared_drives_root" && previousParents != "shared_with_me_root")
+    {
+        url += "&removeParents=" + GDriveHttp::HttpClient::UrlEncode(previousParents);
+    }
+
+    auto resp = http.Patch(url, "{}", "application/json; charset=UTF-8", token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to move item: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    return true;
+}
+
+bool ApiClient::CopyFile(const std::string& fileId,
+                         const std::string& targetParentId,
+                         const std::string& newName,
+                         GDriveItem& itemOut,
+                         std::string* errorOut)
+{
+    if (fileId.empty())
+    {
+        if (errorOut) *errorOut = "Invalid file ID";
+        return false;
+    }
+
+    std::string token = GetToken(errorOut);
+    if (token.empty()) return false;
+
+    GDriveHttp::HttpClient http;
+    std::string url = "https://www.googleapis.com/drive/v3/files/" + fileId + "/copy?supportsAllDrives=true";
+
+    GDriveJson::Value bodyObj;
+    if (!newName.empty()) bodyObj.Set("name", newName);
+    if (!targetParentId.empty())
+    {
+        GDriveJson::Value parentsArr;
+        parentsArr.PushBack(GDriveJson::Value(targetParentId));
+        bodyObj.Set("parents", parentsArr);
+    }
+
+    std::string bodyStr = bodyObj.Serialize();
+    auto resp = http.Post(url, bodyStr, "application/json; charset=UTF-8", token);
+    if (!resp.success)
+    {
+        if (errorOut) *errorOut = "Failed to copy file: " + ExtractErrorMessage(resp);
+        return false;
+    }
+
+    auto json = GDriveJson::Value::Parse(resp.body);
+    ParseItemFromJson(json, itemOut);
+    return true;
+}
+
 bool ApiClient::TrashItem(const std::string& fileId,
                           std::string* errorOut)
 {

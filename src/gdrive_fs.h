@@ -185,6 +185,7 @@ private:
 
     const GDriveApi::GDriveItem* FindItemByPanelName(const char* panelName) const;
     bool ResolveCurrentFolderId();
+    bool ResolveFolderIdForPath(const std::string& path, std::string& folderId, std::string& driveId, bool& isShared);
     bool DownloadSingleItem(const GDriveApi::GDriveItem& item, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
     bool DownloadFolderRecursive(const GDriveApi::GDriveItem& folder, const std::wstring& targetDir, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
     bool UploadSingleItem(const std::wstring& localPath, const std::string& fileName, const std::string& parentFolderId, HWND parent, class CTransferProgressDialog* pProgressDlg = nullptr);
