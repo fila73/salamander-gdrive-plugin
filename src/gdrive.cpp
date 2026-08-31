@@ -4,11 +4,14 @@
 
 #include "precomp.h"
 #include "gdrive.h"
-#include "gdrive_auth.h"
+#include "gdrive.rh2"
 #include "dialogs.h"
-#include "gdrive_fs.h"
+#include "gdrive_auth.h"
 #include "gdrive_cache.h"
 #include "gdrive_log.h"
+#include "gdrivedarkmode.h"
+#include "dialog_find.h"
+#include "gdrive_fs.h"
 
 // Globals
 HINSTANCE DLLInstance = NULL;
@@ -187,6 +190,10 @@ void WINAPI CPluginInterface::About(HWND parent)
 
 BOOL WINAPI CPluginInterface::Release(HWND parent, BOOL force)
 {
+    // Close the modeless Find dialog BEFORE the DLL is unmapped to prevent
+    // callbacks into already-unloaded code (UNLOADED: gdrive.spl crash).
+    CGDriveFindDialog::CloseIfOpen();
+
     if (s_hGetMsgHook)
     {
         UnhookWindowsHookEx(s_hGetMsgHook);

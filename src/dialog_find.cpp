@@ -75,6 +75,37 @@ void CGDriveFindDialog::Launch(HWND hParent, int panel, const std::string& curre
     SetForegroundWindow(hWnd);
 }
 
+void CGDriveFindDialog::CloseIfOpen()
+{
+    // Called from CPluginInterface::Release() before the DLL is unmapped.
+    // We must destroy the modeless dialog synchronously so that no WndProc/subclass
+    // callbacks fire into already-unmapped code (UNLOADED: gdrive.spl crash).
+    if (s_activeFindDialog && s_activeFindDialog->m_hDlg && IsWindow(s_activeFindDialog->m_hDlg))
+    {
+        // StopSearch() joins the worker thread so no more PostMessage into a dead dialog.
+        s_activeFindDialog->StopSearch();
+        if (s_activeFindDialog->m_searchThread.joinable())
+            s_activeFindDialog->m_searchThread.join();
+
+        DestroyWindow(s_activeFindDialog->m_hDlg);
+        // WM_NCDESTROY handler will delete s_activeFindDialog and null the pointer.
+        // Pump messages to let WM_DESTROY / WM_NCDESTROY through.
+        MSG msg;
+        while (s_activeFindDialog && PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+
+    // Fallback: if the object still exists (dialog was never shown or NCDESTROY missed)
+    if (s_activeFindDialog)
+    {
+        delete s_activeFindDialog;
+        s_activeFindDialog = nullptr;
+    }
+}
+
 INT_PTR CALLBACK CGDriveFindDialog::DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     CGDriveFindDialog* pThis = nullptr;

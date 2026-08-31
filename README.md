@@ -43,14 +43,17 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
   - **`Shared`**: Indicates whether an item is shared (`Yes` / `No`).
   - **`Starred`**: Visual `*` indicator for favorite items.
   - Supports column sorting and mouse width adjustments with persistent sizing.
-- 🔎 **Cloud & Fulltext Search (`Alt+F7` / `FS_SERVICE_OPENFINDDLG`)**:
+- 🔎 **Cloud & Fulltext Search (`Alt+F7`) — New in v0.4**:
   - Open Salamander Find window layout with instant Google Drive cloud search.
   - **Filename Search**: `name contains '...'` with wildcard support.
   - **Fulltext Content Search**: `fullText contains '...'` searching inside Docs, Sheets, Slides, PDFs, Text files, and image OCR.
-  - **Focus & Jump**: Double-click or `Enter` immediately navigates the Salamander panel to the selected file's location and highlights it. Correctly handles *Shared with me* paths and folders with Czech/accented characters.
-  - **View (F3) from results**: Opens files directly in Salamander's configured internal viewer (not the system-default app).
+  - **Look In**: scope selection — whole drive, current folder, Shared with me, Starred, Trash.
+  - **Advanced filters**: file type (documents, spreadsheets, images...), files or folders only.
+  - **Search history**: all comboboxes and checkboxes are persisted in the registry.
+  - **Focus & Jump**: double-click or `Enter` immediately navigates the Salamander panel to the selected file's location and highlights it. Correctly handles *Shared with me* paths and folders with Czech/accented characters.
+  - **View (F3) from results**: opens files directly in Salamander's configured internal viewer (not the system-default app).
   - **Keyboard shortcuts**: `Enter` in any editbox starts the search; `Esc` closes the dialog (or stops an active search); `Enter` in the results list triggers Focus.
-  - Modeless non-topmost window — Salamander remains accessible while search dialog is open.
+  - Modeless non-topmost window — Salamander remains accessible while the search dialog is open.
   - Asynchronous background worker thread with instant `Esc` cancellation and Dark Mode support.
 
 ### ⭐ Virtual Views & Context Menu
