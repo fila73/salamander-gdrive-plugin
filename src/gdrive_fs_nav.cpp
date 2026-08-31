@@ -11,6 +11,29 @@
 #include "gdrive_log.h"
 #include "dialogs.h"
 
+static std::map<std::string, std::string, CPluginFS::CaseInsensitiveCompare> s_pathToIdCache;
+static std::mutex s_pathToIdMutex;
+
+static std::string GetValidParentPath(const std::string& currentPath)
+{
+    std::string p = currentPath;
+    while (p.length() > 1)
+    {
+        size_t slashPos = p.rfind('/');
+        if (slashPos == std::string::npos || slashPos == 0)
+        {
+            return "/";
+        }
+        p = p.substr(0, slashPos);
+        std::lock_guard<std::mutex> lock(s_pathToIdMutex);
+        if (s_pathToIdCache.find(p) != s_pathToIdCache.end())
+        {
+            return p;
+        }
+    }
+    return "/";
+}
+
 BOOL WINAPI CPluginFS::GetCurrentPath(char* userPart)
 {
     if (!userPart) return FALSE;
@@ -40,18 +63,16 @@ BOOL WINAPI CPluginFS::GetFullName(CFileData& file, int isDir, char* buf, int bu
     }
     else
     {
-        std::string winPath = m_currentPath;
-        std::replace(winPath.begin(), winPath.end(), '/', '\\');
         if (isDir == 2) // ".."
         {
-            size_t pos = winPath.rfind('\\');
-            if (pos != std::string::npos && pos > 0)
-                path = winPath.substr(0, pos);
-            else
-                path = "\\";
+            std::string parentPath = GetValidParentPath(m_currentPath);
+            std::replace(parentPath.begin(), parentPath.end(), '/', '\\');
+            path = parentPath.empty() ? "\\" : parentPath;
         }
         else
         {
+            std::string winPath = m_currentPath;
+            std::replace(winPath.begin(), winPath.end(), '/', '\\');
             path = winPath + "\\" + std::string(file.Name ? file.Name : "");
         }
     }
@@ -238,10 +259,6 @@ std::string CPluginFS::GetBaseDisplayName(const GDriveApi::GDriveItem& item)
             baseName += item.exportExtension;
         }
     }
-    for (char& c : baseName)
-    {
-        if (c == '/' || c == '\\') c = '_';
-    }
     return baseName;
 }
 
@@ -353,9 +370,6 @@ const GDriveApi::GDriveItem* CPluginFS::FindItemByPanelName(const char* panelNam
     }
     return nullptr;
 }
-
-static std::map<std::string, std::string, CPluginFS::CaseInsensitiveCompare> s_pathToIdCache;
-static std::mutex s_pathToIdMutex;
 
 void CPluginFS::CachePathToId(const std::string& path, const std::string& folderId)
 {
@@ -930,7 +944,6 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
     else
     {
         ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(name);
-        for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
     }
 
     CFileData file;
