@@ -1338,23 +1338,35 @@ void CGDriveFindDialog::ViewSelectedItem()
         return;
     }
 
-    // Download to temp and launch Salamander Viewer
-    char tempPathBuf[MAX_PATH];
-    if (GetTempPathA(MAX_PATH, tempPathBuf))
+    // Download to temp and launch Salamander's configured internal viewer
+    char fileNameBuf[MAX_PATH];
+    DWORD error = 0;
+    if (SalamanderGeneral && SalamanderGeneral->SalGetTempFileName(NULL, "gview", fileNameBuf, TRUE, &error))
     {
-        std::string targetDir = std::string(tempPathBuf) + "salamander_gdrive_view\\";
-        CreateDirectoryA(targetDir.c_str(), NULL);
-        std::string targetFile = targetDir + item.id + "_" + item.name;
-        if (item.isGoogleDoc && !item.exportExtension.empty())
-        {
-            targetFile += item.exportExtension;
-        }
-
-        std::wstring wTargetFile = GDriveHttp::HttpClient::AnsiToWide(targetFile);
+        std::wstring wTempPath = GDriveHttp::HttpClient::AnsiToWide(fileNameBuf);
         std::string err;
-        if (GDriveApi::ApiClient::GetInstance().DownloadFile(item, wTargetFile, nullptr, nullptr, &err))
+        if (GDriveApi::ApiClient::GetInstance().DownloadFile(item, wTempPath, nullptr, nullptr, &err))
         {
-            ShellExecuteA(NULL, "open", targetFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
+            std::string dispName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
+            if (item.isGoogleDoc && !item.exportExtension.empty())
+            {
+                dispName += item.exportExtension;
+            }
+
+            CSalamanderPluginInternalViewerData viewerData;
+            memset(&viewerData, 0, sizeof(viewerData));
+            viewerData.Size = sizeof(viewerData);
+            viewerData.FileName = fileNameBuf;
+            viewerData.Mode = 0;
+            viewerData.Caption = dispName.c_str();
+            viewerData.WholeCaption = FALSE;
+
+            int viewerErr = 0;
+            BOOL ok = SalamanderGeneral->ViewFileInPluginViewer(NULL, &viewerData, TRUE, NULL, dispName.c_str(), viewerErr);
+            if (ok) return;
+
+            // If ViewFileInPluginViewer failed, fallback to system open
+            ShellExecuteA(NULL, "open", fileNameBuf, NULL, NULL, SW_SHOWNORMAL);
             return;
         }
     }
