@@ -14,6 +14,7 @@ namespace GDriveCache
 
 static const uint32_t kCacheMagic = 0x43444C53; // "SLDC"
 static const uint32_t kCacheVersion = 3;
+static const uint32_t kMaxStringLength = 1024 * 1024; // 1 MB sanity limit per string
 
 static void WriteString(FILE* f, const std::string& s)
 {
@@ -28,7 +29,7 @@ static void WriteString(FILE* f, const std::string& s)
 static std::string ReadString(FILE* f)
 {
     uint32_t len = 0;
-    if (fread(&len, sizeof(len), 1, f) != 1 || len == 0) return "";
+    if (fread(&len, sizeof(len), 1, f) != 1 || len == 0 || len > kMaxStringLength) return "";
     std::string s(len, '\0');
     if (fread(&s[0], 1, len, f) != len) return "";
     return s;
@@ -130,10 +131,11 @@ bool CacheManager::SaveToDisk()
         return false;
     }
 
-    FILE* f = _wfopen(path.c_str(), L"wb");
+    std::wstring tmpPath = path + L".tmp";
+    FILE* f = _wfopen(tmpPath.c_str(), L"wb");
     if (!f)
     {
-        GDriveLog::Log("[CACHE] Failed to open cache file for writing: %ls", path.c_str());
+        GDriveLog::Log("[CACHE] Failed to open cache file for writing: %ls", tmpPath.c_str());
         return false;
     }
 
@@ -206,6 +208,8 @@ bool CacheManager::SaveToDisk()
     fflush(f);
     fclose(f);
 
+    MoveFileExW(tmpPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+
     m_dirty = false;
     GDriveLog::Log("[CACHE] Saved to disk for '%s': %u folders, %u sizes (path: %ls)",
                    email.c_str(), folderCount, sizesCount, path.c_str());
@@ -264,7 +268,7 @@ bool CacheManager::LoadFromDisk()
     fread(&m_lastChangeCheckTick, sizeof(m_lastChangeCheckTick), 1, f);
 
     uint32_t folderCount = 0;
-    if (fread(&folderCount, sizeof(folderCount), 1, f) != 1)
+    if (fread(&folderCount, sizeof(folderCount), 1, f) != 1 || folderCount > 1000000)
     {
         fclose(f);
         return false;
@@ -282,7 +286,11 @@ bool CacheManager::LoadFromDisk()
         folder.isValid = (validByte != 0);
 
         uint32_t itemCount = 0;
-        fread(&itemCount, sizeof(itemCount), 1, f);
+        if (fread(&itemCount, sizeof(itemCount), 1, f) != 1 || itemCount > 1000000)
+        {
+            fclose(f);
+            return false;
+        }
 
         for (uint32_t i = 0; i < itemCount && !feof(f); ++i)
         {
@@ -340,7 +348,7 @@ bool CacheManager::LoadFromDisk()
     }
 
     uint32_t sizesCount = 0;
-    if (fread(&sizesCount, sizeof(sizesCount), 1, f) == 1)
+    if (fread(&sizesCount, sizeof(sizesCount), 1, f) == 1 && sizesCount <= 1000000)
     {
         for (uint32_t s = 0; s < sizesCount && !feof(f); ++s)
         {
