@@ -69,13 +69,13 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
 CAPTION "Display && Files"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    GROUPBOX        "Panels & View",IDC_STATIC_1,4,4,242,74
+    GROUPBOX        "Panels && View",IDC_STATIC_1,4,4,242,74
     CONTROL         "&Include Shared Drives (Team Drives)",IDC_CFG_USE_SHARED_DRIVES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,18,220,10
-    CONTROL         "&Use last modified user as fallback for owner when missing",IDC_CFG_OWNER_FALLBACK,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,34,224,18 | BS_MULTILINE
+    CONTROL         "&Use last modified user as fallback for owner when missing",IDC_CFG_OWNER_FALLBACK,"Button",BS_AUTOCHECKBOX | BS_MULTILINE | WS_TABSTOP,12,32,224,18
     LTEXT           "Configure how Google Drive items and columns appear in Salamander panels.",IDC_STATIC_2,12,54,224,18
 
-    GROUPBOX        "File Names & Downloads",IDC_STATIC_3,4,82,242,100
-    CONTROL         "&Sanitize incompatible Windows characters on download (\\ / : * ? "" < > |)",IDC_CFG_SANITIZE_INVALID_CHARS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,96,224,18 | BS_MULTILINE
+    GROUPBOX        "File Names && Downloads",IDC_STATIC_3,4,82,242,100
+    CONTROL         "&Sanitize incompatible Windows characters on download (\\ / : * ? "" < > |)",IDC_CFG_SANITIZE_INVALID_CHARS,"Button",BS_AUTOCHECKBOX | BS_MULTILINE | WS_TABSTOP,12,94,224,18
     LTEXT           "Replacement character:",IDC_STATIC_4,26,118,85,8
     EDITTEXT        IDC_CFG_SANITIZE_CHAR,115,116,16,12,ES_AUTOHSCROLL
     LTEXT           "Replaces characters not permitted by Windows file system when downloading files or folders to local drives.",IDC_STATIC_5,12,136,224,36
