@@ -5,6 +5,7 @@
 #ifndef __GDRIVE_LANG_RH
 #define __GDRIVE_LANG_RH
 
+#define IDD_CFGPAGEACCOUNTS             490
 #define IDD_CFGPAGEGENERAL              490
 #define IDC_CFG_CLIENTID                491
 #define IDC_CFG_ACCOUNT_STATUS          492
@@ -54,6 +55,7 @@
 #define IDC_CFG_SANITIZE_CHAR           541
 #define IDC_CFG_OWNER_FALLBACK          542
 
+#define IDD_CFGPAGEDISPLAY              545
 #define IDD_OVERWRITE_CONFLICT          550
 #define IDC_CONFLICT_ICON               551
 #define IDC_CONFLICT_PROMPT             552

@@ -65,12 +65,16 @@ INT_PTR CCommonPropSheetPage::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam
     return CPropSheetPage::DialogProc(uMsg, wParam, lParam);
 }
 
-CConfigPageGeneral::CConfigPageGeneral()
-    : CCommonPropSheetPage(LoadStr(IDS_CFG_PAGE_GENERAL), HLanguage, IDD_CFGPAGEGENERAL, IDD_CFGPAGEGENERAL, PSP_HASHELP, NULL)
+//
+// CConfigPageAccounts
+//
+
+CConfigPageAccounts::CConfigPageAccounts()
+    : CCommonPropSheetPage(LoadStr(IDS_CFG_PAGE_ACCOUNTS), HLanguage, IDD_CFGPAGEACCOUNTS, IDD_CFGPAGEACCOUNTS, PSP_HASHELP, NULL)
 {
 }
 
-void CConfigPageGeneral::RefreshAccountsList()
+void CConfigPageAccounts::RefreshAccountsList()
 {
     HWND hCombo = GetDlgItem(HWindow, IDC_CFG_ACCOUNTS_COMBO);
     if (!hCombo) return;
@@ -112,7 +116,7 @@ void CConfigPageGeneral::RefreshAccountsList()
     }
 }
 
-void CConfigPageGeneral::Transfer(CTransferInfo& ti)
+void CConfigPageAccounts::Transfer(CTransferInfo& ti)
 {
     char szClientId[512] = {0};
     char szClientSecret[512] = {0};
@@ -127,22 +131,14 @@ void CConfigPageGeneral::Transfer(CTransferInfo& ti)
     ti.EditLine(IDC_CFG_CLIENTID, szClientId, sizeof(szClientId));
     ti.EditLine(IDC_CFG_CLIENTSECRET, szClientSecret, sizeof(szClientSecret));
 
-    int useShared = CfgIncludeSharedDrives ? 1 : 0;
-    ti.CheckBox(IDC_CFG_USE_SHARED_DRIVES, useShared);
-
-    int ownerFallback = CfgOwnerFallbackToModifier ? 1 : 0;
-    ti.CheckBox(IDC_CFG_OWNER_FALLBACK, ownerFallback);
-
     if (ti.Type == ttDataFromWindow)
     {
         GDriveAuth::AuthManager::GetInstance().SetClientId(szClientId);
         GDriveAuth::AuthManager::GetInstance().SetClientSecret(szClientSecret);
-        CfgIncludeSharedDrives = (useShared != 0);
-        CfgOwnerFallbackToModifier = (ownerFallback != 0);
     }
 }
 
-INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
+INT_PTR CConfigPageAccounts::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     if (uMsg == WM_INITDIALOG)
     {
@@ -248,6 +244,43 @@ INT_PTR CConfigPageGeneral::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 }
 
 //
+// CConfigPageDisplay
+//
+
+CConfigPageDisplay::CConfigPageDisplay()
+    : CCommonPropSheetPage(LoadStr(IDS_CFG_PAGE_DISPLAY), HLanguage, IDD_CFGPAGEDISPLAY, IDD_CFGPAGEDISPLAY, PSP_HASHELP, NULL)
+{
+}
+
+void CConfigPageDisplay::Transfer(CTransferInfo& ti)
+{
+    int useShared = CfgIncludeSharedDrives ? 1 : 0;
+    ti.CheckBox(IDC_CFG_USE_SHARED_DRIVES, useShared);
+
+    int ownerFallback = CfgOwnerFallbackToModifier ? 1 : 0;
+    ti.CheckBox(IDC_CFG_OWNER_FALLBACK, ownerFallback);
+
+    int sanitize = CfgSanitizeInvalidChars ? 1 : 0;
+    ti.CheckBox(IDC_CFG_SANITIZE_INVALID_CHARS, sanitize);
+
+    char szSanitizeChar[8] = { CfgSanitizeChar, '\0' };
+    ti.EditLine(IDC_CFG_SANITIZE_CHAR, szSanitizeChar, sizeof(szSanitizeChar));
+
+    if (ti.Type == ttDataFromWindow)
+    {
+        CfgIncludeSharedDrives = (useShared != 0);
+        CfgOwnerFallbackToModifier = (ownerFallback != 0);
+        CfgSanitizeInvalidChars = (sanitize != 0);
+        if (szSanitizeChar[0]) CfgSanitizeChar = szSanitizeChar[0];
+    }
+}
+
+INT_PTR CConfigPageDisplay::DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    return CCommonPropSheetPage::DialogProc(uMsg, wParam, lParam);
+}
+
+//
 // CConfigPageCache
 //
 
@@ -279,18 +312,10 @@ void CConfigPageCache::Transfer(CTransferInfo& ti)
     int smartCtrlR = GDriveCache::CacheManager::GetInstance().IsSmartCtrlR() ? 1 : 0;
     ti.CheckBox(IDC_CFG_SMART_CTRL_R, smartCtrlR);
 
-    int sanitize = CfgSanitizeInvalidChars ? 1 : 0;
-    ti.CheckBox(IDC_CFG_SANITIZE_INVALID_CHARS, sanitize);
-
-    char szSanitizeChar[8] = { CfgSanitizeChar, '\0' };
-    ti.EditLine(IDC_CFG_SANITIZE_CHAR, szSanitizeChar, sizeof(szSanitizeChar));
-
     if (ti.Type == ttDataFromWindow)
     {
         GDriveCache::CacheManager::GetInstance().SetEnabled(enabled != 0);
         GDriveCache::CacheManager::GetInstance().SetSmartCtrlR(smartCtrlR != 0);
-        CfgSanitizeInvalidChars = (sanitize != 0);
-        if (szSanitizeChar[0]) CfgSanitizeChar = szSanitizeChar[0];
 
         HWND hCombo = GetDlgItem(HWindow, IDC_CFG_CACHE_INTERVAL_COMBO);
         if (hCombo)
@@ -443,7 +468,8 @@ CConfigDialog::CConfigDialog(HWND parent)
                       LastCfgPage, PSH_USECALLBACK | PSH_NOAPPLYNOW | PSH_HASHELP,
                       NULL, &LastCfgPage, CenterCallback)
 {
-    Add(&PageGeneral);
+    Add(&PageAccounts);
+    Add(&PageDisplay);
     Add(&PageCache);
 }
 

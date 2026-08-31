@@ -103,6 +103,8 @@
 #define IDS_RECENT                               2141
 #define IDS_LINK_COPIED                          2142
 #define IDS_CONFIRM_EMPTY_TRASH                  2143
+#define IDS_CFG_PAGE_DISPLAY                     2149
+#define IDS_CFG_PAGE_ACCOUNTS                    2150
 #define IDS_CFG_PAGE_GENERAL                     2150
 #define IDS_CFG_PAGE_CACHE                       2151
 #define IDS_CACHE_CLEARED                        2152

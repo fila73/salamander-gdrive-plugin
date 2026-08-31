@@ -32,16 +32,27 @@ protected:
     virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam);
 };
 
-class CConfigPageGeneral : public CCommonPropSheetPage
+class CConfigPageAccounts : public CCommonPropSheetPage
 {
 public:
-    CConfigPageGeneral();
+    CConfigPageAccounts();
 
     virtual void Transfer(CTransferInfo& ti) override;
     virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 
 private:
     void RefreshAccountsList();
+};
+
+typedef CConfigPageAccounts CConfigPageGeneral;
+
+class CConfigPageDisplay : public CCommonPropSheetPage
+{
+public:
+    CConfigPageDisplay();
+
+    virtual void Transfer(CTransferInfo& ti) override;
+    virtual INT_PTR DialogProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 };
 
 class CConfigPageCache : public CCommonPropSheetPage
@@ -59,7 +70,8 @@ private:
 class CConfigDialog : public CPropertyDialog
 {
 protected:
-    CConfigPageGeneral PageGeneral;
+    CConfigPageAccounts PageAccounts;
+    CConfigPageDisplay PageDisplay;
     CConfigPageCache PageCache;
 
 public:
