@@ -43,15 +43,18 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
   - **`Sdíleno`**: Indikace, zda je položka sdílena s dalšími uživateli (`Ano` / `Ne`).
   - **`Hvězdička`**: Vizuální označení `*` pro oblíbené položky.
   - Plná podpora řazení podle sloupců a interaktivní změny šířky myší s perzistentním ukládáním.
-- 🔎 **Cloudové a fulltextové vyhledávání (`Alt+F7` / `FS_SERVICE_OPENFINDDLG`)**:
+- 🔎 **Cloudové a fulltextové vyhledávání (`Alt+F7`) — Novinka ve v0.4**:
   - Rozhraní dialogu přebírá přesnou podobu a ovládání okna Find ze Salamandera.
-  - **Hledání podle názvu**: `name contains '...'` s podporou zástupných znaků.
+  - **Hledání podle názvu**: `name contains '...'` s podporou zástupných znaků (`*`, `?`).
   - **Fulltextové prohledávání obsahu**: `fullText contains '...'` uvnitř Docs, Sheets, Slides, PDF, textů i OCR obrázků.
-  - **Přejít do složky (Focus)**: Dvojklik nebo `Enter` okamžitě přepne panel Salamandera do složky souboru a vybere danou položku. Správně funguje pro soubory ve *Sdíleno se mnou* i složky s českou diakritikou.
-  - **Zobrazit (F3) z výsledků**: Soubor se otevře přímo v interním prohlížeči Salamandera (nikoliv v systémové aplikaci).
+  - **Look In**: výběr rozsahu hledání – celý disk, aktuální složka, Sdíleno se mnou, S hvězdičkou, Koš.
+  - **Pokročilé filtry**: typ souboru (dokumenty, tabulky, obrázky...), pouze soubory nebo jen složky.
+  - **Historie vyhledávání**: všechny comboboxů i zaškrtnúvané položky jsou uloženy v registru.
+  - **Přejít do složky (Focus)**: dvojklik nebo `Enter` okamžitě přepne panel Salamandera do složky souboru a vybere danou položku. Správně funguje pro soubory ve *Sdíleno se mnou* i složky s českou diakritikou.
+  - **Zobrazit (F3) z výsledků**: soubor se otevře přímo v interním prohlížeči Salamandera (nikoliv v systémové aplikaci).
   - **Klávesové zkratky**: `Enter` v libovolném editboxu spustí hledání; `Esc` zavře dialog (nebo přeruší aktivní hledání); `Enter` v seznamu výsledků vyvolá Focus.
   - Nemodální okno bez nucené horní vrstvy — Salamander zůstává přístupný i při otevřeném vyhledávacím okně.
-  - Asynchronní vlákno na pozadí, okamžité přerušení klávesou `Esc` a plná podpora Dark Mode.
+  - Asynchronní vlákno na pozadí s okamžitým přerušením klávesou `Esc` a plnou podporou Dark Mode.
 
 ### ⭐ Virtuální složky a kontextové menu
 - **Virtuální pohledy**:
