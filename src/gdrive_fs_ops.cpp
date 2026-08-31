@@ -530,96 +530,116 @@ void WINAPI CPluginFS::ViewFile(const char* fsName, HWND parent,
 
 void CPluginFS::CalculateFolderSize(HWND parent, int panel)
 {
-    BOOL isDir = FALSE;
-    int index = 0;
-    const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(panel, &isDir);
-    if (!f) return;
+    int selectedFiles = 0;
+    int selectedDirs = 0;
+    SalamanderGeneral->GetPanelSelection(panel, &selectedFiles, &selectedDirs);
 
-    if (!isDir)
+    std::vector<std::string> folderNamesToCalc;
+    if (selectedDirs > 0)
     {
-        char msg[512];
-        std::string szStr = CCalcSizeProgressDialog::FormatSize(f->Size.Value);
-        std::string numStr = CCalcSizeProgressDialog::FormatNumber(f->Size.Value);
-        _snprintf_s(msg, _TRUNCATE, LoadStr(IDS_CALC_RESULT_FMT), f->Name, 0, 1, szStr.c_str(), numStr.c_str());
-        SalamanderGeneral->SalMessageBox(parent, msg, LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONINFORMATION);
-        return;
-    }
-
-    if (strcmp(f->Name, "..") == 0)
-    {
-        std::string curName = m_currentPath;
-        if (curName.empty() || curName == "/")
-            curName = "Google Drive (Root)";
-        else
+        int itIdx = 0;
+        BOOL isDir = FALSE;
+        const CFileData* item = NULL;
+        while ((item = SalamanderGeneral->GetPanelSelectedItem(panel, &itIdx, &isDir)) != NULL)
         {
-            size_t p = curName.rfind('/');
-            if (p != std::string::npos) curName = curName.substr(p + 1);
-        }
-
-        std::string folderId = m_currentFolderId.empty() ? "root" : m_currentFolderId;
-        CCalcSizeProgressDialog dlg(parent, curName.c_str(), folderId, m_currentDriveId, m_isSharedDrive);
-        dlg.Run();
-        return;
-    }
-
-    // Find item ID in cache or path
-    std::string folderId;
-    std::string folderName = f->Name;
-    const GDriveApi::GDriveItem* targetItem = FindItemByPanelName(f->Name);
-    if (targetItem)
-    {
-        folderId = targetItem->id;
-    }
-
-    if (folderId.empty())
-    {
-        if (_stricmp(folderName.c_str(), "My Drive") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_MY_DRIVE)) == 0)
-        {
-            folderId = "root";
-        }
-        else if (_stricmp(folderName.c_str(), "Shared with me") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_SHARED_WITH_ME)) == 0)
-        {
-            folderId = "shared_with_me_root";
+            if (isDir && strcmp(item->Name, "..") != 0)
+            {
+                folderNamesToCalc.push_back(item->Name);
+            }
         }
     }
 
-    if (folderId.empty())
+    if (folderNamesToCalc.empty())
     {
-        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_CANNOT_GET_ITEM_ID), LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONEXCLAMATION);
-        return;
+        BOOL isDir = FALSE;
+        const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(panel, &isDir);
+        if (!f) return;
+
+        if (!isDir)
+        {
+            char msg[512];
+            std::string szStr = CCalcSizeProgressDialog::FormatSize(f->Size.Value);
+            std::string numStr = CCalcSizeProgressDialog::FormatNumber(f->Size.Value);
+            _snprintf_s(msg, _TRUNCATE, LoadStr(IDS_CALC_RESULT_FMT), f->Name, 0, 1, szStr.c_str(), numStr.c_str());
+            SalamanderGeneral->SalMessageBox(parent, msg, LoadStr(IDS_CALC_TITLE), MB_OK | MB_ICONINFORMATION);
+            return;
+        }
+
+        if (strcmp(f->Name, "..") == 0)
+        {
+            std::string curName = m_currentPath;
+            if (curName.empty() || curName == "/")
+                curName = "Google Drive (Root)";
+            else
+            {
+                size_t p = curName.rfind('/');
+                if (p != std::string::npos) curName = curName.substr(p + 1);
+            }
+
+            std::string folderId = m_currentFolderId.empty() ? "root" : m_currentFolderId;
+            CCalcSizeProgressDialog dlg(parent, curName.c_str(), folderId, m_currentDriveId, m_isSharedDrive);
+            dlg.Run();
+            return;
+        }
+
+        folderNamesToCalc.push_back(f->Name);
     }
 
-    CCalcSizeProgressDialog dlg(parent, folderName.c_str(), folderId, m_currentDriveId, m_isSharedDrive);
-    dlg.Run();
-
-    // Update size in panel to replace DIR/ADR with calculated size
-    BOOL isStillDir = FALSE;
-    const CFileData* curF = SalamanderGeneral->GetPanelFocusedItem(panel, &isStillDir);
-    if (curF && isStillDir && _stricmp(curF->Name, folderName.c_str()) == 0)
+    std::map<std::string, int64_t> calcResults;
+    for (const auto& folderName : folderNamesToCalc)
     {
-        CFileData* nonConstF = const_cast<CFileData*>(curF);
-        nonConstF->Size.Value = dlg.GetTotalBytes();
-        nonConstF->SizeValid = 1;
-        nonConstF->Dirty = 1;
-        SalamanderGeneral->RepaintChangedItems(panel);
+        std::string folderId;
+        const GDriveApi::GDriveItem* targetItem = FindItemByPanelName(folderName.c_str());
+        if (targetItem)
+        {
+            folderId = targetItem->id;
+        }
+
+        if (folderId.empty())
+        {
+            if (_stricmp(folderName.c_str(), "My Drive") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_MY_DRIVE)) == 0)
+            {
+                folderId = "root";
+            }
+            else if (_stricmp(folderName.c_str(), "Shared with me") == 0 || _stricmp(folderName.c_str(), LoadStr(IDS_SHARED_WITH_ME)) == 0)
+            {
+                folderId = "shared_with_me_root";
+            }
+        }
+
+        if (folderId.empty()) continue;
+
+        CCalcSizeProgressDialog dlg(parent, folderName.c_str(), folderId, m_currentDriveId, m_isSharedDrive);
+        if (dlg.Run())
+        {
+            calcResults[folderName] = dlg.GetTotalBytes();
+        }
+        else if (dlg.WasCancelled())
+        {
+            break;
+        }
     }
-    else
+
+    if (!calcResults.empty())
     {
         int itIdx = 0;
         BOOL itemIsDir = FALSE;
         const CFileData* item = NULL;
         while ((item = SalamanderGeneral->GetPanelItem(panel, &itIdx, &itemIsDir)) != NULL)
         {
-            if (itemIsDir && _stricmp(item->Name, folderName.c_str()) == 0)
+            if (itemIsDir)
             {
-                CFileData* nonConst = const_cast<CFileData*>(item);
-                nonConst->Size.Value = dlg.GetTotalBytes();
-                nonConst->SizeValid = 1;
-                nonConst->Dirty = 1;
-                SalamanderGeneral->RepaintChangedItems(panel);
-                break;
+                auto itRes = calcResults.find(item->Name);
+                if (itRes != calcResults.end())
+                {
+                    CFileData* nonConst = const_cast<CFileData*>(item);
+                    nonConst->Size.Value = itRes->second;
+                    nonConst->SizeValid = 1;
+                    nonConst->Dirty = 1;
+                }
             }
         }
+        SalamanderGeneral->RepaintChangedItems(panel);
     }
 }
 

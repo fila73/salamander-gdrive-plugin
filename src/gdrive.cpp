@@ -48,34 +48,47 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
     if (nCode >= 0 && wParam == PM_REMOVE)
     {
         MSG* pMsg = (MSG*)lParam;
-        if (pMsg && pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_SPACE)
+        if (pMsg && pMsg->message == WM_KEYDOWN)
         {
-            if (SalamanderGeneral)
+            bool isAltF10 = (pMsg->wParam == VK_F10 && (GetKeyState(VK_MENU) < 0));
+            bool isSpace = (pMsg->wParam == VK_SPACE && (GetKeyState(VK_MENU) >= 0) && (GetKeyState(VK_CONTROL) >= 0) && (GetKeyState(VK_SHIFT) >= 0));
+
+            if (isAltF10 || isSpace)
             {
-                HWND hMain = SalamanderGeneral->GetMainWindowHWND();
-                HWND hActive = GetActiveWindow();
-
-                // Only intercept if Salamander main window is active (no dialogs, popups or message boxes open)
-                if (hMain != NULL && hActive == hMain && pMsg->hwnd != NULL)
+                if (SalamanderGeneral)
                 {
-                    HWND hRoot = GetAncestor(pMsg->hwnd, GA_ROOT);
-                    if (hRoot == hMain)
-                    {
-                        char className[64] = {0};
-                        GetClassNameA(pMsg->hwnd, className, sizeof(className));
+                    HWND hMain = SalamanderGeneral->GetMainWindowHWND();
+                    HWND hActive = GetActiveWindow();
 
-                        // Only intercept if focus is directly on the panel's SysListView32
-                        if (_stricmp(className, "SysListView32") == 0)
+                    // Only intercept if Salamander main window is active (no dialogs, popups or message boxes open)
+                    if (hMain != NULL && hActive == hMain && pMsg->hwnd != NULL)
+                    {
+                        HWND hRoot = GetAncestor(pMsg->hwnd, GA_ROOT);
+                        if (hRoot == hMain)
                         {
-                            CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
-                            if (activeFS && CPluginFS::IsOurFS(activeFS))
+                            char className[64] = {0};
+                            GetClassNameA(pMsg->hwnd, className, sizeof(className));
+
+                            // Only intercept if focus is directly on the panel's SysListView32
+                            if (_stricmp(className, "SysListView32") == 0)
                             {
-                                BOOL isDir = FALSE;
-                                const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
-                                if (f && isDir && strcmp(f->Name, "..") != 0)
+                                CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
+                                if (activeFS && CPluginFS::IsOurFS(activeFS))
                                 {
                                     CPluginFS* gdriveFS = (CPluginFS*)activeFS;
-                                    gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
+                                    if (isAltF10)
+                                    {
+                                        gdriveFS->CalculateFolderSize(hMain, PANEL_SOURCE);
+                                    }
+                                    else if (isSpace)
+                                    {
+                                        BOOL isDir = FALSE;
+                                        const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
+                                        if (f && isDir && strcmp(f->Name, "..") != 0)
+                                        {
+                                            gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
+                                        }
+                                    }
                                 }
                             }
                         }
