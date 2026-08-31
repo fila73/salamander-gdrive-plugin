@@ -47,7 +47,10 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
   - Open Salamander Find window layout with instant Google Drive cloud search.
   - **Filename Search**: `name contains '...'` with wildcard support.
   - **Fulltext Content Search**: `fullText contains '...'` searching inside Docs, Sheets, Slides, PDFs, Text files, and image OCR.
-  - **Focus & Jump**: Double-click or `Enter` immediately navigates the Salamander panel to the selected file's location and highlights it.
+  - **Focus & Jump**: Double-click or `Enter` immediately navigates the Salamander panel to the selected file's location and highlights it. Correctly handles *Shared with me* paths and folders with Czech/accented characters.
+  - **View (F3) from results**: Opens files directly in Salamander's configured internal viewer (not the system-default app).
+  - **Keyboard shortcuts**: `Enter` in any editbox starts the search; `Esc` closes the dialog (or stops an active search); `Enter` in the results list triggers Focus.
+  - Modeless non-topmost window — Salamander remains accessible while search dialog is open.
   - Asynchronous background worker thread with instant `Esc` cancellation and Dark Mode support.
 
 ### ⭐ Virtual Views & Context Menu
@@ -72,7 +75,7 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
 
 ## 🚀 Installation
 
-1. Download the latest release `salamander-gdrive-plugin-v0.3.zip` from [GitHub Releases](https://github.com/fila73/salamander-gdrive-plugin/releases).
+1. Download the latest release `salamander-gdrive-plugin-v0.4.zip` from [GitHub Releases](https://github.com/fila73/salamander-gdrive-plugin/releases).
 2. Extract the files into the `plugins\gdrive` directory of your Open Salamander installation:
    ```
    Open Salamander/

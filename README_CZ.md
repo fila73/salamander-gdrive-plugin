@@ -47,7 +47,10 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
   - Rozhraní dialogu přebírá přesnou podobu a ovládání okna Find ze Salamandera.
   - **Hledání podle názvu**: `name contains '...'` s podporou zástupných znaků.
   - **Fulltextové prohledávání obsahu**: `fullText contains '...'` uvnitř Docs, Sheets, Slides, PDF, textů i OCR obrázků.
-  - **Přejít do složky (Focus)**: Dvojklik nebo `Enter` okamžitě přepne panel Salamandera do složky souboru a vybere danou položku.
+  - **Přejít do složky (Focus)**: Dvojklik nebo `Enter` okamžitě přepne panel Salamandera do složky souboru a vybere danou položku. Správně funguje pro soubory ve *Sdíleno se mnou* i složky s českou diakritikou.
+  - **Zobrazit (F3) z výsledků**: Soubor se otevře přímo v interním prohlížeči Salamandera (nikoliv v systémové aplikaci).
+  - **Klávesové zkratky**: `Enter` v libovolném editboxu spustí hledání; `Esc` zavře dialog (nebo přeruší aktivní hledání); `Enter` v seznamu výsledků vyvolá Focus.
+  - Nemodální okno bez nucené horní vrstvy — Salamander zůstává přístupný i při otevřeném vyhledávacím okně.
   - Asynchronní vlákno na pozadí, okamžité přerušení klávesou `Esc` a plná podpora Dark Mode.
 
 ### ⭐ Virtuální složky a kontextové menu
@@ -72,7 +75,7 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
 
 ## 🚀 Instalace
 
-1. Stáhněte nejnovější archiv `salamander-gdrive-plugin-v0.3.zip` ze sekce [GitHub Releases](https://github.com/fila73/salamander-gdrive-plugin/releases).
+1. Stáhněte nejnovější archiv `salamander-gdrive-plugin-v0.4.zip` ze sekce [GitHub Releases](https://github.com/fila73/salamander-gdrive-plugin/releases).
 2. Rozbalte soubory do adresáře `plugins\gdrive` v instalaci Open Salamandera:
    ```
    Open Salamander/
