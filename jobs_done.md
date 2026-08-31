@@ -72,6 +72,15 @@ Tento dokument rekapituluje všechny realizované části pluginu **Google Disk 
 - **Příčina:** Salamander FS metody `QuickRename` a `CreateDir` nejprve volají plugin s parametrem `mode == 1`. Pokud plugin nevrátí `FALSE`, Salamander neotevře svůj standardní editační řádek. Navíc po dokončení operace (`mode == 2`) je nutné explicitně zavolat `SalamanderGeneral->PostRefreshPanelFS(this)` a `RefreshPanelPath`.
 - **Řešení:** Doplnění korektního zpracování `mode == 1` a volání refreshe po úspěšném provedení operace.
 
+### 2.9 Vyhledávání na Sdílených discích, sloupec Upravil a řízení capabilities
+- **Problém:** Při vyhledávání na Google Disku se nevracely položky ze Sdílených disků (Team Drives), u položek bez vlastníka bylo pole prázdné a uživatel mohl vyvolat akce (smazání, přejmenování), na které neměl v rámci sdíleného disku oprávnění.
+- **Příčina:** Google Drive API vyžaduje parametr `corpora=allDrives` a `supportsAllDrives=true`/`includeItemsFromAllDrives=true`. Položky na Sdílených discích nemají pole `owners`, ale obsahují `lastModifyingUser` a `capabilities`.
+- **Řešení:**
+  1. Doplnění `corpora=allDrives` pro globální vyhledávání a dynamické nabízení jednotlivých Sdílených disků pod tlačítkem Browse.
+  2. Zavedení samostatného sloupce **Upravil** (`Modified By`) v panelech i v okně hledání.
+  3. Konfigurovatelný fallback pro sloupec **Vlastník**: pokud vlastník chybí, automaticky se zobrazí naposledy upravující uživatel.
+  4. Aktivní kontrola oprávnění `capabilities` v kontextovém menu (deaktivace hvězdičky), operacích `Delete`/`QuickRename` a dialogu vyhledávání (tlačítka View/Web).
+
 ---
 
 ## 💡 3. Klíčová ponaučení pro budoucí vývoj
@@ -90,4 +99,5 @@ Tento dokument rekapituluje všechny realizované části pluginu **Google Disk 
 
 5. **Nulové externí závislosti:**
    - Důsledné dodržování pravidla `-static -static-libgcc -static-libstdc++` zaručuje, že vygenerovaný `gdrive.spl` funguje na jakémkoliv Windows systému bez nutnosti instalovat další runtime knihovny.
+
 
