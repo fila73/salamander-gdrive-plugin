@@ -7,6 +7,7 @@
 #include "gdrive_log.h"
 #include <algorithm>
 #include <fstream>
+#include <thread>
 #include <shlobj.h>
 
 namespace GDriveCache
@@ -570,7 +571,7 @@ void CacheManager::InvalidateVirtualFolders()
     if (itTrash != m_folders.end()) { itTrash->second.isValid = false; m_dirty = true; }
 }
 
-bool CacheManager::CheckForRemoteChanges(bool forceCheck)
+bool CacheManager::CheckForRemoteChanges(bool forceCheck, std::vector<std::string>* pChangedFoldersOut)
 {
     if (!m_enabled) return true;
 
@@ -627,6 +628,7 @@ bool CacheManager::CheckForRemoteChanges(bool forceCheck)
             }
             InvalidateVirtualFolders();
             m_dirty = true;
+            if (pChangedFoldersOut) *pChangedFoldersOut = changedFolders;
         }
         else
         {
@@ -640,6 +642,37 @@ bool CacheManager::CheckForRemoteChanges(bool forceCheck)
     }
 
     return false;
+}
+
+void CacheManager::CheckForRemoteChangesAsync(std::function<void(const std::vector<std::string>&)> onComplete, bool forceCheck)
+{
+    if (!m_enabled) return;
+
+    uint64_t now = GetTickCount64();
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!forceCheck && (now - m_lastChangeCheckTick < m_checkIntervalMs))
+        {
+            return;
+        }
+    }
+
+    bool expected = false;
+    if (!m_checkingChanges.compare_exchange_strong(expected, true))
+    {
+        return; // Already running in background
+    }
+
+    std::thread([this, forceCheck, onComplete]()
+    {
+        std::vector<std::string> changedFolders;
+        CheckForRemoteChanges(forceCheck, &changedFolders);
+        m_checkingChanges = false;
+        if (onComplete && !changedFolders.empty())
+        {
+            onComplete(changedFolders);
+        }
+    }).detach();
 }
 
 void CacheManager::AddOrUpdateItem(const std::string& folderKey, const GDriveApi::GDriveItem& item)

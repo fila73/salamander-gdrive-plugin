@@ -32,11 +32,23 @@ std::wstring GetLogFilePath()
     return dir + L"\\gdrive_debug.log";
 }
 
+static bool s_fileLoggingEnabled = false;
+
+void SetFileLoggingEnabled(bool enabled)
+{
+    std::lock_guard<std::mutex> lock(s_logMutex);
+    s_fileLoggingEnabled = enabled;
+}
+
+bool IsFileLoggingEnabled()
+{
+    std::lock_guard<std::mutex> lock(s_logMutex);
+    return s_fileLoggingEnabled;
+}
+
 void Log(const char* fmt, ...)
 {
     std::lock_guard<std::mutex> lock(s_logMutex);
-    std::wstring logPath = GetLogFilePath();
-    if (logPath.empty()) return;
 
     char buf[2048] = {0};
     va_list args;
@@ -56,6 +68,11 @@ void Log(const char* fmt, ...)
     snprintf(finalLine, sizeof(finalLine), "[%s] %s\n", timeStr, buf);
 
     OutputDebugStringA(finalLine);
+
+    if (!s_fileLoggingEnabled) return;
+
+    std::wstring logPath = GetLogFilePath();
+    if (logPath.empty()) return;
 
     HANDLE hFile = CreateFileW(logPath.c_str(), FILE_APPEND_DATA,
                                FILE_SHARE_READ | FILE_SHARE_WRITE,

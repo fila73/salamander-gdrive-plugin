@@ -312,10 +312,14 @@ void CConfigPageCache::Transfer(CTransferInfo& ti)
     int smartCtrlR = GDriveCache::CacheManager::GetInstance().IsSmartCtrlR() ? 1 : 0;
     ti.CheckBox(IDC_CFG_SMART_CTRL_R, smartCtrlR);
 
+    int debugLogging = GDriveLog::IsFileLoggingEnabled() ? 1 : 0;
+    ti.CheckBox(IDC_CFG_DEBUG_LOGGING, debugLogging);
+
     if (ti.Type == ttDataFromWindow)
     {
         GDriveCache::CacheManager::GetInstance().SetEnabled(enabled != 0);
         GDriveCache::CacheManager::GetInstance().SetSmartCtrlR(smartCtrlR != 0);
+        GDriveLog::SetFileLoggingEnabled(debugLogging != 0);
 
         HWND hCombo = GetDlgItem(HWindow, IDC_CFG_CACHE_INTERVAL_COMBO);
         if (hCombo)
@@ -680,27 +684,35 @@ bool CCalcSizeProgressDialog::Run()
 
         int64_t myFilesBytes = 0;
         std::vector<std::string> mySubfolders;
+        uint64_t lastUiTick = GetTickCount64();
 
         for (const auto& it : items)
         {
-            ProcessMessages();
-            if (m_cancelled) break;
-
             if (it.isFolder)
             {
                 m_totalDirs++;
                 mySubfolders.push_back(it.id);
                 folderQueue.push(it.id);
-                UpdateUI(it.name);
             }
             else
             {
                 m_totalFiles++;
                 m_totalBytes += it.size;
                 myFilesBytes += it.size;
-                UpdateUI("");
+            }
+
+            uint64_t nowTick = GetTickCount64();
+            if (nowTick - lastUiTick >= 50)
+            {
+                ProcessMessages();
+                if (m_cancelled) break;
+                UpdateUI(it.isFolder ? it.name : "");
+                lastUiTick = nowTick;
             }
         }
+
+        ProcessMessages();
+        UpdateUI("");
 
         directFolderBytes[currentId] = myFilesBytes;
         childFoldersMap[currentId] = mySubfolders;

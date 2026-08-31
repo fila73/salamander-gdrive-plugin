@@ -86,16 +86,17 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_CAPTION
 CAPTION "Cache && Sync"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    GROUPBOX        "Metadata Cache & Sync",IDC_STATIC_1,4,4,242,118
+    GROUPBOX        "Metadata Cache & Sync",IDC_STATIC_1,4,4,242,126
     CONTROL         "&Enable persistent metadata cache on disk",IDC_CFG_CACHE_ENABLED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,18,220,10
     LTEXT           "Changes check frequency (TTL):",IDC_STATIC_2,12,32,220,8
     COMBOBOX        IDC_CFG_CACHE_INTERVAL_COMBO,12,42,224,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     CONTROL         "&Ctrl+R: Do not force reload if current folder is unchanged",IDC_CFG_SMART_CTRL_R,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,58,224,10
-    LTEXT           "Cache status: Ready (Isolated per account)",IDC_CFG_CACHE_STATUS,12,74,220,8
-    PUSHBUTTON      "&Clear Cache for Active Account",IDC_CFG_CACHE_CLEAR_BTN,12,90,150,14
+    CONTROL         "Enable detailed &debug logging to file",IDC_CFG_DEBUG_LOGGING,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,72,224,10
+    LTEXT           "Cache status: Ready (Isolated per account)",IDC_CFG_CACHE_STATUS,12,88,220,8
+    PUSHBUTTON      "&Clear Cache for Active Account",IDC_CFG_CACHE_CLEAR_BTN,12,104,150,14
 
-    GROUPBOX        "Information",IDC_STATIC_3,4,126,242,56
-    LTEXT           "The smart cache dramatically speeds up folder browsing.\nChanges on Google Drive are detected using the Changes API without unnecessary full folder re-downloads.",IDC_STATIC_4,12,138,224,38
+    GROUPBOX        "Information",IDC_STATIC_3,4,134,242,48
+    LTEXT           "The smart cache dramatically speeds up folder browsing.\nChanges on Google Drive are detected using the Changes API without unnecessary full folder re-downloads.",IDC_STATIC_4,12,144,224,34
 END
 
 IDD_AUTH_PROGRESS DIALOGEX 0, 0, 230, 95

@@ -10,6 +10,8 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <atomic>
+#include <functional>
 #include <windows.h>
 
 namespace GDriveCache
@@ -71,7 +73,11 @@ public:
 
     // Query Google Drive Changes API if the check interval has elapsed.
     // Returns true if changes were checked successfully (or if interval has not elapsed yet).
-    bool CheckForRemoteChanges(bool forceCheck = false);
+    bool CheckForRemoteChanges(bool forceCheck = false, std::vector<std::string>* pChangedFoldersOut = nullptr);
+
+    // Query Google Drive Changes API asynchronously in a background thread if check interval has elapsed.
+    // Calls onComplete with list of changed folder IDs if any changed.
+    void CheckForRemoteChangesAsync(std::function<void(const std::vector<std::string>& changedFolders)> onComplete = nullptr, bool forceCheck = false);
 
     // Immediate local cache mutations
     void AddOrUpdateItem(const std::string& folderKey, const GDriveApi::GDriveItem& item);
@@ -94,6 +100,7 @@ private:
     bool m_smartCtrlR = false; // By default Ctrl+R forces reload of current folder
     bool m_enabled = true;
     bool m_dirty = false;
+    std::atomic<bool> m_checkingChanges{false};
     std::mutex m_mutex;
 };
 

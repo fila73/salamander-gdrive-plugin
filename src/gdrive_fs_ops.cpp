@@ -619,6 +619,17 @@ void CPluginFS::CalculateFolderSize(HWND parent, int panel)
 
         if (folderId.empty()) continue;
 
+        int64_t cachedSize = 0;
+        int cachedFiles = 0, cachedDirs = 0;
+        if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, cachedSize) ||
+            GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, cachedSize, cachedFiles, cachedDirs))
+        {
+            GDriveLog::Log("[CALC] Folder '%s' (ID: %s) -> Found in cache: %lld B. Skipping dialog.",
+                           folderName.c_str(), folderId.c_str(), (long long)cachedSize);
+            calcResults[folderName] = cachedSize;
+            continue;
+        }
+
         CCalcSizeProgressDialog dlg(parent, folderName.c_str(), folderId, m_currentDriveId, m_isSharedDrive);
         if (dlg.Run())
         {

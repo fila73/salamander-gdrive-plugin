@@ -281,6 +281,12 @@ void WINAPI CPluginInterface::LoadConfiguration(HWND parent, HKEY regKey, CSalam
         GDriveCache::CacheManager::GetInstance().SetSmartCtrlR(dwSmartCtrlR != 0);
     }
 
+    DWORD dwDebugLog = 0;
+    if (registry->GetValue(regKey, "DebugLoggingEnabled", REG_DWORD, &dwDebugLog, sizeof(dwDebugLog)))
+    {
+        GDriveLog::SetFileLoggingEnabled(dwDebugLog != 0);
+    }
+
     char szClientId[512] = {0};
     if (registry->GetValue(regKey, "ClientId", REG_SZ, szClientId, sizeof(szClientId)))
     {
@@ -322,6 +328,9 @@ void WINAPI CPluginInterface::SaveConfiguration(HWND parent, HKEY regKey, CSalam
 
     DWORD dwSmartCtrlR = GDriveCache::CacheManager::GetInstance().IsSmartCtrlR() ? 1 : 0;
     registry->SetValue(regKey, "SmartCtrlR", REG_DWORD, &dwSmartCtrlR, sizeof(dwSmartCtrlR));
+
+    DWORD dwDebugLog = GDriveLog::IsFileLoggingEnabled() ? 1 : 0;
+    registry->SetValue(regKey, "DebugLoggingEnabled", REG_DWORD, &dwDebugLog, sizeof(dwDebugLog));
 
     std::string cid = GDriveAuth::AuthManager::GetInstance().GetClientId();
     registry->SetValue(regKey, "ClientId", REG_SZ, cid.c_str(), (int)cid.length() + 1);

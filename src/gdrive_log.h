@@ -10,4 +10,6 @@ namespace GDriveLog
 {
     void Log(const char* fmt, ...);
     std::wstring GetLogFilePath();
+    void SetFileLoggingEnabled(bool enabled);
+    bool IsFileLoggingEnabled();
 }

@@ -1146,7 +1146,37 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
         return TRUE;
     }
 
-    // Check cache synchronization with Changes API
+    // Check if we have a cache hit for the current folder
+    std::vector<GDriveApi::GDriveItem> cachedList;
+    if (!forceRefresh && !m_currentFolderId.empty() && GDriveCache::CacheManager::GetInstance().GetFolder(m_currentFolderId, cachedList))
+    {
+        GDriveLog::Log("[PANEL] ListCurrentPath '%s' (ID: %s) -> Cache hit (%u items)",
+                       m_currentPath.c_str(), m_currentFolderId.c_str(), (uint32_t)cachedList.size());
+        PopulateDirFromItems(dir, m_currentPath, cachedList, m_cachedItems, m_pathToIdCache, pluginData);
+
+        // Run background check for remote changes without blocking UI
+        std::string curFolderId = m_currentFolderId;
+        GDriveCache::CacheManager::GetInstance().CheckForRemoteChangesAsync([this, curFolderId](const std::vector<std::string>& changedFolders)
+        {
+            bool needRefresh = false;
+            for (const auto& fId : changedFolders)
+            {
+                if (fId == curFolderId || fId == "root" || fId == "starred_root" || fId == "recent_root" || fId == "trash_root")
+                {
+                    needRefresh = true;
+                    break;
+                }
+            }
+            if (needRefresh)
+            {
+                SalamanderGeneral->PostRefreshPanelFS(this);
+            }
+        });
+
+        return TRUE;
+    }
+
+    // Check cache synchronization with Changes API (synchronous only on forceRefresh or cache miss)
     if (forceRefresh)
     {
         if (!GDriveCache::CacheManager::GetInstance().IsSmartCtrlR())
@@ -1158,16 +1188,6 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     else
     {
         GDriveCache::CacheManager::GetInstance().CheckForRemoteChanges(false);
-    }
-
-    // Check if we have a cache hit for the current folder
-    std::vector<GDriveApi::GDriveItem> cachedList;
-    if (!m_currentFolderId.empty() && GDriveCache::CacheManager::GetInstance().GetFolder(m_currentFolderId, cachedList))
-    {
-        GDriveLog::Log("[PANEL] ListCurrentPath '%s' (ID: %s) -> Cache hit (%u items)",
-                       m_currentPath.c_str(), m_currentFolderId.c_str(), (uint32_t)cachedList.size());
-        PopulateDirFromItems(dir, m_currentPath, cachedList, m_cachedItems, m_pathToIdCache, pluginData);
-        return TRUE;
     }
 
     // 2. Shared Drives root: show all Shared Drives
