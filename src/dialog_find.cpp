@@ -60,7 +60,7 @@ void CGDriveFindDialog::Launch(HWND hParent, int panel, const std::string& curre
     s_activeFindDialog = new CGDriveFindDialog(hParent, panel, currentPath, currentFolderId);
     HWND hWnd = CreateDialogParam(HLanguage ? HLanguage : DLLInstance,
                                   MAKEINTRESOURCE(IDD_FIND),
-                                  hParent,
+                                  NULL,
                                   DialogProc,
                                   (LPARAM)s_activeFindDialog);
     if (!hWnd)
