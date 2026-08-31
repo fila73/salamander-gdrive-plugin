@@ -39,18 +39,22 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
 - 📊 **Ukazatel volného místa na disku**:
   - Zobrazení volné a celkové kapacity Google Disku v patičce panelu Salamandera.
 - 📋 **Vlastní sloupce v podrobném pohledu (`CSalamanderViewAbstract`)**:
-  - **`Vlastník`**: Zobrazuje jméno nebo e-mail tvůrce položky (klíčové ve Sdílených discích a složce *Sdíleno se mnou*).
+  - **`Vlastník`**: Zobrazuje jméno nebo e-mail tvůrce položky (s možností automatického fallbacku na naposledy upravujícího uživatele v Nastavení, pokud vlastník na Sdílených discích chybí).
+  - **`Upravil`**: Samostatný dedikovaný sloupec se jménem uživatele, který soubor naposledy upravil.
   - **`Sdíleno`**: Indikace, zda je položka sdílena s dalšími uživateli (`Ano` / `Ne`).
   - **`Hvězdička`**: Vizuální označení `*` pro oblíbené položky.
   - Plná podpora řazení podle sloupců a interaktivní změny šířky myší s perzistentním ukládáním.
+- 🔒 **Respektování uživatelských oprávnění (Capabilities)**:
+  - Automatická kontrola oprávnění Google Disku – blokování a zešednutí akcí, které uživatel nesmí provádět (např. zákaz smazání/přejmenování položek jen pro čtení, deaktivace hvězdičky či náhledu).
 - 🔎 **Cloudové a fulltextové vyhledávání (`Alt+F7`) — Novinka ve v0.4**:
   - Rozhraní dialogu přebírá přesnou podobu a ovládání okna Find ze Salamandera.
   - **Hledání podle názvu**: `name contains '...'` s podporou zástupných znaků (`*`, `?`).
   - **Fulltextové prohledávání obsahu**: `fullText contains '...'` uvnitř Docs, Sheets, Slides, PDF, textů i OCR obrázků.
-  - **Look In**: výběr rozsahu hledání – celý disk, aktuální složka, Sdíleno se mnou, S hvězdičkou, Koš.
+  - **Prohledávání celého disku i Sdílených disků (Team Drives)**: Hledání probíhá přes `corpora=allDrives` se zahrnutím všech sdílených disků; v nabídce Look In lze zvolit i konkrétní Sdílený disk.
+  - **Look In & Prohledávat podsložky**: výběr rozsahu hledání – celý disk, konkrétní sdílený disk, aktuální složka, Sdíleno se mnou, S hvězdičkou, Koš s volitelným rekurzivním procházením podsložek.
   - **Pokročilé filtry**: typ souboru (dokumenty, tabulky, obrázky...), pouze soubory nebo jen složky.
-  - **Historie vyhledávání**: všechny comboboxů i zaškrtnúvané položky jsou uloženy v registru.
-  - **Přejít do složky (Focus)**: dvojklik nebo `Enter` okamžitě přepne panel Salamandera do složky souboru a vybere danou položku. Správně funguje pro soubory ve *Sdíleno se mnou* i složky s českou diakritikou.
+  - **Historie vyhledávání**: všechny comboboxy i zaškrtávané položky jsou uloženy v registru.
+  - **Přejít do složky (Focus)**: dvojklik nebo `Enter` okamžitě přepne panel Salamandera do složky souboru a vybere danou položku. Správně funguje pro soubory v *Můj disk*, *Sdílené disky* i *Sdíleno se mnou*.
   - **Zobrazit (F3) z výsledků**: soubor se otevře přímo v interním prohlížeči Salamandera (nikoliv v systémové aplikaci).
   - **Klávesové zkratky**: `Enter` v libovolném editboxu spustí hledání; `Esc` zavře dialog (nebo přeruší aktivní hledání); `Enter` v seznamu výsledků vyvolá Focus.
   - Nemodální okno bez nucené horní vrstvy — Salamander zůstává přístupný i při otevřeném vyhledávacím okně.

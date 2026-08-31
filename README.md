@@ -39,18 +39,22 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
 - 📊 **Drive Quota & Free Space Indicator**:
   - Displays remaining and total storage space in Salamander's panel footer.
 - 📋 **Custom Detailed Panel Columns (`CSalamanderViewAbstract`)**:
-  - **`Owner`**: Displays the file/folder creator name or email (invaluable in Shared Drives and Shared with me).
+  - **`Owner`**: Displays the file/folder creator name or email (with configurable fallback in Settings to show the last modifying user if owner is absent on Shared Drives).
+  - **`Modified By`**: Dedicated column showing the name/email of the user who last modified the item.
   - **`Shared`**: Indicates whether an item is shared (`Yes` / `No`).
   - **`Starred`**: Visual `*` indicator for favorite items.
   - Supports column sorting and mouse width adjustments with persistent sizing.
+- 🔒 **User Capabilities & Permissions Enforcement**:
+  - Respects Google Drive permissions — greys out and blocks forbidden actions (e.g., delete/rename restrictions on read-only items, disabled star modification or download).
 - 🔎 **Cloud & Fulltext Search (`Alt+F7`) — New in v0.4**:
   - Open Salamander Find window layout with instant Google Drive cloud search.
   - **Filename Search**: `name contains '...'` with wildcard support.
   - **Fulltext Content Search**: `fullText contains '...'` searching inside Docs, Sheets, Slides, PDFs, Text files, and image OCR.
-  - **Look In**: scope selection — whole drive, current folder, Shared with me, Starred, Trash.
+  - **Entire Google Drive & Shared Drives (Team Drives)**: Queries Google Drive with `corpora=allDrives` to include all shared drives; individual Shared Drives can be chosen via the Look In menu.
+  - **Look In & Include Subfolders**: scope selection — entire drive, specific shared drive, current folder, Shared with me, Starred, Trash with recursive subfolder toggle.
   - **Advanced filters**: file type (documents, spreadsheets, images...), files or folders only.
   - **Search history**: all comboboxes and checkboxes are persisted in the registry.
-  - **Focus & Jump**: double-click or `Enter` immediately navigates the Salamander panel to the selected file's location and highlights it. Correctly handles *Shared with me* paths and folders with Czech/accented characters.
+  - **Focus & Jump**: double-click or `Enter` immediately navigates the Salamander panel to the selected file's location and highlights it across *My Drive*, *Shared Drives*, and *Shared with me*.
   - **View (F3) from results**: opens files directly in Salamander's configured internal viewer (not the system-default app).
   - **Keyboard shortcuts**: `Enter` in any editbox starts the search; `Esc` closes the dialog (or stops an active search); `Enter` in the results list triggers Focus.
   - Modeless non-topmost window — Salamander remains accessible while the search dialog is open.
