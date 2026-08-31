@@ -40,6 +40,7 @@ private:
 
     void PopulateResults(const std::vector<GDriveApi::GDriveItem>& items);
     void UpdateControlsState();
+    void UpdateSubdirCheckboxState();
     void UpdateAdvancedText();
     void FocusSelectedItem();
     void ViewSelectedItem();
