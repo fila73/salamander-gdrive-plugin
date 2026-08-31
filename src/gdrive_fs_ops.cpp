@@ -346,7 +346,7 @@ void WINAPI CPluginFS::ShowProperties(const char* fsName, HWND parent, int panel
 }
 
 void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, int menuY, int type,
-                                  int panel, int selectedFiles, int selectedDirs)
+                                    int panel, int selectedFiles, int selectedDirs)
 {
     HMENU hMenu = CreatePopupMenu();
     if (!hMenu) return;
@@ -357,13 +357,23 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
     const CFileData* f = focused ? SalamanderGeneral->GetPanelFocusedItem(panel, &isDir)
                                  : SalamanderGeneral->GetPanelSelectedItem(panel, &index, &isDir);
 
-    const GDriveApi::GDriveItem* targetItem = f ? FindItemByPanelName(f->Name) : nullptr;
+    GDriveApi::GDriveItem targetItem;
+    bool hasTarget = false;
+    if (f && f->Name && f->Name[0] && strcmp(f->Name, "..") != 0)
+    {
+        const GDriveApi::GDriveItem* pItem = FindItemByPanelName(f->Name);
+        if (pItem)
+        {
+            targetItem = *pItem;
+            hasTarget = true;
+        }
+    }
 
     bool isInsideTrash = (_stricmp(m_currentPath.c_str(), "/Trash") == 0);
 
     if (isInsideTrash)
     {
-        if (targetItem)
+        if (hasTarget)
         {
             AppendMenuA(hMenu, MF_STRING, CM_RESTORE_TRASH, LoadStr(IDS_MENU_RESTORE_TRASH));
             AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
@@ -372,17 +382,17 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
     }
     else
     {
-        if (targetItem)
+        if (hasTarget)
         {
-            if (!targetItem->webViewLink.empty())
+            if (!targetItem.webViewLink.empty())
             {
                 AppendMenuA(hMenu, MF_STRING, CM_OPEN_IN_BROWSER, LoadStr(IDS_MENU_OPEN_IN_BROWSER));
                 AppendMenuA(hMenu, MF_STRING, CM_COPY_LINK, LoadStr(IDS_MENU_COPY_LINK));
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
             }
 
-            UINT starFlags = targetItem->canEdit ? MF_STRING : (MF_STRING | MF_GRAYED | MF_DISABLED);
-            if (targetItem->isStarred)
+            UINT starFlags = targetItem.canEdit ? MF_STRING : (MF_STRING | MF_GRAYED | MF_DISABLED);
+            if (targetItem.isStarred)
             {
                 AppendMenuA(hMenu, starFlags, CM_REMOVE_STAR, LoadStr(IDS_MENU_REMOVE_STAR));
             }
@@ -404,22 +414,22 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
     {
         CalculateFolderSize(parent, panel);
     }
-    else if (cmd == CM_OPEN_IN_BROWSER && targetItem && !targetItem->webViewLink.empty())
+    else if (cmd == CM_OPEN_IN_BROWSER && hasTarget && !targetItem.webViewLink.empty())
     {
-        ShellExecuteA(NULL, "open", targetItem->webViewLink.c_str(), NULL, NULL, SW_SHOWNORMAL);
+        ShellExecuteA(NULL, "open", targetItem.webViewLink.c_str(), NULL, NULL, SW_SHOWNORMAL);
     }
-    else if (cmd == CM_COPY_LINK && targetItem && !targetItem->webViewLink.empty())
+    else if (cmd == CM_COPY_LINK && hasTarget && !targetItem.webViewLink.empty())
     {
         if (OpenClipboard(parent))
         {
             EmptyClipboard();
-            HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, targetItem->webViewLink.length() + 1);
+            HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, targetItem.webViewLink.length() + 1);
             if (hGlob)
             {
                 char* p = (char*)GlobalLock(hGlob);
                 if (p)
                 {
-                    strcpy(p, targetItem->webViewLink.c_str());
+                    strcpy(p, targetItem.webViewLink.c_str());
                     GlobalUnlock(hGlob);
                     SetClipboardData(CF_TEXT, hGlob);
                 }
@@ -428,13 +438,13 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
             SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_LINK_COPIED), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONINFORMATION);
         }
     }
-    else if ((cmd == CM_ADD_STAR || cmd == CM_REMOVE_STAR) && targetItem)
+    else if ((cmd == CM_ADD_STAR || cmd == CM_REMOVE_STAR) && hasTarget)
     {
         bool makeStarred = (cmd == CM_ADD_STAR);
         std::string err;
-        if (GDriveApi::ApiClient::GetInstance().SetStarred(targetItem->id, makeStarred, &err))
+        if (GDriveApi::ApiClient::GetInstance().SetStarred(targetItem.id, makeStarred, &err))
         {
-            GDriveCache::CacheManager::GetInstance().SetStarStatus(targetItem->id, makeStarred);
+            GDriveCache::CacheManager::GetInstance().SetStarStatus(targetItem.id, makeStarred);
             SalamanderGeneral->RefreshPanelPath(panel);
         }
         else
@@ -442,12 +452,12 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
             SalamanderGeneral->SalMessageBox(parent, err.c_str(), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONERROR);
         }
     }
-    else if (cmd == CM_RESTORE_TRASH && targetItem)
+    else if (cmd == CM_RESTORE_TRASH && hasTarget)
     {
         std::string err;
-        if (GDriveApi::ApiClient::GetInstance().RestoreFromTrash(targetItem->id, &err))
+        if (GDriveApi::ApiClient::GetInstance().RestoreFromTrash(targetItem.id, &err))
         {
-            GDriveCache::CacheManager::GetInstance().RemoveItem("trash_root", targetItem->id);
+            GDriveCache::CacheManager::GetInstance().RemoveItem("trash_root", targetItem.id);
             SalamanderGeneral->RefreshPanelPath(panel);
         }
         else
