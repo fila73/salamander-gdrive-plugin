@@ -70,6 +70,24 @@ Tento dokument shrnuje stav implementace jednotlivých funkcí **Google Drive AP
   - Implementace `FS_SERVICE_OPENFINDDLG` a asynchronního dialogu `CGDriveFindDialog` s věrným rozložením okna Find ze Salamandera.
   - Podpora vyhledávání podle názvu, fulltextového prohledávání obsahu (`fullText contains`), funkce Focus (přechod na nalezenou položku), zobrazení v ListView a Dark Mode.
 
+### 1.7 Opravy dialogu hledání (v0.4)
+- [x] **Focus pro soubory ve *Sdíleno se mnou* a složky s diakritikou**:
+  - Příčina: `ResolveFolderIdForPath` porovnávalo UTF-8 jméno složky z API s ANSI/CP1250 cestou ze Salamanderu → `_stricmp` selhal pro `ě`, `š`, `í`... → fallback na `\\My Drive`.
+  - Řešení: `SearchWorker` nyní při dohledávání rodičovské cesty (`ResolveParentPath`) ihned registruje ID každé složky do globální cache (`CPluginFS::CachePathToId`). Při Focus se pak ID najde přímo v cache bez nutnosti rozebírat cestu segment po segmentu.
+  - Cesty ve výsledcích jsou správně převedeny do ANSI (CP1250) přes `Utf8ToAnsi`.
+  - Soubory vlastněné jiným uživatelem (`isOwnedByMe == false`) mají kořen `\\Shared with me`, nikoliv `\\My Drive`.
+- [x] **View (F3) otevírá v interním prohlížeči Salamanderu**:
+  - Změněno z `ShellExecuteA(..., "open", ...)` na `SalamanderGeneral->ViewFileInPluginViewer(NULL, &viewerData, TRUE, NULL, ...)` s `useCache = TRUE`.
+  - Dočasný soubor spravuje Salamander (automatické smazání po zavření).
+- [x] **Klávesa Enter spouští vyhledávání z editboxů/comboboxů**:
+  - Implementován `DialogControlKeySubclassProc` aplikovaný přes `EnumChildWindows` na všechny potomky dialogu.
+  - `DM_SETDEFID` nastaven na `IDC_FIND_BTN_FINDNOW` při inicializaci.
+- [x] **Klávesa Esc spolehlivě zavírá dialog odkudkoliv**:
+  - `Esc` z ovládacího prvku zastavuje aktivní vyhledávání (první stisk) nebo zavírá dialog (druhý stisk).
+  - Zpracováváno jak subclassingem potomků, tak i přímým `WM_KEYDOWN` v hlavním `DialogProc`.
+- [x] **Dialog není Always-on-Top**:
+  - `CreateDialogParam` volán s `hWndParent = NULL` místo `hParent`, takže dialog **není** *owned window* a nepřekrývá Salamander při kliknutí do jeho okna.
+
 ---
 
 ## 🟡 2. Budoucí rozšíření (Roadmapa)

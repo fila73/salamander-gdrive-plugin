@@ -453,4 +453,67 @@ Open Salamander umožňuje souborovým systémům (`CPluginFS`) převzít obsluh
    - Dotazování cloudového API běží v dedikovaném pracovním vlákně (`std::thread`) s atomickým příznakem pro okamžité zrušení (`cancelFlag`).
    - Po nalezení položky a stisku klávesy `Enter` nebo tlačítka *Focus* plugin zavolá `SalamanderGeneral->ChangePanelPath(panel, fullPath)`, čímž okamžitě přepne panel Salamandera na cílové umístění souboru a označí ho.
 
+4. **Nemodální dialog (Modeless) na hlavním vlákně**:
+   - Dialog musí být vytvořen přes `CreateDialogParam` (ne `DialogBoxParam`) a zpracovávat zprávy skrze hlavní smyčku (`IsDialogMessage` v message loop hostitele, nebo hook Salamandera).
+   - Volání UI Salamanderu ze sekundárního vlákna způsobí pády (race conditions v COM a Win32 message hooks). Všechny volání `SalamanderGeneral->*` musí probíhat z hlavního vlákna.
+   - **`hWndParent = NULL`** v `CreateDialogParam`: Pokud se předá handle hlavního okna Salamanderu jako `hWndParent`, dialog se stane *owned window* — Windows pak dialog udržuje vždy nad svým vlastníkem (efekt "Always on Top"). Pro nemodální dialog bez nucené horní vrstvy předávejte `NULL`.
 
+5. **Klávesy Enter a Esc v nemodálním dialogu**:
+   - V modálním dialogu zpracovává Enter/Esc automaticky dialog manager. V nemodálním je nutné je zachytit ručně.
+   - Doporučené řešení: `EnumChildWindows` s `SetWindowSubclass` aplikuje jeden `WndProc` na všechny potomky, který zachytí `WM_KEYDOWN` a odešle příslušnou `WM_COMMAND` zprávu dialogu.
+   - Nastav `DM_SETDEFID` na hlavní akční tlačítko při `WM_INITDIALOG` / `OnInitDialog`.
+
+---
+
+### ⚠️ 11. Kódování UTF-8 vs. ANSI (CP1250) v Salamander FS
+
+Google Drive API vrací názvy souborů a složek v **UTF-8**. Open Salamander pracuje interně s cestami v **ANSI (Windows-1250 pro českou lokalizaci)**. Pokud se UTF-8 a ANSI řetězce porovnávají přímo (např. přes `_stricmp`), porovnání pro znaky s diakritikou selže, protože UTF-8 kóduje `ě` jako dva bajty (`0xC4 0x9B`), zatímco CP1250 jako jeden bajt (`0xEB`).
+
+**Důsledky v praxi**:
+- `ResolveFolderIdForPath` při procházení segmentů cesty selže → fallback na kořen `/My Drive`.
+- Výsledky vyhledávání mají `item.parentPath` v UTF-8, zatímco Salamander očekává ANSI → `PostFocusTarget` selže.
+
+**Správné vzory**:
+```cpp
+// Převod UTF-8 → ANSI před porovnáváním nebo ukládáním do cache:
+std::string ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(item.name);
+
+// Při porovnání akceptuj oba formáty:
+if (_stricmp(item.name.c_str(), seg.c_str()) == 0 ||
+    _stricmp(ansiName.c_str(), seg.c_str()) == 0)
+
+// Při sestavování cest pro Salamander vždy použij ANSI název:
+std::string fullPath = parentPath + "\\" + ansiName;
+```
+
+**Strategie cachování ID pro vyhledávání**:
+Místo zpětného překladu ANSI cesty přes segmenty (které mohou selhat kvůli kódování) je spolehlivější při dohledávání cesty k výsledku vyhledávání **okamžitě registrovat každé zjištěné ID složky** do globální mapy `path → folderId`. Při Focus pak ID existuje přímo v cache a není nutné znovu traversovat strom z API.
+
+---
+
+### ⚠️ 12. Otevření souboru v interním prohlížeči Salamanderu (`ViewFileInPluginViewer`)
+
+Pro otevření souboru z FS pluginu v interním text/hex prohlížeči Salamandera **nepoužívej** `ShellExecuteA(..., "open", ...)` — to otevře systémovou výchozí aplikaci.
+
+Správný postup:
+1. Stáhni soubor do dočasného umístění přes `SalamanderGeneral->SalGetTempFileName(...)`.
+2. Připrav strukturu `CSalamanderPluginInternalViewerData` (nebo jen `CSalamanderPluginViewerData` pro pluginový viewer).
+3. Zavolej `SalamanderGeneral->ViewFileInPluginViewer(NULL, &viewerData, TRUE, NULL, displayName, err)`.
+   - Parametr `NULL` jako první argument → interní viewer Salamandera.
+   - `useCache = TRUE` → Salamander automaticky smaže dočasný soubor po zavření vieweru.
+
+```cpp
+CSalamanderPluginInternalViewerData viewerData;
+memset(&viewerData, 0, sizeof(viewerData));
+viewerData.Size     = sizeof(viewerData);
+viewerData.FileName = tempFilePath;   // absolutní cesta k dočasnému souboru
+viewerData.Mode     = 0;              // 0 = text, 1 = hex
+viewerData.Caption  = displayName.c_str();
+viewerData.WholeCaption = FALSE;      // FALSE = Salamander přidá " – Viewer"
+
+int err = 0;
+BOOL ok = SalamanderGeneral->ViewFileInPluginViewer(NULL, &viewerData, TRUE, NULL, displayName.c_str(), err);
+// Pokud ok == FALSE, err obsahuje důvod selhání (1=plugin nenahrán, 2=ViewFile vrátil chybu, ...)
+```
+
+> **Pozor**: `ViewFileInPluginViewer` lze volat **pouze z hlavního vlákna** Salamandera (omezení dané Salamander SDK). Nevolej ho z pracovního vyhledávacího vlákna.
