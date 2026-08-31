@@ -333,6 +333,8 @@ BEGIN
     IDS_COL_STARRED_DESC         "Starred status (*)"
     IDS_YES                      "Yes"
     IDS_NO                       "No"
+    IDS_COL_MODIFIED_BY          "Modified By"
+    IDS_COL_MODIFIED_BY_DESC     "User who last modified the file"
     IDS_FIND_TITLE               "Find - Google Drive"
     IDS_FIND_READY               "Specify find options and click Find Now."
     IDS_FIND_SEARCHING           "Searching Google Drive..."
@@ -347,6 +349,7 @@ BEGIN
     IDS_FIND_COL_TIME            "Time"
     IDS_FIND_COL_OWNER           "Owner"
     IDS_FIND_LOOKIN_ALL_DRIVE    "Entire Google Drive"
+    IDS_FIND_COL_MODIFIED_BY     "Modified By"
 END
 
 #endif // English resources

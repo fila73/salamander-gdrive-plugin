@@ -624,6 +624,7 @@ bool CPluginFS::ResolveFolderIdForPath(const std::string& path, std::string& fol
 #define GDRIVE_COL_OWNER_ID 1
 #define GDRIVE_COL_SHARED_ID 2
 #define GDRIVE_COL_STARRED_ID 3
+#define GDRIVE_COL_MODIFIED_BY_ID 4
 
 // Column width state
 static DWORD s_ownerWidth = MAKELONG(130, 130);
@@ -634,6 +635,9 @@ static DWORD s_sharedFixedWidth = MAKELONG(0, 0);
 
 static DWORD s_starredWidth = MAKELONG(40, 40);
 static DWORD s_starredFixedWidth = MAKELONG(0, 0);
+
+static DWORD s_modifiedByWidth = MAKELONG(130, 130);
+static DWORD s_modifiedByFixedWidth = MAKELONG(0, 0);
 
 // Global transfer variables provided by Salamander
 static const CFileData** s_transferFileData = NULL;
@@ -647,6 +651,7 @@ static DWORD* s_transferActCustomData = NULL;
 struct GDrivePluginFileData
 {
     std::string owner;
+    std::string modifiedBy;
     bool isShared = false;
     bool isStarred = false;
 };
@@ -671,9 +676,33 @@ static void WINAPI GetOwnerColumnText()
     if (s_transferFileData && *s_transferFileData && (*s_transferFileData)->PluginData)
     {
         auto* pData = reinterpret_cast<const GDrivePluginFileData*>((*s_transferFileData)->PluginData);
-        if (!pData->owner.empty())
+        std::string text = pData->owner;
+        if (text.empty() && CfgOwnerFallbackToModifier)
         {
-            std::string ansi = GDriveHttp::HttpClient::Utf8ToAnsi(pData->owner);
+            text = pData->modifiedBy;
+        }
+
+        if (!text.empty())
+        {
+            std::string ansi = GDriveHttp::HttpClient::Utf8ToAnsi(text);
+            int len = (int)ansi.length();
+            if (len > TRANSFER_BUFFER_MAX - 1) len = TRANSFER_BUFFER_MAX - 1;
+            memcpy(s_transferBuffer, ansi.data(), len);
+            *s_transferLen = len;
+            return;
+        }
+    }
+    *s_transferLen = 0;
+}
+
+static void WINAPI GetModifiedByColumnText()
+{
+    if (s_transferFileData && *s_transferFileData && (*s_transferFileData)->PluginData)
+    {
+        auto* pData = reinterpret_cast<const GDrivePluginFileData*>((*s_transferFileData)->PluginData);
+        if (!pData->modifiedBy.empty())
+        {
+            std::string ansi = GDriveHttp::HttpClient::Utf8ToAnsi(pData->modifiedBy);
             int len = (int)ansi.length();
             if (len > TRANSFER_BUFFER_MAX - 1) len = TRANSFER_BUFFER_MAX - 1;
             memcpy(s_transferBuffer, ansi.data(), len);
@@ -779,6 +808,20 @@ void WINAPI CGDrivePluginDataInterface::SetupView(BOOL leftPanel, CSalamanderVie
         colOwner.Width = leftPanel ? LOWORD(s_ownerWidth) : HIWORD(s_ownerWidth);
         colOwner.FixedWidth = leftPanel ? LOWORD(s_ownerFixedWidth) : HIWORD(s_ownerFixedWidth);
         view->InsertColumn(count++, &colOwner);
+
+        // Add Modified By column
+        CColumn colModifiedBy;
+        memset(&colModifiedBy, 0, sizeof(colModifiedBy));
+        lstrcpynA(colModifiedBy.Name, LoadStr(IDS_COL_MODIFIED_BY), sizeof(colModifiedBy.Name));
+        lstrcpynA(colModifiedBy.Description, LoadStr(IDS_COL_MODIFIED_BY_DESC), sizeof(colModifiedBy.Description));
+        colModifiedBy.GetText = GetModifiedByColumnText;
+        colModifiedBy.CustomData = GDRIVE_COL_MODIFIED_BY_ID;
+        colModifiedBy.SupportSorting = 1;
+        colModifiedBy.LeftAlignment = 1;
+        colModifiedBy.ID = COLUMN_ID_CUSTOM;
+        colModifiedBy.Width = leftPanel ? LOWORD(s_modifiedByWidth) : HIWORD(s_modifiedByWidth);
+        colModifiedBy.FixedWidth = leftPanel ? LOWORD(s_modifiedByFixedWidth) : HIWORD(s_modifiedByFixedWidth);
+        view->InsertColumn(count++, &colModifiedBy);
     }
 }
 
@@ -798,6 +841,9 @@ void WINAPI CGDrivePluginDataInterface::ColumnFixedWidthShouldChange(BOOL leftPa
         case GDRIVE_COL_STARRED_ID:
             s_starredFixedWidth = MAKELONG(newFixedWidth, HIWORD(s_starredFixedWidth));
             break;
+        case GDRIVE_COL_MODIFIED_BY_ID:
+            s_modifiedByFixedWidth = MAKELONG(newFixedWidth, HIWORD(s_modifiedByFixedWidth));
+            break;
         }
     }
     else
@@ -812,6 +858,9 @@ void WINAPI CGDrivePluginDataInterface::ColumnFixedWidthShouldChange(BOOL leftPa
             break;
         case GDRIVE_COL_STARRED_ID:
             s_starredFixedWidth = MAKELONG(LOWORD(s_starredFixedWidth), newFixedWidth);
+            break;
+        case GDRIVE_COL_MODIFIED_BY_ID:
+            s_modifiedByFixedWidth = MAKELONG(LOWORD(s_modifiedByFixedWidth), newFixedWidth);
             break;
         }
     }
@@ -837,6 +886,9 @@ void WINAPI CGDrivePluginDataInterface::ColumnWidthWasChanged(BOOL leftPanel, co
         case GDRIVE_COL_STARRED_ID:
             s_starredWidth = MAKELONG(newWidth, HIWORD(s_starredWidth));
             break;
+        case GDRIVE_COL_MODIFIED_BY_ID:
+            s_modifiedByWidth = MAKELONG(newWidth, HIWORD(s_modifiedByWidth));
+            break;
         }
     }
     else
@@ -851,6 +903,9 @@ void WINAPI CGDrivePluginDataInterface::ColumnWidthWasChanged(BOOL leftPanel, co
             break;
         case GDRIVE_COL_STARRED_ID:
             s_starredWidth = MAKELONG(LOWORD(s_starredWidth), newWidth);
+            break;
+        case GDRIVE_COL_MODIFIED_BY_ID:
+            s_modifiedByWidth = MAKELONG(LOWORD(s_modifiedByWidth), newWidth);
             break;
         }
     }
@@ -906,6 +961,7 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
     {
         auto* pData = new GDrivePluginFileData();
         pData->owner = item->ownerName.empty() ? item->ownerEmail : item->ownerName;
+        pData->modifiedBy = item->lastModifyingUserName.empty() ? item->lastModifyingUserEmail : item->lastModifyingUserName;
         pData->isShared = item->isShared;
         pData->isStarred = item->isStarred;
         file.PluginData = reinterpret_cast<DWORD_PTR>(pData);

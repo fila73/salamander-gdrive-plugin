@@ -171,6 +171,8 @@
 #define IDS_COL_STARRED_DESC                     2215
 #define IDS_YES                                  2216
 #define IDS_NO                                   2217
+#define IDS_COL_MODIFIED_BY                      2218
+#define IDS_COL_MODIFIED_BY_DESC                 2219
 #define IDS_FIND_TITLE                           2220
 #define IDS_FIND_READY                           2221
 #define IDS_FIND_SEARCHING                       2222
@@ -185,5 +187,6 @@
 #define IDS_FIND_COL_TIME                        2231
 #define IDS_FIND_COL_OWNER                       2232
 #define IDS_FIND_LOOKIN_ALL_DRIVE                2233
+#define IDS_FIND_COL_MODIFIED_BY                 2234
 
 #endif // __GDRIVE_RH2

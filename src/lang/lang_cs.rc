@@ -333,6 +333,8 @@ BEGIN
     IDS_COL_STARRED_DESC         "Oblíbená položka (*)"
     IDS_YES                      "Ano"
     IDS_NO                       "Ne"
+    IDS_COL_MODIFIED_BY          "Upravil"
+    IDS_COL_MODIFIED_BY_DESC     "Uživatel, který soubor naposledy upravil"
     IDS_FIND_TITLE               "Hledat - Google Disk"
     IDS_FIND_READY               "Zadejte parametry hledání a klikněte na Hledat."
     IDS_FIND_SEARCHING           "Vyhledávám na Google Disku..."
@@ -347,6 +349,7 @@ BEGIN
     IDS_FIND_COL_TIME            "Čas"
     IDS_FIND_COL_OWNER           "Vlastník"
     IDS_FIND_LOOKIN_ALL_DRIVE    "Celý Google Disk"
+    IDS_FIND_COL_MODIFIED_BY     "Upravil"
 END
 
 #endif // Czech resources
