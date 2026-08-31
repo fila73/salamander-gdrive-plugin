@@ -13,7 +13,7 @@ namespace GDriveCache
 {
 
 static const uint32_t kCacheMagic = 0x43444C53; // "SLDC"
-static const uint32_t kCacheVersion = 2;
+static const uint32_t kCacheVersion = 3;
 
 static void WriteString(FILE* f, const std::string& s)
 {
@@ -175,6 +175,16 @@ bool CacheManager::SaveToDisk()
             fwrite(&flags, sizeof(flags), 1, f);
             WriteString(f, item.ownerName);
             WriteString(f, item.ownerEmail);
+            WriteString(f, item.lastModifyingUserName);
+            WriteString(f, item.lastModifyingUserEmail);
+            uint8_t capFlags = (item.canEdit ? 1 : 0) |
+                               (item.canDelete ? 2 : 0) |
+                               (item.canRename ? 4 : 0) |
+                               (item.canTrash ? 8 : 0) |
+                               (item.canCopy ? 16 : 0) |
+                               (item.canDownload ? 32 : 0) |
+                               (item.canShare ? 64 : 0);
+            fwrite(&capFlags, sizeof(capFlags), 1, f);
             fwrite(&item.createdTime, sizeof(item.createdTime), 1, f);
             fwrite(&item.version, sizeof(item.version), 1, f);
             WriteString(f, item.webViewLink);
@@ -242,7 +252,7 @@ bool CacheManager::LoadFromDisk()
         return false;
     }
 
-    if (magic != kCacheMagic || (version != 1 && version != 2))
+    if (magic != kCacheMagic || (version != 1 && version != 2 && version != 3))
     {
         fclose(f);
         GDriveLog::Log("[CACHE] Invalid cache file header (magic: %08X, ver: %u) in %ls", magic, version, path.c_str());
@@ -295,6 +305,25 @@ bool CacheManager::LoadFromDisk()
             {
                 item.ownerName = ReadString(f);
                 item.ownerEmail = ReadString(f);
+            }
+            if (version >= 3)
+            {
+                item.lastModifyingUserName = ReadString(f);
+                item.lastModifyingUserEmail = ReadString(f);
+                uint8_t capFlags = 0;
+                if (fread(&capFlags, sizeof(capFlags), 1, f) == 1)
+                {
+                    item.canEdit = (capFlags & 1) != 0;
+                    item.canDelete = (capFlags & 2) != 0;
+                    item.canRename = (capFlags & 4) != 0;
+                    item.canTrash = (capFlags & 8) != 0;
+                    item.canCopy = (capFlags & 16) != 0;
+                    item.canDownload = (capFlags & 32) != 0;
+                    item.canShare = (capFlags & 64) != 0;
+                }
+            }
+            if (version >= 2)
+            {
                 fread(&item.createdTime, sizeof(item.createdTime), 1, f);
                 fread(&item.version, sizeof(item.version), 1, f);
             }

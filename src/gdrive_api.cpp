@@ -202,7 +202,7 @@ bool ApiClient::ListSharedDrives(std::vector<GDriveItem>& drivesOut, std::string
     return true;
 }
 
-static const char* kItemFields = "id,name,mimeType,size,modifiedTime,createdTime,starred,trashed,shared,ownedByMe,owners(displayName,emailAddress),version,webViewLink,webContentLink,parents";
+static const char* kItemFields = "id,name,mimeType,size,modifiedTime,createdTime,starred,trashed,shared,ownedByMe,owners(displayName,emailAddress),lastModifyingUser(displayName,emailAddress),capabilities(canEdit,canDelete,canRename,canTrash,canCopy,canDownload,canShare),driveId,version,webViewLink,webContentLink,parents";
 
 static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool isSharedDrive = false, const std::string& driveId = "")
 {
@@ -227,6 +227,23 @@ static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool
             item.ownerEmail = owners[0].GetString("emailAddress");
         }
     }
+    if (f.Has("lastModifyingUser") && f.GetObject("lastModifyingUser").IsObject())
+    {
+        const auto& lmu = f.GetObject("lastModifyingUser");
+        item.lastModifyingUserName = lmu.GetString("displayName");
+        item.lastModifyingUserEmail = lmu.GetString("emailAddress");
+    }
+    if (f.Has("capabilities") && f.GetObject("capabilities").IsObject())
+    {
+        const auto& cap = f.GetObject("capabilities");
+        item.canEdit = cap.GetBool("canEdit", true);
+        item.canDelete = cap.GetBool("canDelete", true);
+        item.canRename = cap.GetBool("canRename", true);
+        item.canTrash = cap.GetBool("canTrash", true);
+        item.canCopy = cap.GetBool("canCopy", true);
+        item.canDownload = cap.GetBool("canDownload", true);
+        item.canShare = cap.GetBool("canShare", true);
+    }
     if (f.Has("parents") && f.GetArray("parents").IsArray())
     {
         const auto& parents = f.GetArray("parents");
@@ -239,6 +256,12 @@ static void ParseItemFromJson(const GDriveJson::Value& f, GDriveItem& item, bool
     item.webContentLink = f.GetString("webContentLink");
     item.isSharedDrive = isSharedDrive;
     item.driveId = driveId;
+    std::string itemDriveId = f.GetString("driveId");
+    if (!itemDriveId.empty())
+    {
+        item.driveId = itemDriveId;
+        item.isSharedDrive = true;
+    }
 
     ApiClient::SetupGoogleDocExport(item);
 }
@@ -372,6 +395,10 @@ bool ApiClient::SearchFiles(const SearchOptions& opts,
         if (opts.isSharedDrive && !opts.driveId.empty())
         {
             url += "&corpora=drive&driveId=" + GDriveHttp::HttpClient::UrlEncode(opts.driveId);
+        }
+        else
+        {
+            url += "&corpora=allDrives";
         }
 
         auto resp = http.Get(url, token);

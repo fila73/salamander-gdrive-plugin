@@ -31,6 +31,15 @@ struct GDriveItem
     bool isOwnedByMe = true;
     std::string ownerName;
     std::string ownerEmail;
+    std::string lastModifyingUserName;
+    std::string lastModifyingUserEmail;
+    bool canEdit = true;
+    bool canDelete = true;
+    bool canRename = true;
+    bool canTrash = true;
+    bool canCopy = true;
+    bool canDownload = true;
+    bool canShare = true;
     FILETIME createdTime = {0, 0};
     int64_t version = 0;
     std::string parentId;
