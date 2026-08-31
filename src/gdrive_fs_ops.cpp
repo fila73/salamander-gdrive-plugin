@@ -673,37 +673,72 @@ void CPluginFS::OnSpacePressedOnFolder(int panel, const CFileData* f)
             folderId = "shared_with_me_root";
     }
 
-    if (folderId.empty()) return;
+    int itIdx = 0;
+    BOOL itemIsDir = FALSE;
+    const CFileData* item = NULL;
+    const CFileData* targetF = NULL;
+    const CFileData* nextF = NULL;
+    bool foundCurrent = false;
 
+    while ((item = SalamanderGeneral->GetPanelItem(panel, &itIdx, &itemIsDir)) != NULL)
+    {
+        if (!foundCurrent)
+        {
+            if (item == f || (item->Name && strcmp(item->Name, folderName.c_str()) == 0))
+            {
+                targetF = item;
+                foundCurrent = true;
+            }
+        }
+        else
+        {
+            nextF = item;
+            break;
+        }
+    }
+
+    if (!targetF) targetF = f;
+
+    // Toggle selection on the folder
+    BOOL newSelected = !targetF->Selected;
+    SalamanderGeneral->SelectPanelItem(panel, targetF, newSelected);
+
+    // If size is in cache, display it directly
     int64_t folderSize = 0;
     int files = 0, dirs = 0;
-    if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, folderSize) ||
-        GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, folderSize, files, dirs))
+    if (!folderId.empty() &&
+        (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, folderSize) ||
+         GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, folderSize, files, dirs)))
     {
         GDriveLog::Log("[SPACE] Folder '%s' (ID: %s) -> Found in cache: %lld B. Displaying in panel directly.",
                        folderName.c_str(), folderId.c_str(), (long long)folderSize);
 
-        int itIdx = 0;
-        BOOL itemIsDir = FALSE;
-        const CFileData* item = NULL;
-        while ((item = SalamanderGeneral->GetPanelItem(panel, &itIdx, &itemIsDir)) != NULL)
-        {
-            if (itemIsDir && item->Name && strcmp(item->Name, folderName.c_str()) == 0)
-            {
-                CFileData* nonConst = const_cast<CFileData*>(item);
-                nonConst->Size.Value = folderSize;
-                nonConst->SizeValid = 1;
-                nonConst->Dirty = 1;
-                break;
-            }
-        }
-        SalamanderGeneral->RepaintChangedItems(panel);
+        CFileData* nonConst = const_cast<CFileData*>(targetF);
+        nonConst->Size.Value = folderSize;
+        nonConst->SizeValid = 1;
+        nonConst->Dirty = 1;
     }
-    else
+    else if (!folderId.empty())
     {
         GDriveLog::Log("[SPACE] Folder '%s' (ID: %s) -> Not in size cache. Launching calculation dialog.",
                        folderName.c_str(), folderId.c_str());
         HWND hMain = SalamanderGeneral->GetMainWindowHWND();
-        CalculateFolderSize(hMain, panel);
+        CCalcSizeProgressDialog dlg(hMain, folderName.c_str(), folderId, m_currentDriveId, m_isSharedDrive);
+        if (dlg.Run())
+        {
+            folderSize = dlg.GetTotalBytes();
+            CFileData* nonConst = const_cast<CFileData*>(targetF);
+            nonConst->Size.Value = folderSize;
+            nonConst->SizeValid = 1;
+            nonConst->Dirty = 1;
+        }
     }
+
+    // Advance focus to next item
+    if (nextF)
+    {
+        SalamanderGeneral->SetPanelFocusedItem(panel, nextF, FALSE);
+    }
+
+    SalamanderGeneral->RepaintChangedItems(panel);
 }
