@@ -48,10 +48,11 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
     if (nCode >= 0 && wParam == PM_REMOVE)
     {
         MSG* pMsg = (MSG*)lParam;
-        if (pMsg && pMsg->message == WM_KEYDOWN)
+        if (pMsg && (pMsg->message == WM_KEYDOWN || pMsg->message == WM_SYSKEYDOWN))
         {
             bool isAltF10 = (pMsg->wParam == VK_F10 && (GetKeyState(VK_MENU) < 0));
-            bool isSpace = (pMsg->wParam == VK_SPACE && (GetKeyState(VK_MENU) >= 0) && (GetKeyState(VK_CONTROL) >= 0) && (GetKeyState(VK_SHIFT) >= 0));
+            bool isSpace = (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_SPACE &&
+                            (GetKeyState(VK_MENU) >= 0) && (GetKeyState(VK_CONTROL) >= 0) && (GetKeyState(VK_SHIFT) >= 0));
 
             if (isAltF10 || isSpace)
             {
@@ -60,8 +61,9 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
                     HWND hMain = SalamanderGeneral->GetMainWindowHWND();
                     HWND hActive = GetActiveWindow();
 
-                    // Only intercept if Salamander main window is active (no dialogs, popups or message boxes open)
-                    if (hMain != NULL && hActive == hMain && pMsg->hwnd != NULL)
+                    // Only intercept when main Salamander window is active AND no dialogs/popups are open over it
+                    if (hMain != NULL && (hActive == hMain || GetForegroundWindow() == hMain) &&
+                        GetLastActivePopup(hMain) == hMain && pMsg->hwnd != NULL)
                     {
                         HWND hRoot = GetAncestor(pMsg->hwnd, GA_ROOT);
                         if (hRoot == hMain)
@@ -69,8 +71,13 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
                             char className[64] = {0};
                             GetClassNameA(pMsg->hwnd, className, sizeof(className));
 
-                            // Only intercept if focus is directly on the panel's SysListView32
-                            if (_stricmp(className, "SysListView32") == 0)
+                            // Do not intercept if user is typing in Edit, RichEdit or ComboBox
+                            bool isTypingControl = (_stricmp(className, "Edit") == 0 ||
+                                                    _strnicmp(className, "RichEdit", 8) == 0 ||
+                                                    _stricmp(className, "ComboBox") == 0 ||
+                                                    _stricmp(className, "ComboLBox") == 0);
+
+                            if (!isTypingControl)
                             {
                                 CPluginFSInterfaceAbstract* activeFS = SalamanderGeneral->GetPanelPluginFS(PANEL_SOURCE);
                                 if (activeFS && CPluginFS::IsOurFS(activeFS))
@@ -78,6 +85,7 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
                                     CPluginFS* gdriveFS = (CPluginFS*)activeFS;
                                     if (isAltF10)
                                     {
+                                        pMsg->message = WM_NULL; // Consume key event
                                         gdriveFS->CalculateFolderSize(hMain, PANEL_SOURCE);
                                     }
                                     else if (isSpace)
@@ -86,6 +94,7 @@ static LRESULT CALLBACK GetMsgHookProc(int nCode, WPARAM wParam, LPARAM lParam)
                                         const CFileData* f = SalamanderGeneral->GetPanelFocusedItem(PANEL_SOURCE, &isDir);
                                         if (f && isDir && strcmp(f->Name, "..") != 0)
                                         {
+                                            pMsg->message = WM_NULL; // Consume key event
                                             gdriveFS->OnSpacePressedOnFolder(PANEL_SOURCE, f);
                                         }
                                     }

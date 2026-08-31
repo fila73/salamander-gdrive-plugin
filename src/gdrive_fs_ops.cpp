@@ -655,7 +655,7 @@ void CPluginFS::CalculateFolderSize(HWND parent, int panel)
 
 void CPluginFS::OnSpacePressedOnFolder(int panel, const CFileData* f)
 {
-    if (!f || strcmp(f->Name, "..") == 0) return;
+    if (!f || !f->Name || strcmp(f->Name, "..") == 0) return;
 
     std::string folderId;
     std::string folderName = f->Name;
@@ -680,12 +680,23 @@ void CPluginFS::OnSpacePressedOnFolder(int panel, const CFileData* f)
     if (GDriveCache::CacheManager::GetInstance().GetFolderSize(folderId, folderSize) ||
         GDriveCache::CacheManager::GetInstance().ComputeFolderSizeFromCache(folderId, folderSize, files, dirs))
     {
-        GDriveLog::Log("[SPACE] Folder '%s' (ID: %s) -> Found in cache: %lld B. Displaying in panel directly without recalculation.",
+        GDriveLog::Log("[SPACE] Folder '%s' (ID: %s) -> Found in cache: %lld B. Displaying in panel directly.",
                        folderName.c_str(), folderId.c_str(), (long long)folderSize);
-        CFileData* nonConstF = const_cast<CFileData*>(f);
-        nonConstF->Size.Value = folderSize;
-        nonConstF->SizeValid = 1;
-        nonConstF->Dirty = 1;
+
+        int itIdx = 0;
+        BOOL itemIsDir = FALSE;
+        const CFileData* item = NULL;
+        while ((item = SalamanderGeneral->GetPanelItem(panel, &itIdx, &itemIsDir)) != NULL)
+        {
+            if (itemIsDir && item->Name && strcmp(item->Name, folderName.c_str()) == 0)
+            {
+                CFileData* nonConst = const_cast<CFileData*>(item);
+                nonConst->Size.Value = folderSize;
+                nonConst->SizeValid = 1;
+                nonConst->Dirty = 1;
+                break;
+            }
+        }
         SalamanderGeneral->RepaintChangedItems(panel);
     }
     else
