@@ -31,6 +31,7 @@ extern int AssignedFSNameLen;
 extern std::string CfgClientId;
 extern std::string CfgClientSecret;
 extern BOOL CfgIncludeSharedDrives;
+extern BOOL CfgOwnerFallbackToModifier;
 extern BOOL CfgSanitizeInvalidChars;
 extern char CfgSanitizeChar;
 

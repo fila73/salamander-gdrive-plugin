@@ -130,11 +130,15 @@ void CConfigPageGeneral::Transfer(CTransferInfo& ti)
     int useShared = CfgIncludeSharedDrives ? 1 : 0;
     ti.CheckBox(IDC_CFG_USE_SHARED_DRIVES, useShared);
 
+    int ownerFallback = CfgOwnerFallbackToModifier ? 1 : 0;
+    ti.CheckBox(IDC_CFG_OWNER_FALLBACK, ownerFallback);
+
     if (ti.Type == ttDataFromWindow)
     {
         GDriveAuth::AuthManager::GetInstance().SetClientId(szClientId);
         GDriveAuth::AuthManager::GetInstance().SetClientSecret(szClientSecret);
         CfgIncludeSharedDrives = (useShared != 0);
+        CfgOwnerFallbackToModifier = (ownerFallback != 0);
     }
 }
 

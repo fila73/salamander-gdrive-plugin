@@ -52,6 +52,7 @@
 
 #define IDC_CFG_SANITIZE_INVALID_CHARS  540
 #define IDC_CFG_SANITIZE_CHAR           541
+#define IDC_CFG_OWNER_FALLBACK          542
 
 #define IDD_OVERWRITE_CONFLICT          550
 #define IDC_CONFLICT_ICON               551

@@ -30,6 +30,7 @@ char AssignedFSName[MAX_PATH] = "gdrive";
 int AssignedFSNameLen = 6;
 
 BOOL CfgIncludeSharedDrives = TRUE;
+BOOL CfgOwnerFallbackToModifier = TRUE;
 BOOL CfgSanitizeInvalidChars = TRUE;
 char CfgSanitizeChar = '_';
 std::string CfgClientId = "";
@@ -216,6 +217,12 @@ void WINAPI CPluginInterface::LoadConfiguration(HWND parent, HKEY regKey, CSalam
         CfgIncludeSharedDrives = (dwShared != 0);
     }
 
+    DWORD dwFallback = 1;
+    if (registry->GetValue(regKey, "OwnerFallbackToModifier", REG_DWORD, &dwFallback, sizeof(dwFallback)))
+    {
+        CfgOwnerFallbackToModifier = (dwFallback != 0);
+    }
+
     DWORD dwSanitize = 1;
     if (registry->GetValue(regKey, "SanitizeInvalidChars", REG_DWORD, &dwSanitize, sizeof(dwSanitize)))
     {
@@ -275,6 +282,9 @@ void WINAPI CPluginInterface::SaveConfiguration(HWND parent, HKEY regKey, CSalam
 
     DWORD dwShared = CfgIncludeSharedDrives ? 1 : 0;
     registry->SetValue(regKey, "IncludeSharedDrives", REG_DWORD, &dwShared, sizeof(dwShared));
+
+    DWORD dwFallback = CfgOwnerFallbackToModifier ? 1 : 0;
+    registry->SetValue(regKey, "OwnerFallbackToModifier", REG_DWORD, &dwFallback, sizeof(dwFallback));
 
     DWORD dwSanitize = CfgSanitizeInvalidChars ? 1 : 0;
     registry->SetValue(regKey, "SanitizeInvalidChars", REG_DWORD, &dwSanitize, sizeof(dwSanitize));
