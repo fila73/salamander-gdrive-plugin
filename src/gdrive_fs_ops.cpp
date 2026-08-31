@@ -30,6 +30,11 @@ BOOL WINAPI CPluginFS::QuickRename(const char* fsName, int mode, HWND parent, CF
     std::string fileUtf8Name = GDriveHttp::HttpClient::AnsiToUtf8(file.Name);
 
     const GDriveApi::GDriveItem* pTarget = FindItemByPanelName(file.Name);
+    if (pTarget && !pTarget->canRename)
+    {
+        SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_NO_PERMISSION_RENAME), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+        return FALSE;
+    }
     std::string fileId = pTarget ? pTarget->id : "";
 
     if (fileId.empty())
@@ -254,6 +259,21 @@ BOOL WINAPI CPluginFS::Delete(const char* fsName, int mode, HWND parent, int pan
             break;
         }
 
+        const GDriveApi::GDriveItem* target = FindItemByPanelName(name.c_str());
+        if (target)
+        {
+            if (shiftPressed && !target->canDelete)
+            {
+                SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_NO_PERMISSION_DELETE), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+                continue;
+            }
+            else if (!shiftPressed && !target->canTrash && !target->canDelete)
+            {
+                SalamanderGeneral->SalMessageBox(parent, LoadStr(IDS_ERR_NO_PERMISSION_DELETE), LoadStr(IDS_PLUGINNAME), MB_OK | MB_ICONEXCLAMATION);
+                continue;
+            }
+        }
+
         if (progressStarted)
         {
             progressDlg.SetCurrentFile(name, (int64_t)itemsToDelete.size());
@@ -361,13 +381,14 @@ void WINAPI CPluginFS::ContextMenu(const char* fsName, HWND parent, int menuX, i
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
             }
 
+            UINT starFlags = targetItem->canEdit ? MF_STRING : (MF_STRING | MF_GRAYED | MF_DISABLED);
             if (targetItem->isStarred)
             {
-                AppendMenuA(hMenu, MF_STRING, CM_REMOVE_STAR, LoadStr(IDS_MENU_REMOVE_STAR));
+                AppendMenuA(hMenu, starFlags, CM_REMOVE_STAR, LoadStr(IDS_MENU_REMOVE_STAR));
             }
             else
             {
-                AppendMenuA(hMenu, MF_STRING, CM_ADD_STAR, LoadStr(IDS_MENU_ADD_STAR));
+                AppendMenuA(hMenu, starFlags, CM_ADD_STAR, LoadStr(IDS_MENU_ADD_STAR));
             }
             AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
         }

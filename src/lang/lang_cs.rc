@@ -350,6 +350,8 @@ BEGIN
     IDS_FIND_COL_OWNER           "Vlastník"
     IDS_FIND_LOOKIN_ALL_DRIVE    "Celý Google Disk"
     IDS_FIND_COL_MODIFIED_BY     "Upravil"
+    IDS_ERR_NO_PERMISSION_DELETE "Nemáte oprávnění smazat tuto položku na Google Disku."
+    IDS_ERR_NO_PERMISSION_RENAME "Nemáte oprávnění přejmenovat tuto položku na Google Disku."
 END
 
 #endif // Czech resources

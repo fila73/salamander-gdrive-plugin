@@ -350,6 +350,8 @@ BEGIN
     IDS_FIND_COL_OWNER           "Owner"
     IDS_FIND_LOOKIN_ALL_DRIVE    "Entire Google Drive"
     IDS_FIND_COL_MODIFIED_BY     "Modified By"
+    IDS_ERR_NO_PERMISSION_DELETE "You do not have permission to delete this item on Google Drive."
+    IDS_ERR_NO_PERMISSION_RENAME "You do not have permission to rename this item on Google Drive."
 END
 
 #endif // English resources
