@@ -66,27 +66,31 @@ Tento dokument shrnuje stav implementace jednotlivých funkcí **Google Drive AP
   - Rozdělení monolitického `gdrive_fs.cpp` na `gdrive_fs_nav.cpp`, `gdrive_fs_transfer.cpp`, `gdrive_fs_ops.cpp` a `gdrive_fs.cpp`.
 - [x] **Vlastní sloupce panelu (Owner, Shared, Starred)**:
   - Implementace rozhraní `CPluginDataInterfaceAbstract` a `CSalamanderViewAbstract` pro zobrazení sloupců Vlastník, Sdíleno a Hvězdička.
-- [x] **Cloudové a fulltextové vyhledávání (`Alt+F7` / `OpenFindDialog`)**:
-  - Implementace `FS_SERVICE_OPENFINDDLG` a asynchronního dialogu `CGDriveFindDialog` s věrným rozložením okna Find ze Salamandera.
-  - Podpora vyhledávání podle názvu, fulltextového prohledávání obsahu (`fullText contains`), funkce Focus (přechod na nalezenou položku), zobrazení v ListView a Dark Mode.
 
-### 1.7 Opravy dialogu hledání (v0.4)
-- [x] **Focus pro soubory ve *Sdíleno se mnou* a složky s diakritikou**:
-  - Příčina: `ResolveFolderIdForPath` porovnávalo UTF-8 jméno složky z API s ANSI/CP1250 cestou ze Salamanderu → `_stricmp` selhal pro `ě`, `š`, `í`... → fallback na `\\My Drive`.
-  - Řešení: `SearchWorker` nyní při dohledávání rodičovské cesty (`ResolveParentPath`) ihned registruje ID každé složky do globální cache (`CPluginFS::CachePathToId`). Při Focus se pak ID najde přímo v cache bez nutnosti rozebírat cestu segment po segmentu.
-  - Cesty ve výsledcích jsou správně převedeny do ANSI (CP1250) přes `Utf8ToAnsi`.
-  - Soubory vlastněné jiným uživatelem (`isOwnedByMe == false`) mají kořen `\\Shared with me`, nikoliv `\\My Drive`.
-- [x] **View (F3) otevírá v interním prohlížeči Salamanderu**:
-  - Změněno z `ShellExecuteA(..., "open", ...)` na `SalamanderGeneral->ViewFileInPluginViewer(NULL, &viewerData, TRUE, NULL, ...)` s `useCache = TRUE`.
-  - Dočasný soubor spravuje Salamander (automatické smazání po zavření).
-- [x] **Klávesa Enter spouští vyhledávání z editboxů/comboboxů**:
-  - Implementován `DialogControlKeySubclassProc` aplikovaný přes `EnumChildWindows` na všechny potomky dialogu.
-  - `DM_SETDEFID` nastaven na `IDC_FIND_BTN_FINDNOW` při inicializaci.
-- [x] **Klávesa Esc spolehlivě zavírá dialog odkudkoliv**:
-  - `Esc` z ovládacího prvku zastavuje aktivní vyhledávání (první stisk) nebo zavírá dialog (druhý stisk).
-  - Zpracováváno jak subclassingem potomků, tak i přímým `WM_KEYDOWN` v hlavním `DialogProc`.
-- [x] **Dialog není Always-on-Top**:
-  - `CreateDialogParam` volán s `hWndParent = NULL` místo `hParent`, takže dialog **není** *owned window* a nepřekrývá Salamander při kliknutí do jeho okna.
+### 1.7 Cloudové vyhledávání a prohlížeč souborů (v0.4)
+- [x] **Cloudové a fulltextové vyhledávání (`Alt+F7` / `OpenFindDialog`)**:
+  - Implementace `FS_SERVICE_OPENFINDDLG` a asynchronního modeless dialogu `CGDriveFindDialog` s věrným rozložením okna Find ze Salamandera.
+  - **Hledání podle názvu**: `name contains '...'` s podporou zástupných znaků (`*`, `?`).
+  - **Fulltextové prohledávání obsahu**: `fullText contains '...'` uvnitř Docs, Sheets, Slides, PDF, textů i OCR obrázků.
+  - **Look In**: výběr rozsahu hledání – celý disk, aktuální složka, Shared with me, Starred, Trash.
+  - **Pokročilé filtry**: typ souboru (dokumenty, tabulky, obrázky...), pouze soubory/složky.
+  - **Perzistence nastavení**: všechny checkboxy, seznam historií vyhledávání a Look In se ukládají do registru.
+  - **Výsledky v ListView**: sloupce Název, Cesta, Velikost, Datum, Čas, Vlastník; podpora řazení.
+  - **Tmavý režim (Dark Mode)**: plné přizpůsobení schématu Salamandera.
+  - Asynchronní vlákno na pozadí s atomickým přerušením klávesou `Esc`.
+- [x] **Funkce Focus (přechod na nalezenou položku)**:
+  - Dvojklik nebo `Enter` přepne panel Salamandera přímo do složky souboru a označí ho.
+  - Opravena podpora pro soubory ve *Sdíleno se mnou* a složky s českou diakritikou (UTF-8 vs. ANSI/CP1250).
+  - `SearchWorker` při dohledávání cest okamžitě cachuje `folderId → path` do globální mapy, takže Focus nemusí znovu traversovat strom z API.
+- [x] **View (F3) z výsledků vyhledávání**:
+  - Soubor se otevře v interním prohlížeči Salamandera (`SalamanderGeneral->ViewFileInPluginViewer`) s `useCache = TRUE`.
+  - Google Dokumenty jsou exportovány do standardního formátu (`.docx`, `.xlsx`, `.pptx`, `.pdf`).
+- [x] **Klávesové zkratky v dialogu**:
+  - `Enter` v libovolném editboxu/comboboxu spouští hledání (`DM_SETDEFID` + subclassing přes `EnumChildWindows`).
+  - `Esc` zastavuje aktivní hledání (první stisk) nebo zavírá dialog (druhý stisk).
+  - `Enter` v seznamu výsledků volá Focus.
+- [x] **Nemodální okno bez Always-on-Top**:
+  - `CreateDialogParam` s `hWndParent = NULL` (ne handle Salamandera) → dialog není *owned window* a nepřekrývá Salamander.
 
 ---
 
