@@ -238,6 +238,10 @@ std::string CPluginFS::GetBaseDisplayName(const GDriveApi::GDriveItem& item)
             baseName += item.exportExtension;
         }
     }
+    for (char& c : baseName)
+    {
+        if (c == '/' || c == '\\') c = '_';
+    }
     return baseName;
 }
 
@@ -926,6 +930,7 @@ static void AddItemToDir(CSalamanderDirectoryAbstract* dir, const char* name,
     else
     {
         ansiName = GDriveHttp::HttpClient::Utf8ToAnsi(name);
+        for (char& c : ansiName) { if (c == '/' || c == '\\') c = '_'; }
     }
 
     CFileData file;
