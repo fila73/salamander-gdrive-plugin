@@ -14,7 +14,7 @@
 static std::map<std::string, std::string, CPluginFS::CaseInsensitiveCompare> s_pathToIdCache;
 static std::mutex s_pathToIdMutex;
 
-static std::string GetValidParentPath(const std::string& currentPath)
+std::string CPluginFS::GetValidParentPath(const std::string& currentPath)
 {
     std::string p = currentPath;
     while (p.length() > 1)

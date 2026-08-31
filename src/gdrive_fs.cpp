@@ -254,37 +254,42 @@ void WINAPI CPluginInterfaceForFS::ExecuteOnFS(int panel, CPluginFSInterfaceAbst
                                               CFileData& file, int isDir)
 {
     CPluginFS* fs = static_cast<CPluginFS*>(pluginFS);
+    if (!fs) return;
+
     if (isDir)
     {
-        char newPath[MAX_PATH];
-        char curPath[MAX_PATH];
-        fs->GetCurrentPath(curPath);
-        lstrcpyn(newPath, curPath, MAX_PATH);
-
         if (isDir == 2) // ".."
         {
-            char* cutDir = NULL;
-            if (SalamanderGeneral->CutDirectory(newPath, &cutDir))
-            {
-                char focusName[MAX_PATH] = {0};
-                if (cutDir) lstrcpyn(focusName, cutDir, MAX_PATH);
+            std::string curPath = fs->GetCurrentPathStr();
+            std::string parentPath = CPluginFS::GetValidParentPath(curPath);
+            std::string focusName;
 
-                fs = NULL; // pointer might become invalid after ChangePanelPath
-                SalamanderGeneral->ChangePanelPathToPluginFS(panel, pluginFSName, newPath, NULL,
-                                                             -1, focusName[0] ? focusName : NULL);
-            }
-            else
+            if (curPath.length() > parentPath.length())
             {
-                SalamanderGeneral->ChangePanelPathToPluginFS(panel, pluginFSName, "\\");
+                focusName = curPath.substr(parentPath == "/" ? 0 : parentPath.length());
+                if (!focusName.empty() && focusName[0] == '/') focusName = focusName.substr(1);
             }
+
+            std::string winParent = parentPath;
+            std::replace(winParent.begin(), winParent.end(), '/', '\\');
+            if (winParent.empty()) winParent = "\\";
+
+            std::string ansiFocus = GDriveHttp::HttpClient::Utf8ToAnsi(focusName);
+
+            fs = NULL; // pointer might become invalid after ChangePanelPath
+            SalamanderGeneral->ChangePanelPathToPluginFS(panel, pluginFSName, winParent.c_str(), NULL,
+                                                         -1, ansiFocus.empty() ? NULL : ansiFocus.c_str());
         }
         else // subdirectory
         {
-            if (SalamanderGeneral->SalPathAppend(newPath, file.Name, MAX_PATH))
-            {
-                fs = NULL;
-                SalamanderGeneral->ChangePanelPathToPluginFS(panel, pluginFSName, newPath);
-            }
+            std::string curPath = fs->GetCurrentPathStr();
+            std::string nextPath = (curPath == "/" ? "" : curPath) + "/" + (file.Name ? file.Name : "");
+            std::string winNext = nextPath;
+            std::replace(winNext.begin(), winNext.end(), '/', '\\');
+            if (winNext.empty()) winNext = "\\";
+
+            fs = NULL;
+            SalamanderGeneral->ChangePanelPathToPluginFS(panel, pluginFSName, winNext.c_str());
         }
     }
 }

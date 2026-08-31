@@ -239,6 +239,7 @@ public:
     static std::string ExtractSuffixFromDisambiguatedName(const std::string& name);
     static std::string GetBaseDisplayName(const GDriveApi::GDriveItem& item);
     static std::map<std::string, std::string> ComputeDisplayNames(const std::vector<GDriveApi::GDriveItem>& items);
+    static std::string GetValidParentPath(const std::string& currentPath);
 };
 
 class CPluginInterfaceForFS : public CPluginInterfaceForFSAbstract
