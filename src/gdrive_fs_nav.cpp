@@ -674,6 +674,8 @@ struct GDrivePluginFileData
     bool isStarred = false;
 };
 
+static CGDrivePluginDataInterface s_pluginDataInterface;
+
 void WINAPI CGDrivePluginDataInterface::ReleasePluginData(CFileData& file, BOOL isDir)
 {
     if (file.PluginData != 0)
@@ -1059,7 +1061,7 @@ BOOL WINAPI CPluginFS::ListCurrentPath(CSalamanderDirectoryAbstract* dir,
     if (!dir) return FALSE;
 
     iconsType = pitFromRegistry;
-    pluginData = &m_pluginDataInterface;
+    pluginData = &s_pluginDataInterface;
     m_cachedItems.clear();
 
     dir->SetFlags(SALDIRFLAG_IGNOREDUPDIRS);

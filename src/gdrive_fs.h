@@ -129,7 +129,6 @@ class CPluginFS : public CPluginFSInterfaceAbstract
 {
 public:
     CTopIndexMem TopIndexMem;
-    CGDrivePluginDataInterface m_pluginDataInterface;
 
     CPluginFS(const char* fsName);
     virtual ~CPluginFS();
