@@ -70,7 +70,7 @@ Plnohodnotný souborový plugin pro správce souborů **Open Salamander** (a Dar
   - *Kopírovat odkaz do schránky*
   - *Přidat / Odebrat hvězdičku*
   - *Obnovit z koše* / *Vysypat koš...*
-  - *Spočítat velikost složky...* (Rekurzivní skener s možností přerušení klávesou Esc)
+  - *Spočítat velikost složky...* (`Alt+F10` / `Mezera` v panelu / kontextové menu): Rekurzivní výpočet velikosti složek s podporou přerušení klávesou Esc a okamžitým zobrazením z mezipaměti. Klávesa `Mezera` v panelu přepíná výběr položky, spočte/zobrazí velikost a posune kurzor na další řádek.
 
 ### 📄 Automatický export Google Dokumentů
 - Automatický převod formátů Google Dokumenty, Tabulky a Prezentace do standardních formátů (`.docx`, `.xlsx`, `.pptx`, `.pdf`) při stahování nebo náhledu.

@@ -23,7 +23,8 @@ Tento dokument rekapituluje všechny realizované části pluginu **Google Disk 
 | **Modularizace kódu (CR-08)** | Rozdělení monolitického `gdrive_fs.cpp` na navigaci (`gdrive_fs_nav.cpp`), přenosy (`gdrive_fs_transfer.cpp`), operace (`gdrive_fs_ops.cpp`) a jádro (`gdrive_fs.cpp`). | `src/gdrive_fs*.cpp` |
 | **Dynamický Dark Mode** | Striktní respektování uživatelského nastavení schématu v Salamanderu s okamžitým přepínáním. | `src/gdrivedarkmode.cpp` |
 | **Vlastní sloupce panelu** | Implementace `CPluginDataInterfaceAbstract` a `CSalamanderViewAbstract`: zobrazení sloupců **Vlastník** (`Owner`), **Sdíleno** (`Shared`) a **Hvězdička** (`Starred`), podpora řazení a nastavení šířky sloupců. | `src/gdrive_fs_nav.cpp`, `src/gdrive_fs.h`, `src/gdrive_cache.cpp` |
-| **Hledání na disku (`Alt+F7`)** | Implementace `FS_SERVICE_OPENFINDDLG`, asynchronního dialogu `CGDriveFindDialog` věrně replikujícího okno Find ze Salamandera: vyhledávání podle názvu, **fulltextový obsah (`fullText contains`)**, filtry podsložek a typů, funkce **Focus** (přechod na položku v panelu), zobrazení výsledků v ListView s Dark Mode. • Oprava funkce Focus pro soubory ve *Sdíleno se mnou* a složky s českou diakritikou: přímé cachování ID→cesta při dohledávání výsledků eliminuje chybný fallback na `\My Drive`. • View (F3) nyní otevírá soubor v interním prohlížeči Salamandera (`ViewFileInPluginViewer`), nikoliv v systémové aplikaci. • `Enter` v libovolném editboxu/comboboxu spouští vyhledávání. • `Esc` spolehlivě zavírá dialog z jakéhokoliv ovládacího prvku. • Dialog je nemodální bez nucené horní vrstvy (`WS_EX_TOPMOST`). | `src/dialog_find.cpp`, `src/dialog_find.h`, `src/gdrive_api.cpp`, `src/gdrive_fs.cpp`, `src/gdrive_fs_nav.cpp`, `src/gdrive_fs.h` |
+| **Vyhledávání na disku (`Alt+F7`)** | Implementace `FS_SERVICE_OPENFINDDLG`, asynchronního dialogu `CGDriveFindDialog` věrně replikujícího okno Find ze Salamandera: vyhledávání podle názvu, **fulltextový obsah (`fullText contains`)**, filtry podsložek a typů, funkce **Focus** (přechod na položku v panelu), zobrazení výsledků v ListView s Dark Mode. • Podpora prohledávání celého disku i Sdílených disků (`corpora=allDrives`). • View (F3) otevírá soubor v interním prohlížeči Salamandera (`ViewFileInPluginViewer`). • `Enter` spouští hledání, `Esc` zavírá dialog. • Dialog je nemodální bez nucené horní vrstvy (`WS_EX_TOPMOST`). | `src/dialog_find.cpp`, `src/dialog_find.h`, `src/gdrive_api.cpp`, `src/gdrive_fs.cpp`, `src/gdrive_fs_nav.cpp`, `src/gdrive_fs.h` |
+| **Opravy stability a navigace (v0.4)** | • Zachování původních lomítek v názvech složek v panelu s bezpečnou navigací `..` a zachováním focusu. • Atomické ukládání mezipaměti (`MoveFileExW`) a bezpečnostní limity bránící alokacím poškozených souborů. • Odstranění visícího ukazatele v kontextovém menu (`TrackPopupMenu`). • Odstranění pádu při `CloseFS`/Unloadu přesunutím rozhraní dat pluginu na statickou instanci. • Klávesa Mezera v panelu přepíná výběr, posouvá focus a počítá/zobrazuje velikost složky. | `src/gdrive_fs.cpp`, `src/gdrive_fs_nav.cpp`, `src/gdrive_fs_ops.cpp`, `src/gdrive_cache.cpp`, `src/gdrive.cpp` |
 
 ---
 
@@ -80,6 +81,16 @@ Tento dokument rekapituluje všechny realizované části pluginu **Google Disk 
   2. Zavedení samostatného sloupce **Upravil** (`Modified By`) v panelech i v okně hledání.
   3. Konfigurovatelný fallback pro sloupec **Vlastník**: pokud vlastník chybí, automaticky se zobrazí naposledy upravující uživatel.
   4. Aktivní kontrola oprávnění `capabilities` v kontextovém menu (deaktivace hvězdičky), operacích `Delete`/`QuickRename` a dialogu vyhledávání (tlačítka View/Web).
+
+### 2.10 Názvy složek s lomítky a navigace do nadřazené složky (`..`)
+- **Problém:** Pokud název složky obsahoval lomítko, při návratu do nadřazené složky (`..`) selhalo zaostření a kurzor skočil na první položku panelu.
+- **Příčina:** `SalamanderGeneral->CutDirectory` v `ExecuteOnFS` odřízl cestu na znaku lomítka uvnitř názvu složky namísto skutečné hranice složky.
+- **Řešení:** Použití `CPluginFS::GetValidParentPath` a předání celého segmentu původního názvu složky jako `focusName` do `ChangePanelPathToPluginFS`.
+
+### 2.11 Životní cyklus `CPluginDataInterface` při `CloseFS` a odpojení FS
+- **Problém:** Pád Salamandera při přepnutí z `gdrive:` na disk `C:` nebo při Unloadu pluginu.
+- **Příčina:** Instance `CGDrivePluginDataInterface` byla členskou proměnnou třídy `CPluginFS`. Při `CloseFS` byla smazána dříve, než Salamander uvolnil data položek panelu přes `ReleasePluginData`.
+- **Řešení:** Oddělení životního cyklu a zavedení statické instance `s_pluginDataInterface`.
 
 ---
 

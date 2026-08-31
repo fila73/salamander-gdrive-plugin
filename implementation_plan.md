@@ -67,30 +67,37 @@ Tento dokument shrnuje stav implementace jednotlivých funkcí **Google Drive AP
 - [x] **Vlastní sloupce panelu (Owner, Shared, Starred)**:
   - Implementace rozhraní `CPluginDataInterfaceAbstract` a `CSalamanderViewAbstract` pro zobrazení sloupců Vlastník, Sdíleno a Hvězdička.
 
-### 1.7 Cloudové vyhledávání a prohlížeč souborů (v0.4)
+### 1.7 Cloudové vyhledávání, správa a opravy stability (v0.4)
 - [x] **Cloudové a fulltextové vyhledávání (`Alt+F7` / `OpenFindDialog`)**:
   - Implementace `FS_SERVICE_OPENFINDDLG` a asynchronního modeless dialogu `CGDriveFindDialog` s věrným rozložením okna Find ze Salamandera.
   - **Hledání podle názvu**: `name contains '...'` s podporou zástupných znaků (`*`, `?`).
   - **Fulltextové prohledávání obsahu**: `fullText contains '...'` uvnitř Docs, Sheets, Slides, PDF, textů i OCR obrázků.
-  - **Look In**: výběr rozsahu hledání – celý disk, aktuální složka, Shared with me, Starred, Trash.
+  - **Look In**: výběr rozsahu hledání – celý disk, konkrétní Sdílený disk, aktuální složka, Shared with me, Starred, Trash.
+  - **Prohledávání celého disku i Sdílených disků**: `corpora=allDrives` se zahrnutím všech Team Drives.
   - **Pokročilé filtry**: typ souboru (dokumenty, tabulky, obrázky...), pouze soubory/složky.
   - **Perzistence nastavení**: všechny checkboxy, seznam historií vyhledávání a Look In se ukládají do registru.
-  - **Výsledky v ListView**: sloupce Název, Cesta, Velikost, Datum, Čas, Vlastník; podpora řazení.
+  - **Výsledky v ListView**: sloupce Název, Cesta, Velikost, Datum, Čas, Vlastník, Upravil; podpora řazení.
   - **Tmavý režim (Dark Mode)**: plné přizpůsobení schématu Salamandera.
   - Asynchronní vlákno na pozadí s atomickým přerušením klávesou `Esc`.
 - [x] **Funkce Focus (přechod na nalezenou položku)**:
   - Dvojklik nebo `Enter` přepne panel Salamandera přímo do složky souboru a označí ho.
-  - Opravena podpora pro soubory ve *Sdíleno se mnou* a složky s českou diakritikou (UTF-8 vs. ANSI/CP1250).
-  - `SearchWorker` při dohledávání cest okamžitě cachuje `folderId → path` do globální mapy, takže Focus nemusí znovu traversovat strom z API.
+  - Plná podpora pro soubory ve *Sdíleno se mnou*, *Sdílené disky* a složky s českou diakritikou (UTF-8 vs. ANSI/CP1250).
+  - `SearchWorker` při dohledávání cest okamžitě cachuje `folderId → path` do mapy cest.
 - [x] **View (F3) z výsledků vyhledávání**:
   - Soubor se otevře v interním prohlížeči Salamandera (`SalamanderGeneral->ViewFileInPluginViewer`) s `useCache = TRUE`.
   - Google Dokumenty jsou exportovány do standardního formátu (`.docx`, `.xlsx`, `.pptx`, `.pdf`).
 - [x] **Klávesové zkratky v dialogu**:
-  - `Enter` v libovolném editboxu/comboboxu spouští hledání (`DM_SETDEFID` + subclassing přes `EnumChildWindows`).
+  - `Enter` v libovolném editboxu/comboboxu spouští hledání.
   - `Esc` zastavuje aktivní hledání (první stisk) nebo zavírá dialog (druhý stisk).
   - `Enter` v seznamu výsledků volá Focus.
 - [x] **Nemodální okno bez Always-on-Top**:
   - `CreateDialogParam` s `hWndParent = NULL` (ne handle Salamandera) → dialog není *owned window* a nepřekrývá Salamander.
+- [x] **Opravy stability a navigace**:
+  - Původní názvy složek s lomítky zachovány v panelech i editboxech s korektní navigací `..` a zachováním zaostření.
+  - Statická instance `s_pluginDataInterface` pro odstranění pádu při `CloseFS`/Unloadu.
+  - Bezpečnostní horní limity délek řetězců a počtů položek v `ReadString` a atomické ukládání `SaveToDisk` (`MoveFileExW`).
+  - Bezpečné kopírování položek v kontextovém menu (`ContextMenu`) eliminující visící ukazatele během modální smyčky `TrackPopupMenu`.
+  - Klávesa Mezera v panelu přepíná výběr položky, posouvá focus a počítá/zobrazuje velikost složky.
 
 ---
 

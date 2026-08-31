@@ -70,7 +70,7 @@ A full-featured filesystem, management, and viewer plugin for **Open Salamander*
   - *Copy Link to Clipboard*
   - *Add / Remove Star*
   - *Restore from Trash* / *Empty Trash...*
-  - *Calculate Folder Size...* (Recursive scanner with Esc/Cancel support)
+  - *Calculate Folder Size...* (`Alt+F10` / `Space` in panel / context menu): Recursive folder size calculator with Esc/Cancel support and fast RAM/disk cache display. `Space` in panel toggles directory selection, calculates/shows size, and advances focus to the next item.
 
 ### 📄 Google Docs Auto-Export
 - Automatically converts Google Docs, Sheets, and Slides into standard office formats (`.docx`, `.xlsx`, `.pptx`, `.pdf`) on download or viewing.
